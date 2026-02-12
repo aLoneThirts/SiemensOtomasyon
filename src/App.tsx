@@ -7,6 +7,7 @@ import Dashboard from '../src/Pages/Dashboard';
 import SatisTeklifPage from '../src/Pages/SatisTeklifPage';
 import BekleyenUrunlerPage from '../src/Pages/BekleyenUrunlerPage';
 import AdminPanel from '../src/Pages/AdminPanel';
+import SatisDetayPage from '../src/Pages/SatisDetayPage';
 import './App.css';
 
 const PrivateRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
