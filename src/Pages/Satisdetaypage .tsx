@@ -4,11 +4,11 @@ import { useAuth } from '../context/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu } from '../types/satis';
-import { getSubeByKod } from '../types/sube';
+import { getSubeByKod, SUBELER } from '../types/sube';
 import './SatisDetay.css';
 
 const SatisDetayPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { subeKodu, id } = useParams<{ subeKodu: string; id: string }>();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [satis, setSatis] = useState<SatisTeklifFormu | null>(null);
@@ -22,14 +22,23 @@ const SatisDetayPage: React.FC = () => {
     try {
       setLoading(true);
       
-      // Tüm şubelerde ara
-      for (const sube of getSubeByKod(currentUser!.subeKodu) ? [getSubeByKod(currentUser!.subeKodu)!] : []) {
-        const satisDoc = await getDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!));
-        
-        if (satisDoc.exists()) {
-          setSatis({ id: satisDoc.id, ...satisDoc.data() } as SatisTeklifFormu);
-          break;
-        }
+      // Şube bilgisini al
+      const sube = getSubeByKod(subeKodu as any);
+      if (!sube) {
+        console.error('Şube bulunamadı:', subeKodu);
+        return;
+      }
+
+      console.log('Şube:', sube.dbPath, 'ID:', id);
+      
+      // Satışı çek
+      const satisDoc = await getDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!));
+      
+      if (satisDoc.exists()) {
+        setSatis({ id: satisDoc.id, ...satisDoc.data() } as SatisTeklifFormu);
+        console.log('Satış bulundu:', satisDoc.data());
+      } else {
+        console.error('Satış bulunamadı!');
       }
     } catch (error) {
       console.error('Satış detayı yüklenemedi:', error);

@@ -89,7 +89,11 @@ const Dashboard: React.FC = () => {
     <div className="dashboard-container">
       <header className="dashboard-header">
         <div className="header-content">
+<<<<<<< Updated upstream
           <h1>SIEMENS OTOMASYON</h1>
+=======
+          <h1>İş Takip Sistemi</h1>
+>>>>>>> Stashed changes
           <div className="user-info">
             <div className="user-details">
               <div className="user-name">{currentUser?.ad} {currentUser?.soyad}</div>
