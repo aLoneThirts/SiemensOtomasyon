@@ -1,7 +1,8 @@
 import { SubeKodu } from './sube';
 
+// types/user.ts
 export enum UserRole {
-  ADMIN = 'ADMIN',
+  ADMIN = 'ADMIN',  // Burada 'ADMIN' büyük harf ve tırnak içinde mi?
   CALISAN = 'CALISAN'
 }
 

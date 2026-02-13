@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types/user';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu } from '../types/satis';
 import { getSubeByKod, SUBELER } from '../types/sube';
@@ -28,36 +28,86 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       const satisListesi: SatisTeklifFormu[] = [];
 
+      console.log('Kullanıcı rolü:', currentUser?.role);
+      console.log('Kullanıcı şubesi:', currentUser?.subeKodu);
+
       if (currentUser?.role === UserRole.ADMIN) {
-        // Admin tüm şubelerin satışlarını görebilir
+        // ADMIN - TÜM ŞUBELERİN SATIŞLARINI GETİR
+        console.log('Admin tüm şubeleri getiriyor...');
+        
         for (const sube of SUBELER) {
-          const q = query(
-            collection(db, `subeler/${sube.dbPath}/satislar`),
-            orderBy('olusturmaTarihi', 'desc')
-          );
-          const snapshot = await getDocs(q);
-          snapshot.forEach(doc => {
-            satisListesi.push({ id: doc.id, ...doc.data() } as SatisTeklifFormu);
-          });
+          try {
+            console.log(`${sube.ad} şubesi getiriliyor... Path: subeler/${sube.dbPath}/satislar`);
+            const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
+            const snapshot = await getDocs(satisRef);
+            
+            console.log(`${sube.ad}: ${snapshot.size} satış bulundu`);
+            
+            snapshot.forEach((doc) => {
+              const satisData = doc.data();
+              satisListesi.push({ 
+                id: doc.id, 
+                ...satisData,
+                subeKodu: sube.kod
+              } as SatisTeklifFormu);
+            });
+          } catch (error) {
+            console.error(`${sube.ad} şubesi yüklenirken hata:`, error);
+          }
         }
       } else {
-        // Çalışan sadece kendi şubesinin satışlarını görebilir
+        // CALISAN - SADECE KENDİ ŞUBESİ
+        console.log('Çalışan kendi şubesini getiriyor...');
         const sube = getSubeByKod(currentUser!.subeKodu);
+        
         if (sube) {
-          const q = query(
-            collection(db, `subeler/${sube.dbPath}/satislar`),
-            orderBy('olusturmaTarihi', 'desc')
-          );
-          const snapshot = await getDocs(q);
-          snapshot.forEach(doc => {
-            satisListesi.push({ id: doc.id, ...doc.data() } as SatisTeklifFormu);
-          });
+          try {
+            console.log(`${sube.ad} şubesi getiriliyor... Path: subeler/${sube.dbPath}/satislar`);
+            const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
+            const snapshot = await getDocs(satisRef);
+            
+            console.log(`${sube.ad}: ${snapshot.size} satış bulundu`);
+            
+            snapshot.forEach((doc) => {
+              satisListesi.push({ 
+                id: doc.id, 
+                ...doc.data() 
+              } as SatisTeklifFormu);
+            });
+          } catch (error) {
+            console.error('Satışlar yüklenirken hata:', error);
+          }
         }
       }
 
-      setSatislar(satisListesi);
+      console.log('TÜM SATIŞLAR:', satisListesi.map(s => ({
+        id: s.id,
+        sube: s.subeKodu,
+        kod: s.satisKodu
+      })));
+
+      const siraliSatislar = [...satisListesi].sort((a: any, b: any) => {
+        const getDate = (tarih: any): Date => {
+          if (!tarih) return new Date(0);
+          if (tarih && typeof tarih === 'object' && 'toDate' in tarih) {
+            return tarih.toDate();
+          }
+          if (tarih instanceof Date) {
+            return tarih;
+          }
+          return new Date(tarih);
+        };
+        
+        const dateA = getDate(a.tarih);
+        const dateB = getDate(b.tarih);
+        return dateB.getTime() - dateA.getTime();
+      });
+
+      console.log('Toplam satış sayısı:', siraliSatislar.length);
+      setSatislar(siraliSatislar);
+      
     } catch (error) {
-      console.error('Satışlar yüklenemedi:', error);
+      console.error('Ana hata:', error);
     } finally {
       setLoading(false);
     }
@@ -81,21 +131,41 @@ const Dashboard: React.FC = () => {
 
   const formatDate = (date: any) => {
     if (!date) return '';
-    const d = date.toDate ? date.toDate() : new Date(date);
-    return d.toLocaleDateString('tr-TR');
+    try {
+      if (date && typeof date === 'object' && 'toDate' in date) {
+        return date.toDate().toLocaleDateString('tr-TR');
+      }
+      if (date instanceof Date) {
+        return date.toLocaleDateString('tr-TR');
+      }
+      return new Date(date).toLocaleDateString('tr-TR');
+    } catch {
+      return '';
+    }
   };
 
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
         <div className="header-content">
-          <h1>Siemens Otomasyon</h1>
+          <h1>İş Takip Sistemi</h1>
           <div className="user-info">
-            <span className="user-name">
-              {currentUser?.ad} {currentUser?.soyad}
-              {currentUser?.role === UserRole.ADMIN && <span className="admin-badge">Admin</span>}
-            </span>
-            <span className="user-sube">{getSubeByKod(currentUser!.subeKodu)?.ad}</span>
+            <div className="user-details">
+              <span className="user-name">
+                {currentUser?.ad} {currentUser?.soyad}
+              </span>
+              <div className="user-badges">
+                {/* DÜZELTİLDİ: Admin/User ayrımı */}
+                <span className={`role-badge ${currentUser?.role === UserRole.ADMIN ? 'role-admin' : 'role-user'}`}>
+                  {currentUser?.role === UserRole.ADMIN ? 'Admin' : 'User'}
+                </span>
+                <span className="sube-badge">
+                  {currentUser?.role === UserRole.ADMIN 
+                    ? 'Tüm Şubeler' 
+                    : `${getSubeByKod(currentUser!.subeKodu)?.ad} Şubesi`}
+                </span>
+              </div>
+            </div>
             <button onClick={handleLogout} className="btn-logout">Çıkış</button>
           </div>
         </div>
@@ -149,11 +219,15 @@ const Dashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {satislar.map(satis => (
+                {satislar.map((satis) => (
                   <tr key={satis.id}>
                     <td><strong>{satis.satisKodu}</strong></td>
-                    <td>{getSubeByKod(satis.subeKodu)?.ad}</td>
-                    <td>{satis.musteriBilgileri.isim}</td>
+                    <td>
+                      {satis.subeKodu ? 
+                        getSubeByKod(satis.subeKodu)?.ad : 
+                        getSubeByKod(currentUser!.subeKodu)?.ad}
+                    </td>
+                    <td>{satis.musteriBilgileri?.isim || 'Belirtilmemiş'}</td>
                     <td><strong>{formatPrice(satis.toplamTutar)}</strong></td>
                     <td>{formatDate(satis.tarih)}</td>
                     <td>{formatDate(satis.teslimatTarihi)}</td>
@@ -164,7 +238,10 @@ const Dashboard: React.FC = () => {
                     </td>
                     <td>
                       <button 
-                        onClick={() => navigate(`/satis-detay/${satis.id}`)}
+                        onClick={() => {
+                          const subeKodu = satis.subeKodu || currentUser!.subeKodu;
+                          navigate(`/satis-detay/${subeKodu}/${satis.id}`);
+                        }}
                         className="btn-view"
                       >
                         Görüntüle

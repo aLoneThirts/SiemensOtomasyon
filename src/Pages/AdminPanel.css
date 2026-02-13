@@ -1,232 +1,255 @@
-.admin-panel-container {
-  min-height: 100vh;
-  background: #f5f7fa;
-}
+/* AdminPanel.css'e EKLENECEK YENİ STİLLER */
 
-.admin-header {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  padding: 20px 0;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.admin-nav {
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 0;
-  display: flex;
-  gap: 5px;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
-.admin-content {
-  max-width: 1400px;
-  margin: 30px auto;
-  padding: 0 20px;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 25px;
-  margin-bottom: 40px;
-}
-
-.stat-card {
-  background: white;
-  border-radius: 20px;
-  padding: 30px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  position: relative;
-  overflow: hidden;
-}
-
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 4px;
-  transition: all 0.3s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-}
-
-.stat-card.purple::before {
-  background: linear-gradient(90deg, #8b5cf6 0%, #6d28d9 100%);
-}
-
-.stat-card.green::before {
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-}
-
-.stat-card.orange::before {
-  background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
-}
-
-.stat-card.blue::before {
-  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
-}
-
-.stat-icon {
-  font-size: 56px;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
-}
-
-.stat-info h3 {
-  margin: 0 0 10px 0;
-  color: #6b7280;
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.stat-value {
-  margin: 0;
-  color: #1f2937;
-  font-size: 36px;
-  font-weight: 800;
-  letter-spacing: -1px;
-}
-
-.section {
-  background: white;
-  border-radius: 12px;
-  padding: 30px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.section h2 {
-  margin: 0 0 25px 0;
-  color: #1f2937;
-  font-size: 22px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #f3f4f6;
-}
-
-.table-container {
-  overflow-x: auto;
-}
-
-.admin-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.admin-table thead {
-  background: #f9fafb;
-}
-
-.admin-table th {
-  padding: 15px;
-  text-align: left;
-  font-weight: 600;
-  color: #374151;
-  font-size: 14px;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-.admin-table td {
-  padding: 15px;
-  border-bottom: 1px solid #f3f4f6;
-  color: #6b7280;
-}
-
-.admin-table tbody tr:hover {
-  background: #f9fafb;
-}
-
-.log-container {
-  display: grid;
-  gap: 15px;
-}
-
-.log-item {
-  background: #f9fafb;
-  border-left: 4px solid #667eea;
-  border-radius: 8px;
-  padding: 15px 20px;
-  transition: all 0.3s;
-}
-
-.log-item:hover {
-  background: #f3f4f6;
-  border-left-color: #5568d3;
-}
-
-.log-header {
+/* Section Header ve Filter */
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+  gap: 15px;
 }
 
-.log-badge {
-  background: #667eea;
+.filter-section {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.filter-select {
+  padding: 10px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  min-width: 220px;
+  background-color: white;
+  cursor: pointer;
+  color: #1f2937;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.filter-select:hover {
+  border-color: #f59e0b;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+.btn-refresh {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   color: white;
-  padding: 4px 12px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.2);
+}
+
+.btn-refresh:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(245, 158, 11, 0.3);
+}
+
+/* Satış Tablosu Stilleri */
+.sales-table-container {
+  overflow-x: auto;
   border-radius: 12px;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  border: 1px solid #e5e7eb;
+  background: white;
 }
 
-.log-time {
-  color: #6b7280;
-  font-size: 13px;
+.sales-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1000px;
 }
 
-.log-body p {
-  margin: 5px 0;
+.sales-table thead {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.sales-table th {
+  padding: 16px 20px;
+  text-align: left;
+  font-weight: 600;
+  color: white;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.sales-table th:first-child {
+  border-top-left-radius: 12px;
+}
+
+.sales-table th:last-child {
+  border-top-right-radius: 12px;
+}
+
+.sales-table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f3f4f6;
   color: #374151;
   font-size: 14px;
 }
 
-.log-detail {
-  color: #6b7280 !important;
-  font-style: italic;
+.sales-table tbody tr {
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
-.log-user {
-  color: #6b7280 !important;
-  font-size: 13px !important;
+.sales-table tbody tr:hover {
+  background: #fff9f0;
+  transform: scale(1.01);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
 }
 
+.sales-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Status Badge */
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.approved {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.status-badge.pending {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+/* View Button */
+.btn-view {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+.btn-view:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 2px dashed #e5e7eb;
+}
+
+.empty-state p {
+  color: #6b7280;
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.btn-primary {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.4);
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: #f59e0b;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
-  .stat-card {
-    padding: 20px;
+  .filter-section {
+    width: 100%;
+    flex-direction: column;
   }
 
-  .stat-icon {
-    font-size: 36px;
+  .filter-select {
+    width: 100%;
+    min-width: auto;
   }
 
-  .stat-value {
-    font-size: 24px;
+  .btn-refresh {
+    width: 100%;
   }
 
-  .section {
-    padding: 20px 15px;
+  .sales-table {
+    min-width: 800px;
   }
 
-  .admin-table {
+  .sales-table th,
+  .sales-table td {
+    padding: 12px 15px;
+    font-size: 13px;
+  }
+
+  .btn-view {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .status-badge {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+}
+
+/* Küçük ekranlar için ek düzenlemeler */
+@media (max-width: 480px) {
+  .sales-table {
     min-width: 600px;
+  }
+
+  .sales-table th,
+  .sales-table td {
+    padding: 10px 12px;
+    font-size: 12px;
   }
 }

@@ -1,3 +1,4 @@
+// AdminPanel.tsx (GÜNCELLENMİŞ VERSİYON)
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -19,9 +20,11 @@ const AdminPanel: React.FC = () => {
     onayBekleyenSatislar: 0
   });
 
+  const [tumSatislar, setTumSatislar] = useState<SatisTeklifFormu[]>([]);
   const [subeIstatistikleri, setSubeIstatistikleri] = useState<any[]>([]);
   const [sonLoglar, setSonLoglar] = useState<SatisLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedSube, setSelectedSube] = useState<string>('tumu');
 
   useEffect(() => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN) {
@@ -32,17 +35,21 @@ const AdminPanel: React.FC = () => {
     fetchAdminData();
   }, [currentUser]);
 
-  const fetchAdminData = async () => {
-    try {
-      setLoading(true);
-      let toplamSatis = 0;
-      let toplamTutar = 0;
-      let bekleyenUrunler = 0;
-      let onayBekleyenSatislar = 0;
-      const subeStats: any[] = [];
-      const tumLoglar: SatisLog[] = [];
+ // AdminPanel.tsx - fetchAdminData fonksiyonunu güncelle
+// AdminPanel.tsx - fetchAdminData fonksiyonunu güncelle
+const fetchAdminData = async () => {
+  try {
+    setLoading(true);
+    let toplamSatis = 0;
+    let toplamTutar = 0;
+    let bekleyenUrunler = 0;
+    let onayBekleyenSatislar = 0;
+    const subeStats: any[] = [];
+    const tumLoglar: SatisLog[] = [];
+    const tumSatislarListesi: SatisTeklifFormu[] = [];
 
-      for (const sube of SUBELER) {
+    for (const sube of SUBELER) {
+      try {
         // Satışları çek
         const satisQuery = query(collection(db, `subeler/${sube.dbPath}/satislar`));
         const satisSnapshot = await getDocs(satisQuery);
@@ -51,12 +58,15 @@ const AdminPanel: React.FC = () => {
         let subeToplam = 0;
         let subeOnayBekleyen = 0;
 
-        satisSnapshot.forEach(doc => {
-          const satis = doc.data() as SatisTeklifFormu;
+        satisSnapshot.forEach((doc: any) => {
+          const satis = { id: doc.id, ...doc.data() } as SatisTeklifFormu;
+          tumSatislarListesi.push(satis);
+          
           toplamSatis++;
           subeSatisSayisi++;
           toplamTutar += satis.toplamTutar;
           subeToplam += satis.toplamTutar;
+          
           if (!satis.onayDurumu) {
             onayBekleyenSatislar++;
             subeOnayBekleyen++;
@@ -64,59 +74,90 @@ const AdminPanel: React.FC = () => {
         });
 
         // Bekleyen ürünleri çek
-        const bekleyenQuery = query(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`));
-        const bekleyenSnapshot = await getDocs(bekleyenQuery);
-        let subeBekleyen = 0;
-        
-        bekleyenSnapshot.forEach(doc => {
-          const urun = doc.data() as BekleyenUrun;
-          if (urun.durum !== 'TESLIM_EDILDI') {
-            bekleyenUrunler++;
-            subeBekleyen++;
-          }
-        });
+        let subeBekleyen = 0; // Burada tanımlıyoruz
+        try {
+          const bekleyenQuery = query(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`));
+          const bekleyenSnapshot = await getDocs(bekleyenQuery);
+          
+          bekleyenSnapshot.forEach((doc: any) => {
+            const urun = doc.data() as BekleyenUrun;
+            if (urun.durum !== 'TESLIM_EDILDI') {
+              bekleyenUrunler++;
+              subeBekleyen++;
+            }
+          });
+        } catch (error) {
+          console.warn(`${sube.ad} - Bekleyen ürünler yüklenemedi:`, error);
+        }
 
         // Logları çek
-        const logQuery = query(collection(db, `subeler/${sube.dbPath}/loglar`));
-        const logSnapshot = await getDocs(logQuery);
-        
-        logSnapshot.forEach(doc => {
-          tumLoglar.push({ id: doc.id, ...doc.data() } as SatisLog);
-        });
+        try {
+          const logQuery = query(collection(db, `subeler/${sube.dbPath}/loglar`));
+          const logSnapshot = await getDocs(logQuery);
+          
+          logSnapshot.forEach((doc: any) => {
+            tumLoglar.push({ id: doc.id, ...doc.data() } as SatisLog);
+          });
+        } catch (error) {
+          console.warn(`${sube.ad} - Loglar yüklenemedi:`, error);
+        }
 
         subeStats.push({
           sube: sube.ad,
+          subeKodu: sube.kod,
           satisSayisi: subeSatisSayisi,
           toplamTutar: subeToplam,
-          bekleyenUrunler: subeBekleyen,
+          bekleyenUrunler: subeBekleyen, // Artık tanımlı
           onayBekleyen: subeOnayBekleyen
         });
+
+      } catch (error) {
+        console.error(`${sube.ad} şubesi verileri yüklenemedi:`, error);
+        // Hata alsak bile diğer şubelere devam et
+        subeStats.push({
+          sube: sube.ad,
+          subeKodu: sube.kod,
+          satisSayisi: 0,
+          toplamTutar: 0,
+          bekleyenUrunler: 0,
+          onayBekleyen: 0,
+          hata: true
+        });
       }
-
-      setIstatistikler({
-        toplamSatis,
-        toplamTutar,
-        bekleyenUrunler,
-        onayBekleyenSatislar
-      });
-
-      setSubeIstatistikleri(subeStats);
-
-      // En son 20 logu göster
-      const siraliLoglar = tumLoglar.sort((a, b) => {
-        const dateA = a.tarih instanceof Date ? a.tarih : (a.tarih as any).toDate();
-        const dateB = b.tarih instanceof Date ? b.tarih : (b.tarih as any).toDate();
-        return dateB.getTime() - dateA.getTime();
-      }).slice(0, 20);
-
-      setSonLoglar(siraliLoglar);
-    } catch (error) {
-      console.error('Admin verileri yüklenemedi:', error);
-    } finally {
-      setLoading(false);
     }
-  };
 
+    // Tarihe göre sırala (en yeni en üstte)
+    const siraliSatislar = tumSatislarListesi.sort((a, b) => {
+      const dateA = a.tarih instanceof Date ? a.tarih : (a.tarih as any)?.toDate?.() || new Date(0);
+      const dateB = b.tarih instanceof Date ? b.tarih : (b.tarih as any)?.toDate?.() || new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    setTumSatislar(siraliSatislar);
+    setIstatistikler({
+      toplamSatis,
+      toplamTutar,
+      bekleyenUrunler,
+      onayBekleyenSatislar
+    });
+
+    setSubeIstatistikleri(subeStats);
+
+    // En son 20 logu göster
+    const siraliLoglar = tumLoglar.sort((a, b) => {
+      const dateA = a.tarih instanceof Date ? a.tarih : (a.tarih as any)?.toDate?.() || new Date(0);
+      const dateB = b.tarih instanceof Date ? b.tarih : (b.tarih as any)?.toDate?.() || new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    }).slice(0, 20);
+
+    setSonLoglar(siraliLoglar);
+  } catch (error) {
+    console.error('Admin verileri yüklenemedi:', error);
+    alert('Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.');
+  } finally {
+    setLoading(false);
+  }
+};
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
@@ -130,6 +171,12 @@ const AdminPanel: React.FC = () => {
     return d.toLocaleString('tr-TR');
   };
 
+  const formatShortDate = (date: any) => {
+    if (!date) return '';
+    const d = date.toDate ? date.toDate() : new Date(date);
+    return d.toLocaleDateString('tr-TR');
+  };
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -138,6 +185,10 @@ const AdminPanel: React.FC = () => {
       console.error('Çıkış yapılamadı:', error);
     }
   };
+
+  const filteredSatislar = selectedSube === 'tumu' 
+    ? tumSatislar 
+    : tumSatislar.filter(satis => satis.subeKodu === selectedSube);
 
   if (loading) {
     return <div className="loading">Yükleniyor...</div>;
@@ -233,6 +284,76 @@ const AdminPanel: React.FC = () => {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Tüm Satışlar Tablosu */}
+        <div className="section">
+          <div className="section-header">
+            <h2>Tüm Şubeler - Satış Listesi</h2>
+            <div className="filter-section">
+              <select 
+                value={selectedSube} 
+                onChange={(e) => setSelectedSube(e.target.value)}
+                className="filter-select"
+              >
+                <option value="tumu">Tüm Şubeler</option>
+                {SUBELER.map(sube => (
+                  <option key={sube.kod} value={sube.kod}>
+                    {sube.ad}
+                  </option>
+                ))}
+              </select>
+              <button onClick={fetchAdminData} className="btn-refresh">Yenile</button>
+            </div>
+          </div>
+
+          {filteredSatislar.length === 0 ? (
+            <div className="empty-state">
+              <p>Gösterilecek satış bulunmuyor.</p>
+            </div>
+          ) : (
+            <div className="sales-table-container">
+              <table className="sales-table">
+                <thead>
+                  <tr>
+                    <th>Satış Kodu</th>
+                    <th>Şube</th>
+                    <th>Müşteri</th>
+                    <th>Toplam Tutar</th>
+                    <th>Tarih</th>
+                    <th>Teslimat</th>
+                    <th>Durum</th>
+                    <th>İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSatislar.map(satis => (
+                    <tr key={satis.id}>
+                      <td><strong>{satis.satisKodu}</strong></td>
+                      <td>{getSubeByKod(satis.subeKodu)?.ad}</td>
+                      <td>{satis.musteriBilgileri?.isim || 'Belirtilmemiş'}</td>
+                      <td><strong>{formatPrice(satis.toplamTutar)}</strong></td>
+                      <td>{formatShortDate(satis.tarih)}</td>
+                      <td>{formatShortDate(satis.teslimatTarihi)}</td>
+                      <td>
+                        <span className={`status-badge ${satis.onayDurumu ? 'approved' : 'pending'}`}>
+                          {satis.onayDurumu ? 'Onaylı' : 'Beklemede'}
+                        </span>
+                      </td>
+                      <td>
+                        <button 
+                          onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
+                          className="btn-view"
+                        >
+                          Görüntüle
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Son İşlemler (Loglar) */}

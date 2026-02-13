@@ -217,18 +217,145 @@
 
 /* Print Styles */
 @media print {
-  .satis-detay-header button {
-    display: none;
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
   .satis-detay-container {
     background: white;
+    padding: 10px;
+    max-width: 100%;
   }
-  
+
+  .satis-detay-header {
+    margin-bottom: 15px;
+  }
+
+  .satis-detay-header button {
+    display: none !important;
+  }
+
+  .satis-detay-header h1 {
+    font-size: 20px;
+    margin: 0;
+    text-align: center;
+    -webkit-text-fill-color: #667eea;
+  }
+
+  .satis-detay-content {
+    max-width: 100%;
+  }
+
   .detay-section {
     box-shadow: none;
     border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
     page-break-inside: avoid;
+    background: white;
+  }
+
+  .detay-section h2 {
+    font-size: 14px;
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #667eea;
+  }
+
+  .section-header {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+
+  .section-header h2 {
+    font-size: 14px;
+  }
+
+  .status-badge {
+    padding: 4px 10px;
+    font-size: 10px;
+  }
+
+  .info-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    font-size: 11px;
+  }
+
+  .info-item {
+    gap: 4px;
+  }
+
+  .info-item label {
+    font-size: 9px;
+  }
+
+  .info-item span,
+  .info-item strong {
+    font-size: 11px;
+  }
+
+  .urunler-table {
+    font-size: 10px;
+    margin-top: 10px;
+  }
+
+  .urunler-table th,
+  .urunler-table td {
+    padding: 6px 4px;
+    font-size: 10px;
+  }
+
+  .urunler-table thead {
+    background: #f9fafb;
+  }
+
+  .urunler-table tfoot {
+    background: #667eea;
+  }
+
+  .toplam-row td {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .checkbox-info {
+    gap: 15px;
+    margin-top: 10px;
+    padding-top: 10px;
+    font-size: 10px;
+  }
+
+  .checkbox-item span {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  .not-found {
+    display: none;
+  }
+
+  /* Tek sayfaya sığdırma */
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .satis-detay-container {
+    transform: scale(0.95);
+    transform-origin: top center;
   }
 }
 
