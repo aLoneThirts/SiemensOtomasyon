@@ -17,6 +17,9 @@ import SatisTeklifPage from '../src/Pages/SatisTeklifPage';
 import BekleyenUrunlerPage from '../src/Pages/BekleyenUrunlerPage';
 import AdminPanel from '../src/Pages/AdminPanel';
 import SatisDetayPage from './Pages/Satisdetaypage ';
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 import './App.css';
 

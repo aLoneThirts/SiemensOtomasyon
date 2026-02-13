@@ -90,7 +90,11 @@ const Dashboard: React.FC = () => {
       <header className="dashboard-header">
         <div className="header-content">
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
           <h1>SIEMENS OTOMASYON</h1>
+=======
+          <h1>İş Takip Sistemi</h1>
+>>>>>>> Stashed changes
 =======
           <h1>İş Takip Sistemi</h1>
 >>>>>>> Stashed changes
