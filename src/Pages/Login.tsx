@@ -27,7 +27,6 @@ const Login: React.FC = () => {
     } catch (error: any) {
       console.error('Login error:', error);
       
-      // Firebase hata mesajlarını Türkçeleştir
       if (error.code === 'auth/user-not-found') {
         setError('Bu email adresiyle kayıtlı kullanıcı bulunamadı.');
       } else if (error.code === 'auth/wrong-password') {
@@ -49,11 +48,9 @@ const Login: React.FC = () => {
   return (
     <div className="auth-container">
       <div className="auth-left">
-        <svg className="siemens-logo" viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
-          <text x="10" y="30" fontFamily="Arial, sans-serif" fontSize="32" fontWeight="bold" fill="white">
-            SIEMENS
-          </text>
-        </svg>
+        <div className="siemens-logo-container">
+          <h1 className="siemens-brand">TUFEKÇİ HOME SIEMENS</h1>
+        </div>
         <div className="auth-welcome">
           <h1>İş Takip Sistemine Hoş Geldiniz</h1>
           <p>Satış süreçlerinizi kolayca yönetin, müşteri bilgilerinizi takip edin ve işletmenizi dijitalleştirin.</p>

@@ -1,61 +1,61 @@
 .satis-detay-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-  padding: 30px 20px;
+  background: #f8f9fa;
+  padding: 30px 40px;
 }
 
 .satis-detay-header {
-  max-width: 1200px;
-  margin: 0 auto 40px;
+  max-width: 1400px;
+  margin: 0 auto 30px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 25px;
+  gap: 20px;
 }
 
 .satis-detay-header h1 {
   margin: 0;
   flex: 1;
   text-align: center;
-  color: #1f2937;
-  font-size: 32px;
+  color: #1a1a1a;
+  font-size: 28px;
   font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .btn-print {
-  padding: 12px 24px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  padding: 12px 28px;
+  background: #28a745;
   color: white;
   border: none;
-  border-radius: 25px;
+  border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .btn-print:hover {
+  background: #218838;
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
 }
 
 .satis-detay-content {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
 .detay-section {
   background: white;
-  border-radius: 20px;
-  padding: 35px;
-  margin-bottom: 25px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(102, 126, 234, 0.1);
+  border-radius: 8px;
+  padding: 30px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid #009999;
 }
 
 .section-header {
@@ -63,21 +63,19 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 25px;
-  padding-bottom: 20px;
-  border-bottom: 3px solid transparent;
-  border-image: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  border-image-slice: 1;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
 }
 
 .detay-section h2 {
   margin: 0 0 25px 0;
-  color: #1f2937;
-  font-size: 22px;
+  color: #1a1a1a;
+  font-size: 18px;
   font-weight: 700;
-  padding-bottom: 20px;
-  border-bottom: 3px solid transparent;
-  border-image: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  border-image-slice: 1;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .info-grid {
@@ -94,7 +92,7 @@
 
 .info-item label {
   font-size: 12px;
-  color: #6b7280;
+  color: #666;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -103,7 +101,7 @@
 .info-item span,
 .info-item strong {
   font-size: 15px;
-  color: #1f2937;
+  color: #1a1a1a;
 }
 
 .info-item strong {
@@ -117,39 +115,39 @@
 }
 
 .urunler-table thead {
-  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  background: #f8f9fa;
 }
 
 .urunler-table th {
   padding: 15px;
   text-align: left;
   font-weight: 700;
-  color: #1f2937;
+  color: #1a1a1a;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid #d0d0d0;
 }
 
 .urunler-table td {
   padding: 15px;
-  border-bottom: 1px solid #f3f4f6;
-  color: #4b5563;
+  border-bottom: 1px solid #f0f0f0;
+  color: #333;
   font-size: 14px;
 }
 
 .urunler-table tbody tr:hover {
-  background: rgba(102, 126, 234, 0.04);
+  background: #f8f9fa;
 }
 
 .urunler-table tfoot {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #009999;
   color: white;
 }
 
 .toplam-row td {
-  padding: 20px 15px;
-  font-size: 18px;
+  padding: 18px 15px;
+  font-size: 17px;
   font-weight: 700;
   border: none;
 }
@@ -159,46 +157,46 @@
   gap: 30px;
   margin-top: 25px;
   padding-top: 25px;
-  border-top: 2px solid #f3f4f6;
+  border-top: 2px solid #f0f0f0;
 }
 
 .checkbox-item span {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   padding: 8px 16px;
-  border-radius: 20px;
+  border-radius: 4px;
   display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .checkbox-item span.checked {
-  background: #d1fae5;
-  color: #065f46;
+  background: #28a745;
+  color: white;
 }
 
 .checkbox-item span:not(.checked) {
-  background: #fee;
-  color: #c33;
+  background: #dc3545;
+  color: white;
 }
 
 .status-badge {
   padding: 8px 20px;
-  border-radius: 25px;
-  font-size: 13px;
+  border-radius: 4px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .status-badge.approved {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  color: #065f46;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+  background: #28a745;
+  color: white;
 }
 
 .status-badge.pending {
-  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
-  color: #92400e;
-  box-shadow: 0 2px 8px rgba(251, 146, 60, 0.2);
+  background: #ffc107;
+  color: #856404;
 }
 
 .not-found {
@@ -211,7 +209,7 @@
 }
 
 .not-found h2 {
-  color: #1f2937;
+  color: #1a1a1a;
   font-size: 28px;
 }
 
@@ -245,7 +243,7 @@
     font-size: 20px;
     margin: 0;
     text-align: center;
-    -webkit-text-fill-color: #667eea;
+    color: #009999;
   }
 
   .satis-detay-content {
@@ -254,19 +252,20 @@
 
   .detay-section {
     box-shadow: none;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
     padding: 12px;
     margin-bottom: 10px;
     page-break-inside: avoid;
     background: white;
+    border-left-color: #009999;
   }
 
   .detay-section h2 {
     font-size: 14px;
     margin: 0 0 10px 0;
     padding-bottom: 8px;
-    border-bottom: 2px solid #667eea;
+    border-bottom: 2px solid #009999;
   }
 
   .section-header {
@@ -314,11 +313,11 @@
   }
 
   .urunler-table thead {
-    background: #f9fafb;
+    background: #f8f9fa;
   }
 
   .urunler-table tfoot {
-    background: #667eea;
+    background: #009999;
   }
 
   .toplam-row td {
@@ -342,7 +341,6 @@
     display: none;
   }
 
-  /* Tek sayfaya sığdırma */
   @page {
     size: A4;
     margin: 10mm;

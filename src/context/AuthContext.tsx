@@ -4,12 +4,12 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { User, RegisterData, UserRole } from '../types/user';
-import { SubeKodu } from '../types/sube';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -17,8 +17,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
-
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export const useAuth = () => {
@@ -95,6 +95,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // }
     }
   };
+  
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
+  };
 
   const logout = async () => {
     await signOut(auth);
@@ -105,7 +109,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     login,
     register,
-    logout
+    logout,
+    resetPassword
   };
 
   return (

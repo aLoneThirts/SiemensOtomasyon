@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu } from '../types/satis';
-import { getSubeByKod, SUBELER } from '../types/sube';
+import { getSubeByKod } from '../types/sube';
 import './SatisDetay.css';
 
 const SatisDetayPage: React.FC = () => {
   const { subeKodu, id } = useParams<{ subeKodu: string; id: string }>();
-  const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [satis, setSatis] = useState<SatisTeklifFormu | null>(null);
   const [loading, setLoading] = useState(true);

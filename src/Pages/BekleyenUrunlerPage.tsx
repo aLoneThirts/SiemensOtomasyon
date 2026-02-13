@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types/user';
-import { collection, query, getDocs, addDoc, doc, updateDoc, where } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { BekleyenUrun } from '../types/satis';
 import { getSubeByKod, SUBELER } from '../types/sube';
@@ -197,10 +197,6 @@ urunListesi.sort((a, b) => {
               Teslim Edildi ({bekleyenUrunler.filter(u => u.durum === 'TESLIM_EDILDI').length})
             </button>
           </div>
-
-          <button onClick={() => setShowForm(!showForm)} className="btn-add-product">
-            {showForm ? 'Formu Kapat' : '+ Yeni Bekleyen Ürün'}
-          </button>
         </div>
 
         {showForm && (

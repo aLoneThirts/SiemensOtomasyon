@@ -245,9 +245,17 @@
     min-height: 40vh;
   }
 
-  .siemens-logo {
-    width: 200px;
-  }
+.siemens-logo-container {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 50px;
+}
+
+.siemens-logo {
+  width: 250px;
+  height: auto;
+  display: block;
+
 
   .auth-welcome h1 {
     font-size: 32px;
@@ -260,4 +268,14 @@
   .form-row {
     grid-template-columns: 1fr;
   }
+.siemens-brand {
+  font-size: 64px;
+  font-weight: 900;
+  letter-spacing: 14px;
+  color: white;
+  margin: 0;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  font-family: 'Arial', sans-serif;
+}
+}
 }

@@ -20,6 +20,14 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    // Debug için
+    console.log('👤 Current User:', currentUser);
+    console.log('🔑 Role:', currentUser?.role);
+    console.log('🔑 Role Type:', typeof currentUser?.role);
+    console.log('📊 UserRole.ADMIN:', UserRole.ADMIN);
+    console.log('✅ Is Admin?:', currentUser?.role === UserRole.ADMIN);
+    console.log('✅ Role includes ADMIN?:', currentUser?.role?.includes('ADMIN'));
+
     fetchSatislar();
   }, [currentUser]);
 
@@ -28,26 +36,44 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       const satisListesi: SatisTeklifFormu[] = [];
 
-      if (currentUser?.role === UserRole.ADMIN) {
-        // Admin tüm şubelerin satışlarını görebilir
+      console.log('🔍 Fetching satislar...');
+      console.log('🔑 Current role:', currentUser?.role);
+      console.log('✅ Is admin check:', currentUser?.role?.trim() === 'ADMIN');
+
+      const isAdmin = currentUser?.role?.toString().trim() === 'ADMIN';
+      
+      console.log('👑 Is Admin:', isAdmin);
+
+      if (isAdmin) {
+        console.log('👑 ADMIN - Tüm şubelerin satışları yükleniyor...');
         for (const sube of SUBELER) {
           try {
+            console.log(`📦 ${sube.ad} yükleniyor...`);
             const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
             const snapshot = await getDocs(satisRef);
             
+            console.log(`✅ ${sube.ad}: ${snapshot.size} satış bulundu`);
+            
             snapshot.forEach((doc: any) => {
-              satisListesi.push({ id: doc.id, ...doc.data() } as SatisTeklifFormu);
+              satisListesi.push({ 
+                id: doc.id, 
+                ...doc.data(),
+                subeKodu: sube.kod // Şube kodunu ekle
+              } as SatisTeklifFormu);
             });
           } catch (error) {
-            console.error(`${sube.ad} şubesi yüklenemedi:`, error);
+            console.error(`❌ ${sube.ad} şubesi yüklenemedi:`, error);
           }
         }
       } else {
-        // Çalışan sadece kendi şubesinin satışlarını görebilir
+        console.log('👤 ÇALIŞAN - Sadece kendi şubesi yükleniyor...');
         const sube = getSubeByKod(currentUser!.subeKodu);
         if (sube) {
+          console.log(`📦 ${sube.ad} yükleniyor...`);
           const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
           const snapshot = await getDocs(satisRef);
+          
+          console.log(`✅ ${sube.ad}: ${snapshot.size} satış bulundu`);
           
           snapshot.forEach((doc: any) => {
             satisListesi.push({ id: doc.id, ...doc.data() } as SatisTeklifFormu);
@@ -55,9 +81,10 @@ const Dashboard: React.FC = () => {
         }
       }
 
+      console.log('📊 Toplam yüklenen satış sayısı:', satisListesi.length);
       setSatislar(satisListesi);
     } catch (error) {
-      console.error('Satışlar yüklenemedi:', error);
+      console.error('❌ Satışlar yüklenemedi:', error);
     } finally {
       setLoading(false);
     }
@@ -89,22 +116,14 @@ const Dashboard: React.FC = () => {
     <div className="dashboard-container">
       <header className="dashboard-header">
         <div className="header-content">
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
           <h1>SIEMENS OTOMASYON</h1>
-=======
-          <h1>İş Takip Sistemi</h1>
->>>>>>> Stashed changes
-=======
-          <h1>İş Takip Sistemi</h1>
->>>>>>> Stashed changes
           <div className="user-info">
             <div className="user-details">
               <div className="user-name">{currentUser?.ad} {currentUser?.soyad}</div>
               <div className="user-meta">
                 <span className="user-sube">{getSubeByKod(currentUser!.subeKodu)?.ad}</span>
                 <span className="user-role">
-                  ({currentUser?.role === UserRole.ADMIN ? 'Admin' : 'Çalışan'})
+                  ({currentUser?.role?.toString().trim() === 'ADMIN' ? 'Admin' : 'Çalışan'})
                 </span>
               </div>
             </div>
@@ -123,7 +142,7 @@ const Dashboard: React.FC = () => {
         <button onClick={() => navigate('/bekleyen-urunler')} className="nav-btn">
           Bekleyen Ürünler
         </button>
-        {currentUser?.role === UserRole.ADMIN && (
+        {currentUser?.role?.toString().trim() === 'ADMIN' && (
           <button onClick={() => navigate('/admin')} className="nav-btn">
             Admin Panel
           </button>
@@ -133,6 +152,7 @@ const Dashboard: React.FC = () => {
       <div className="dashboard-content">
         <div className="content-header">
           <h2>Satış Listesi</h2>
+           <button onClick={fetchSatislar} className="btn-filtre">Şube Filtrele</button>
           <button onClick={fetchSatislar} className="btn-refresh">YENİLE</button>
         </div>
 
@@ -161,7 +181,7 @@ const Dashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {satislar.map(satis => (
+                {satislar.map((satis: SatisTeklifFormu) => (
                   <tr key={satis.id}>
                     <td><strong>{satis.satisKodu}</strong></td>
                     <td>{getSubeByKod(satis.subeKodu)?.ad}</td>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, MusteriBilgileri, Urun, OdemeYontemi, SatisLog } from '../types/satis';
 import { getSubeByKod } from '../types/sube';
