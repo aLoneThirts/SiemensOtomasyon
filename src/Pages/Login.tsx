@@ -25,7 +25,22 @@ const Login: React.FC = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch (error: any) {
-      setError('Giriş başarısız. Email veya şifre hatalı.');
+      console.error('Login error:', error);
+      
+      // Firebase hata mesajlarını Türkçeleştir
+      if (error.code === 'auth/user-not-found') {
+        setError('Bu email adresiyle kayıtlı kullanıcı bulunamadı.');
+      } else if (error.code === 'auth/wrong-password') {
+        setError('Şifre hatalı.');
+      } else if (error.code === 'auth/invalid-email') {
+        setError('Geçersiz email adresi.');
+      } else if (error.code === 'auth/too-many-requests') {
+        setError('Çok fazla başarısız giriş denemesi. Lütfen daha sonra tekrar deneyin.');
+      } else if (error.code === 'auth/invalid-credential') {
+        setError('Email veya şifre hatalı.');
+      } else {
+        setError(error.message || 'Giriş başarısız. Email veya şifre hatalı.');
+      }
     } finally {
       setLoading(false);
     }
@@ -54,24 +69,28 @@ const Login: React.FC = () => {
           
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label>E-posta</label>
+              <label htmlFor="email">E-posta</label>
               <input
+                id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="ornek@email.com"
                 disabled={loading}
+                autoComplete="email"
               />
             </div>
 
             <div className="form-group">
-              <label>Şifre</label>
+              <label htmlFor="password">Şifre</label>
               <input
+                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 disabled={loading}
+                autoComplete="current-password"
               />
             </div>
 

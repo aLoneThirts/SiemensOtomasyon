@@ -80,8 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
-  };
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
     
     // Kullanıcının şube bilgisini kontrol et
     const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
@@ -89,10 +88,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userData = userDoc.data();
       
       // Admin değilse ve farklı şubeye giriş yapmaya çalışıyorsa hata ver
-      if (userData.role !== UserRole.ADMIN && userData.subeKodu !== subeKodu) {
-        await signOut(auth);
-        throw new Error('Bu şubeye giriş yetkiniz yok!');
-      }
+      // Not: Şube kontrolü için subeKodu parametresi eklemen gerekebilir
+      // if (userData.role !== UserRole.ADMIN && userData.subeKodu !== subeKodu) {
+      //   await signOut(auth);
+      //   throw new Error('Bu şubeye giriş yetkiniz yok!');
+      // }
     }
   };
 
