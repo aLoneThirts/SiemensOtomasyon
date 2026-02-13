@@ -1,25 +1,52 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { SUBELER } from '../types/sube';
-import { SubeKodu } from '../types/sube';
-import { RegisterData } from '../types/user';
 import './Auth.css';
 
 const Register: React.FC = () => {
-  const [formData, setFormData] = useState<RegisterData>({
+  const [formData, setFormData] = useState({
     email: '',
     password: '',
     ad: '',
     soyad: '',
-    subeKodu: SubeKodu.KARTAL
+    subeKodu: ''
   });
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.email || !formData.password || !formData.ad || !formData.soyad || !formData.subeKodu) {
+      setError('Lütfen tüm alanları doldurun');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Şifre en az 6 karakter olmalıdır');
+      return;
+    }
+
+    try {
+      setError('');
+      setLoading(true);
+      await register({
+        email: formData.email,
+        password: formData.password,
+        ad: formData.ad,
+        soyad: formData.soyad,
+        subeKodu: formData.subeKodu as any
+      });
+      navigate('/dashboard');
+    } catch (error: any) {
+      setError(error.message || 'Kayıt başarısız oldu');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -28,125 +55,104 @@ const Register: React.FC = () => {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (formData.password !== confirmPassword) {
-      setError('Şifreler eşleşmiyor!');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError('Şifre en az 6 karakter olmalıdır!');
-      return;
-    }
-
-    try {
-      setError('');
-      setLoading(true);
-      await register(formData);
-      navigate('/login');
-    } catch (err: any) {
-      setError(err.message || 'Kayıt yapılamadı!');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="auth-container">
-      <div className="auth-card">
-        <h1>Siemens Otomasyon</h1>
-        <h2>Kayıt Ol</h2>
-        
-        {error && <div className="error-message">{error}</div>}
-        
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Şube Seçin</label>
-            <select
-              name="subeKodu"
-              value={formData.subeKodu}
-              onChange={handleChange}
-              required
-            >
-              {SUBELER.map(sube => (
-                <option key={sube.kod} value={sube.kod}>
-                  {sube.ad}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="auth-left">
+        <svg className="siemens-logo" viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
+          <text x="10" y="30" fontFamily="Arial, sans-serif" fontSize="32" fontWeight="bold" fill="white">
+            SIEMENS
+          </text>
+        </svg>
+        <div className="auth-welcome">
+          <h1>Takımınıza Katılın</h1>
+          <p>Profesyonel iş takip sistemimizle satış süreçlerinizi optimize edin ve verimliliğinizi artırın.</p>
+        </div>
+      </div>
+      
+      <div className="auth-right">
+        <div className="auth-card">
+          <h1>Kayıt Ol</h1>
+          <h2>Yeni hesap oluşturun</h2>
+          
+          {error && <div className="error-message">{error}</div>}
+          
+          <form onSubmit={handleSubmit}>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Ad</label>
+                <input
+                  type="text"
+                  name="ad"
+                  value={formData.ad}
+                  onChange={handleChange}
+                  placeholder="Adınız"
+                  disabled={loading}
+                />
+              </div>
 
-          <div className="form-row">
+              <div className="form-group">
+                <label>Soyad</label>
+                <input
+                  type="text"
+                  name="soyad"
+                  value={formData.soyad}
+                  onChange={handleChange}
+                  placeholder="Soyadınız"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
             <div className="form-group">
-              <label>Ad</label>
+              <label>E-posta</label>
               <input
-                type="text"
-                name="ad"
-                value={formData.ad}
+                type="email"
+                name="email"
+                value={formData.email}
                 onChange={handleChange}
-                placeholder="Adınız"
-                required
+                placeholder="ornek@email.com"
+                disabled={loading}
               />
             </div>
 
             <div className="form-group">
-              <label>Soyad</label>
+              <label>Şifre</label>
               <input
-                type="text"
-                name="soyad"
-                value={formData.soyad}
+                type="password"
+                name="password"
+                value={formData.password}
                 onChange={handleChange}
-                placeholder="Soyadınız"
-                required
+                placeholder="En az 6 karakter"
+                disabled={loading}
               />
             </div>
+
+            <div className="form-group">
+              <label>Şube</label>
+              <select
+                name="subeKodu"
+                value={formData.subeKodu}
+                onChange={handleChange}
+                disabled={loading}
+              >
+                <option value="">Şube Seçiniz</option>
+                {SUBELER.map(sube => (
+                  <option key={sube.kod} value={sube.kod}>
+                    {sube.ad}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Kayıt Yapılıyor...' : 'Kayıt Ol'}
+            </button>
+          </form>
+
+          <div className="auth-link">
+            Zaten hesabınız var mı? <Link to="/login">Giriş Yap</Link>
           </div>
-
-          <div className="form-group">
-            <label>E-posta</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="ornek@email.com"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Şifre</label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Minimum 6 karakter"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Şifre Tekrar</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Şifrenizi tekrar girin"
-              required
-            />
-          </div>
-
-          <button type="submit" disabled={loading} className="btn-primary">
-            {loading ? 'Kayıt Yapılıyor...' : 'Kayıt Ol'}
-          </button>
-        </form>
-
-        <p className="auth-link">
-          Zaten hesabın var mı? <a href="/login">Giriş Yap</a>
-        </p>
+        </div>
       </div>
     </div>
   );

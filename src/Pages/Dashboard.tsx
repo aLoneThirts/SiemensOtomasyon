@@ -28,86 +28,36 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       const satisListesi: SatisTeklifFormu[] = [];
 
-      console.log('Kullanıcı rolü:', currentUser?.role);
-      console.log('Kullanıcı şubesi:', currentUser?.subeKodu);
-
       if (currentUser?.role === UserRole.ADMIN) {
-        // ADMIN - TÜM ŞUBELERİN SATIŞLARINI GETİR
-        console.log('Admin tüm şubeleri getiriyor...');
-        
+        // Admin tüm şubelerin satışlarını görebilir
         for (const sube of SUBELER) {
           try {
-            console.log(`${sube.ad} şubesi getiriliyor... Path: subeler/${sube.dbPath}/satislar`);
             const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
             const snapshot = await getDocs(satisRef);
             
-            console.log(`${sube.ad}: ${snapshot.size} satış bulundu`);
-            
-            snapshot.forEach((doc) => {
-              const satisData = doc.data();
-              satisListesi.push({ 
-                id: doc.id, 
-                ...satisData,
-                subeKodu: sube.kod
-              } as SatisTeklifFormu);
+            snapshot.forEach((doc: any) => {
+              satisListesi.push({ id: doc.id, ...doc.data() } as SatisTeklifFormu);
             });
           } catch (error) {
-            console.error(`${sube.ad} şubesi yüklenirken hata:`, error);
+            console.error(`${sube.ad} şubesi yüklenemedi:`, error);
           }
         }
       } else {
-        // CALISAN - SADECE KENDİ ŞUBESİ
-        console.log('Çalışan kendi şubesini getiriyor...');
+        // Çalışan sadece kendi şubesinin satışlarını görebilir
         const sube = getSubeByKod(currentUser!.subeKodu);
-        
         if (sube) {
-          try {
-            console.log(`${sube.ad} şubesi getiriliyor... Path: subeler/${sube.dbPath}/satislar`);
-            const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
-            const snapshot = await getDocs(satisRef);
-            
-            console.log(`${sube.ad}: ${snapshot.size} satış bulundu`);
-            
-            snapshot.forEach((doc) => {
-              satisListesi.push({ 
-                id: doc.id, 
-                ...doc.data() 
-              } as SatisTeklifFormu);
-            });
-          } catch (error) {
-            console.error('Satışlar yüklenirken hata:', error);
-          }
+          const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
+          const snapshot = await getDocs(satisRef);
+          
+          snapshot.forEach((doc: any) => {
+            satisListesi.push({ id: doc.id, ...doc.data() } as SatisTeklifFormu);
+          });
         }
       }
 
-      console.log('TÜM SATIŞLAR:', satisListesi.map(s => ({
-        id: s.id,
-        sube: s.subeKodu,
-        kod: s.satisKodu
-      })));
-
-      const siraliSatislar = [...satisListesi].sort((a: any, b: any) => {
-        const getDate = (tarih: any): Date => {
-          if (!tarih) return new Date(0);
-          if (tarih && typeof tarih === 'object' && 'toDate' in tarih) {
-            return tarih.toDate();
-          }
-          if (tarih instanceof Date) {
-            return tarih;
-          }
-          return new Date(tarih);
-        };
-        
-        const dateA = getDate(a.tarih);
-        const dateB = getDate(b.tarih);
-        return dateB.getTime() - dateA.getTime();
-      });
-
-      console.log('Toplam satış sayısı:', siraliSatislar.length);
-      setSatislar(siraliSatislar);
-      
+      setSatislar(satisListesi);
     } catch (error) {
-      console.error('Ana hata:', error);
+      console.error('Satışlar yüklenemedi:', error);
     } finally {
       setLoading(false);
     }
@@ -131,42 +81,26 @@ const Dashboard: React.FC = () => {
 
   const formatDate = (date: any) => {
     if (!date) return '';
-    try {
-      if (date && typeof date === 'object' && 'toDate' in date) {
-        return date.toDate().toLocaleDateString('tr-TR');
-      }
-      if (date instanceof Date) {
-        return date.toLocaleDateString('tr-TR');
-      }
-      return new Date(date).toLocaleDateString('tr-TR');
-    } catch {
-      return '';
-    }
+    const d = date.toDate ? date.toDate() : new Date(date);
+    return d.toLocaleDateString('tr-TR');
   };
 
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
         <div className="header-content">
-          <h1>İş Takip Sistemi</h1>
+          <h1>SIEMENS OTOMASYON</h1>
           <div className="user-info">
             <div className="user-details">
-              <span className="user-name">
-                {currentUser?.ad} {currentUser?.soyad}
-              </span>
-              <div className="user-badges">
-                {/* DÜZELTİLDİ: Admin/User ayrımı */}
-                <span className={`role-badge ${currentUser?.role === UserRole.ADMIN ? 'role-admin' : 'role-user'}`}>
-                  {currentUser?.role === UserRole.ADMIN ? 'Admin' : 'User'}
-                </span>
-                <span className="sube-badge">
-                  {currentUser?.role === UserRole.ADMIN 
-                    ? 'Tüm Şubeler' 
-                    : `${getSubeByKod(currentUser!.subeKodu)?.ad} Şubesi`}
+              <div className="user-name">{currentUser?.ad} {currentUser?.soyad}</div>
+              <div className="user-meta">
+                <span className="user-sube">{getSubeByKod(currentUser!.subeKodu)?.ad}</span>
+                <span className="user-role">
+                  ({currentUser?.role === UserRole.ADMIN ? 'Admin' : 'Çalışan'})
                 </span>
               </div>
             </div>
-            <button onClick={handleLogout} className="btn-logout">Çıkış</button>
+            <button onClick={handleLogout} className="btn-logout">ÇIKIŞ</button>
           </div>
         </div>
       </header>
@@ -191,7 +125,7 @@ const Dashboard: React.FC = () => {
       <div className="dashboard-content">
         <div className="content-header">
           <h2>Satış Listesi</h2>
-          <button onClick={fetchSatislar} className="btn-refresh">Yenile</button>
+          <button onClick={fetchSatislar} className="btn-refresh">YENİLE</button>
         </div>
 
         {loading ? (
@@ -200,7 +134,7 @@ const Dashboard: React.FC = () => {
           <div className="empty-state">
             <p>Henüz satış kaydı bulunmuyor.</p>
             <button onClick={() => navigate('/satis-teklif')} className="btn-primary">
-              İlk Satış Teklifini Oluştur
+              İLK SATIŞ TEKLİFİNİ OLUŞTUR
             </button>
           </div>
         ) : (
@@ -208,43 +142,36 @@ const Dashboard: React.FC = () => {
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th>Satış Kodu</th>
-                  <th>Şube</th>
-                  <th>Müşteri</th>
-                  <th>Toplam Tutar</th>
-                  <th>Tarih</th>
-                  <th>Teslimat</th>
-                  <th>Durum</th>
-                  <th>İşlemler</th>
+                  <th>SATIŞ KODU</th>
+                  <th>ŞUBE</th>
+                  <th>MÜŞTERİ</th>
+                  <th>TOPLAM TUTAR</th>
+                  <th>TARİH</th>
+                  <th>TESLİMAT</th>
+                  <th>DURUM</th>
+                  <th>İŞLEMLER</th>
                 </tr>
               </thead>
               <tbody>
-                {satislar.map((satis) => (
+                {satislar.map(satis => (
                   <tr key={satis.id}>
                     <td><strong>{satis.satisKodu}</strong></td>
-                    <td>
-                      {satis.subeKodu ? 
-                        getSubeByKod(satis.subeKodu)?.ad : 
-                        getSubeByKod(currentUser!.subeKodu)?.ad}
-                    </td>
-                    <td>{satis.musteriBilgileri?.isim || 'Belirtilmemiş'}</td>
+                    <td>{getSubeByKod(satis.subeKodu)?.ad}</td>
+                    <td>{satis.musteriBilgileri.isim}</td>
                     <td><strong>{formatPrice(satis.toplamTutar)}</strong></td>
                     <td>{formatDate(satis.tarih)}</td>
                     <td>{formatDate(satis.teslimatTarihi)}</td>
                     <td>
                       <span className={`status-badge ${satis.onayDurumu ? 'approved' : 'pending'}`}>
-                        {satis.onayDurumu ? 'Onaylı' : 'Beklemede'}
+                        {satis.onayDurumu ? 'ONAYLI' : 'BEKLEMEDE'}
                       </span>
                     </td>
                     <td>
                       <button 
-                        onClick={() => {
-                          const subeKodu = satis.subeKodu || currentUser!.subeKodu;
-                          navigate(`/satis-detay/${subeKodu}/${satis.id}`);
-                        }}
+                        onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
                         className="btn-view"
                       >
-                        Görüntüle
+                        GÖRÜNTÜLE
                       </button>
                     </td>
                   </tr>
