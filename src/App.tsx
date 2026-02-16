@@ -8,6 +8,7 @@ import SatisTeklifPage from './Pages/SatisTeklifPage';
 import BekleyenUrunlerPage from './Pages/BekleyenUrunlerPage';
 import AdminPanel from './Pages/AdminPanel';
 import SatisDetayPage from './Pages/SatisDetayPage';
+import Kasa from './Pages/Kasa';
 import './App.css';
 
 const PrivateRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -59,6 +60,22 @@ function App() {
             element={
               <PrivateRoute>
                 <AdminPanel />
+              </PrivateRoute>
+            }
+          />
+             <Route
+            path="/kasa"
+            element={
+              <PrivateRoute>
+                <Kasa />
+              </PrivateRoute>
+            }
+          />
+             <Route
+            path="/ciro/performans"
+            element={
+              <PrivateRoute>
+                <Kasa />
               </PrivateRoute>
             }
           />

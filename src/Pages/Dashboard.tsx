@@ -227,7 +227,16 @@ const Dashboard: React.FC = () => {
           Yeni Satış Teklifi
         </button>
         <button onClick={() => navigate('/bekleyen-urunler')} className="nav-btn">
-          Bekleyen Ürünler
+          İleri Teslim
+        </button>
+          <button onClick={() => navigate('/bekleyen-urunler')} className="nav-btn">
+          Kontrol Et
+        </button>
+         <button onClick={() => navigate('../pages/Kasa')} className="nav-btn">
+         KASA
+        </button>
+           <button onClick={() => navigate('/ciro/performans')} className="nav-btn">
+         Ciro/Performans
         </button>
         {isAdmin && (
           <button onClick={() => navigate('/admin')} className="nav-btn">
@@ -263,28 +272,125 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div className="filtre-grup">
-            <label>Başlangıç Tarihi:</label>
-            <input 
-              type="date" 
-              value={baslangicTarihi}
-              min={enEskiTarih}
-              max={enYeniTarih}
-              onChange={(e) => setBaslangicTarihi(e.target.value)}
-              className="filtre-input"
-            />
+            <label>Zarar Olanları Göster</label>
+            <select 
+              value={secilenSube} 
+              onChange={(e) => setSecilenSube(e.target.value)}
+              className="filtre-select"
+            >
+              <option value="">Tüm Şubeler ({mevcutSubeler.length})</option>
+              {mevcutSubeler.map(kod => {
+                const sube = getSubeByKod(kod as SubeKodu);
+                return sube ? (
+                  <option key={kod} value={kod}>
+                    {sube.ad}
+                  </option>
+                ) : null;
+              })}
+            </select>
           </div>
 
           <div className="filtre-grup">
-            <label>Bitiş Tarihi:</label>
-            <input 
-              type="date" 
-              value={bitisTarihi}
-              min={enEskiTarih}
-              max={enYeniTarih}
-              onChange={(e) => setBitisTarihi(e.target.value)}
-              className="filtre-input"
-            />
+            <label>Durum :</label>
+            <select 
+              value={secilenSube} 
+              onChange={(e) => setSecilenSube(e.target.value)}
+              className="filtre-select"
+            >
+              <option value="">Tüm Şubeler ({mevcutSubeler.length})</option>
+              {mevcutSubeler.map(kod => {
+                const sube = getSubeByKod(kod as SubeKodu);
+                return sube ? (
+                  <option key={kod} value={kod}>
+                    {sube.ad}
+                  </option>
+                ) : null;
+              })}
+            </select>
           </div>
+
+              <div className="filtre-grup">
+            <label>Teslim Tarihi</label>
+            <select 
+              value={secilenSube} 
+              onChange={(e) => setSecilenSube(e.target.value)}
+              className="filtre-select"
+            >
+              <option value="">Tüm Şubeler ({mevcutSubeler.length})</option>
+              {mevcutSubeler.map(kod => {
+                const sube = getSubeByKod(kod as SubeKodu);
+                return sube ? (
+                  <option key={kod} value={kod}>
+                    {sube.ad}
+                  </option>
+                ) : null;
+              })}
+            </select>
+          </div>
+
+            <div className="filtre-grup">
+            <label>Açık Hesap</label>
+            <select 
+              value={secilenSube} 
+              onChange={(e) => setSecilenSube(e.target.value)}
+              className="filtre-select"
+            >
+              <option value="">Tüm Şubeler ({mevcutSubeler.length})</option>
+              {mevcutSubeler.map(kod => {
+                const sube = getSubeByKod(kod as SubeKodu);
+                return sube ? (
+                  <option key={kod} value={kod}>
+                    {sube.ad}
+                  </option>
+                ) : null;
+              })}
+            </select>
+          </div>
+       
+
+            <div className="filtre-grup">
+            <label>Satış Tarihi</label>
+            <select 
+              value={secilenSube} 
+              onChange={(e) => setSecilenSube(e.target.value)}
+              className="filtre-select"
+            >
+              <option value="">Tüm Şubeler ({mevcutSubeler.length})</option>
+              {mevcutSubeler.map(kod => {
+                const sube = getSubeByKod(kod as SubeKodu);
+                return sube ? (
+                  <option key={kod} value={kod}>
+                    {sube.ad}
+                  </option>
+                ) : null;
+              })}
+            </select>
+          </div>
+
+             <div className="searchbar">
+            <label>Satış Kodu:</label>
+            <select 
+              value={secilenSube} 
+              onChange={(e) => setSecilenSube(e.target.value)}
+              className="searchbar"
+            >
+              <option value="">Tüm Şubeler ({mevcutSubeler.length})</option>
+              {mevcutSubeler.map(kod => {
+                const sube = getSubeByKod(kod as SubeKodu);
+                return sube ? (
+                  <option key={kod} value={kod}>
+                    {sube.ad}
+                  </option>
+                ) : null;
+              })}
+            </select>
+          </div>
+       
+       
+
+       
+       
+      
 
           <button onClick={filtreleriSifirla} className="btn-sifirla">
             Filtreleri Sıfırla
@@ -332,6 +438,10 @@ const Dashboard: React.FC = () => {
                       <span className={`status-badge ${satis.onayDurumu ? 'approved' : 'pending'}`}>
                         {satis.onayDurumu ? 'ONAYLI' : 'BEKLEMEDE'}
                       </span>
+                        <span className={`status-badge ${satis.onayDurumu ? 'approved' : 'pending'}`}>
+                        {satis.onayDurumu ? 'A.H' : 'Ödendi'}
+                      </span>
+
                     </td>
                     <td>
                       <button 
