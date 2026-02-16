@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { SatisTeklifFormu } from '../types/satis';
+import { SatisTeklifFormu, Kampanya, YesilEtiket, KartOdeme } from '../types/satis';
 import { getSubeByKod } from '../types/sube';
 import './SatisDetay.css';
 
@@ -20,21 +20,16 @@ const SatisDetayPage: React.FC = () => {
     try {
       setLoading(true);
       
-      // Şube bilgisini al
       const sube = getSubeByKod(subeKodu as any);
       if (!sube) {
         console.error('Şube bulunamadı:', subeKodu);
         return;
       }
 
-      console.log('Şube:', sube.dbPath, 'ID:', id);
-      
-      // Satışı çek
       const satisDoc = await getDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!));
       
       if (satisDoc.exists()) {
         setSatis({ id: satisDoc.id, ...satisDoc.data() } as SatisTeklifFormu);
-        console.log('Satış bulundu:', satisDoc.data());
       } else {
         console.error('Satış bulunamadı!');
       }
@@ -45,21 +40,37 @@ const SatisDetayPage: React.FC = () => {
     }
   };
 
-  const formatPrice = (price: number) => {
+  const formatPrice = (price: number | undefined | null) => {
+    if (price === undefined || price === null) return '0₺';
     return new Intl.NumberFormat('tr-TR', {
-      style: 'currency',
-      currency: 'TRY'
-    }).format(price);
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(price) + '₺';
   };
 
   const formatDate = (date: any) => {
-    if (!date) return '';
-    const d = date.toDate ? date.toDate() : new Date(date);
-    return d.toLocaleDateString('tr-TR');
+    if (!date) return '-';
+    try {
+      const d = date.toDate ? date.toDate() : new Date(date);
+      return d.toLocaleDateString('tr-TR');
+    } catch {
+      return '-';
+    }
   };
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const toplamMaliyetHesapla = () => {
+    if (!satis?.urunler) return 0;
+    const alisToplam = satis.urunler.reduce((sum, urun) => sum + (urun.adet * urun.alisFiyati), 0);
+    const bipToplam = satis.urunler.reduce((sum, urun) => sum + ((urun.bip || 0) * urun.adet), 0);
+    return alisToplam - bipToplam;
+  };
+
+  const yesilEtiketToplamHesapla = () => {
+    return satis?.yesilEtiketler?.reduce((sum, etiket) => sum + etiket.tutar, 0) || 0;
   };
 
   if (loading) {
@@ -78,8 +89,10 @@ const SatisDetayPage: React.FC = () => {
   }
 
   return (
-    <div className="satis-detay-container">
-      <div className="satis-detay-header">
+    <div className="detay-container">
+      
+      {/* HEADER */}
+      <div className="detay-header no-print">
         <button onClick={() => navigate('/dashboard')} className="btn-back">
           ← Geri
         </button>
@@ -89,144 +102,206 @@ const SatisDetayPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="satis-detay-content">
-        {/* Başlık Bilgileri */}
-        <div className="detay-section">
-          <div className="section-header">
-            <h2>Satış Bilgileri</h2>
-            <span className={`status-badge ${satis.onayDurumu ? 'approved' : 'pending'}`}>
-              {satis.onayDurumu ? 'Onaylı' : 'Onay Bekliyor'}
-            </span>
-          </div>
+      {/* İÇERİK */}
+      <div className="detay-icerik">
+        
+        {/* BAŞLIK */}
+        <div className="baslik-bolumu">
+          <div className="firma-adi">Siemens Otomasyon</div>
+          <div className="sayfa-basligi">SATIŞ DETAYI</div>
+        </div>
+
+        {/* 1. YEŞİL ÇERÇEVE */}
+        <div className="yesil-cerceve">
           
-          <div className="info-grid">
-            <div className="info-item">
-              <label>Satış Kodu</label>
-              <strong>{satis.satisKodu}</strong>
+          {/* Üst Satır - 3 Sütun */}
+          <div className="ust-satir">
+            <div className="sutun">
+              <div className="etiket">SATIŞ KODU</div>
+              <div className="deger">{satis.satisKodu}</div>
             </div>
-            <div className="info-item">
-              <label>Şube</label>
-              <span>{getSubeByKod(satis.subeKodu)?.ad}</span>
+            
+            <div className="sutun orta-sutun">
+              <div className="etiket">SATIŞ BİLGİLERİ</div>
+              <div className="bilgi">MÜŞTERİ TEMSİLCİSİ: {satis.musteriTemsilcisi}</div>
+              {satis.musteriTemsilcisiTel && <div className="bilgi">TEL: {satis.musteriTemsilcisiTel}</div>}
             </div>
-            <div className="info-item">
-              <label>Tarih</label>
-              <span>{formatDate(satis.tarih)}</span>
+            
+            <div className="sutun">
+              <div className="etiket">TARİH</div>
+              <div className="deger">{formatDate(satis.tarih)}</div>
             </div>
-            <div className="info-item">
-              <label>Teslimat Tarihi</label>
-              <span>{formatDate(satis.teslimatTarihi)}</span>
+          </div>
+
+          {/* Alt Satır - Müşteri Bilgileri (YAN YANA) */}
+          <div className="alt-satir">
+            {/* SOL - Müşteri Bilgileri */}
+            <div className="sol-kolon">
+              <div className="baslik-alt">MÜŞTERİ BİLGİLERİ</div>
+              <div className="satir-item">ÖNVAN: {satis.musteriBilgileri?.isim}</div>
+              <div className="satir-item">V.K NO: {satis.musteriBilgileri?.vkNo || '-'}</div>
+              <div className="satir-item">V.D: {satis.musteriBilgileri?.vd || '-'}</div>
+              <div className="satir-item">CEP: {satis.musteriBilgileri?.cep || '-'}</div>
+              <div className="satir-item">ADRES: {satis.musteriBilgileri?.adres}</div>
             </div>
-            <div className="info-item">
-              <label>Müşteri Temsilcisi</label>
-              <span>{satis.musteriTemsilcisi || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>Oluşturan</label>
-              <span>{satis.olusturanKullanici}</span>
+            
+            {/* SAĞ - Diğer Bilgiler */}
+            <div className="sag-kolon">
+              <div className="satir-item">MARS NO: {satis.marsNo || '-'}</div>
+              <div className="satir-item">MAĞAZA: {satis.magaza || '-'}</div>
+              <div className="satir-item">FATURA NO: {satis.faturaNo || '-'}</div>
+              <div className="satir-item">SERVİS: {satis.servisNotu || '-'}</div>
+              <div className="satir-item">TESLİM EDİLDİ Mİ?: {satis.teslimEdildiMi ? 'EVET' : 'HAYIR'}</div>
+              <div className="satir-item">TESLİMAT TARİHİ: {formatDate(satis.teslimatTarihi)}</div>
             </div>
           </div>
         </div>
 
-        {/* Müşteri Bilgileri */}
-        <div className="detay-section">
-          <h2>Müşteri Bilgileri</h2>
-          <div className="info-grid">
-            <div className="info-item">
-              <label>İsim</label>
-              <strong>{satis.musteriBilgileri.isim}</strong>
-            </div>
-            <div className="info-item">
-              <label>Adres</label>
-              <span>{satis.musteriBilgileri.adres}</span>
-            </div>
-            <div className="info-item">
-              <label>Fatura Adresi</label>
-              <span>{satis.musteriBilgileri.faturaAdresi || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>İş Adresi</label>
-              <span>{satis.musteriBilgileri.isAdresi || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>Vergi Numarası</label>
-              <span>{satis.musteriBilgileri.vergiNumarasi || '-'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Ürünler */}
-        <div className="detay-section">
-          <h2>Ürünler</h2>
-          <table className="urunler-table">
-            <thead>
-              <tr>
-                <th>Ürün Kodu</th>
-                <th>Ürün Adı</th>
-                <th>Adet</th>
-                <th>Birim Fiyat</th>
-                <th>Toplam</th>
-              </tr>
-            </thead>
-            <tbody>
-              {satis.urunler.map((urun, index) => (
-                <tr key={index}>
-                  <td>{urun.kod}</td>
-                  <td><strong>{urun.ad}</strong></td>
-                  <td>{urun.adet}</td>
-                  <td>{formatPrice(urun.alisFiyati)}</td>
-                  <td><strong>{formatPrice(urun.adet * urun.alisFiyati)}</strong></td>
+        {/* 2. ANA BÖLÜM - ÜRÜNLER + KAMPANYALAR */}
+        <div className="ana-bolum">
+          
+          {/* SOL - Kırmızı Çerçeve (Ürünler) */}
+          <div className="kirmizi-cerceve urun-bolumu">
+            <table className="urun-tablo">
+              <thead>
+                <tr>
+                  <th>ORİN KODU</th>
+                  <th>ADET</th>
+                  <th>ALIŞ</th>
+                  <th>BİP</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="toplam-row">
-                <td colSpan={4}>Genel Toplam</td>
-                <td><strong>{formatPrice(satis.toplamTutar)}</strong></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        {/* Ödeme ve Diğer Bilgiler */}
-        <div className="detay-section">
-          <h2>Ödeme ve Teslimat Bilgileri</h2>
-          <div className="info-grid">
-            <div className="info-item">
-              <label>Ödeme Yöntemi</label>
-              <strong>{satis.odemeYontemi}</strong>
-            </div>
-            <div className="info-item">
-              <label>Hesaba Geçen</label>
-              <span>{satis.hesabaGecen || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>Mağaza</label>
-              <span>{satis.magaza || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>Cevap</label>
-              <span>{satis.cevap || '-'}</span>
-            </div>
-          </div>
-
-          <div className="checkbox-info">
-            <div className="checkbox-item">
-              <span className={satis.fatura ? 'checked' : ''}>
-                {satis.fatura ? '✓' : '✗'} Fatura
-              </span>
-            </div>
-            <div className="checkbox-item">
-              <span className={satis.ileriTeslim ? 'checked' : ''}>
-                {satis.ileriTeslim ? '✓' : '✗'} İleri Teslim
-              </span>
-            </div>
-            <div className="checkbox-item">
-              <span className={satis.servis ? 'checked' : ''}>
-                {satis.servis ? '✓' : '✗'} Servis
-              </span>
+              </thead>
+              <tbody>
+                {/* Ürünler - Formdan gelenler */}
+                {satis.urunler && satis.urunler.length > 0 ? (
+                  satis.urunler.map((urun, index) => (
+                    <tr key={index}>
+                      <td>{urun.kod}</td>
+                      <td>{urun.adet}</td>
+                      <td>{formatPrice(urun.alisFiyati)}</td>
+                      <td>{urun.bip ? formatPrice(urun.bip) : '-'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4}>Ürün bulunamadı</td>
+                  </tr>
+                )}
+                
+                {/* BOŞ SATIRLAR - 15-20 adet yer olsun */}
+                {Array.from({ length: Math.max(0, 15 - (satis.urunler?.length || 0)) }).map((_, i) => (
+                  <tr key={`bos-${i}`} className="bos-satir">
+                    <td>(15-20 adet yer olsun)</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            
+            <div className="toplam-alan">
+              TOPLAM MALİYET: {formatPrice(toplamMaliyetHesapla())}
             </div>
           </div>
+
+          {/* SAĞ - Kampanyalar + Yeşil Etiketler */}
+          <div className="yan-panel">
+            
+            {/* Kampanyalar - Sarı Kutu */}
+            <div className="sari-kutu">
+              <div className="kutu-baslik">KAMPANYALAR</div>
+              {satis.kampanyalar && satis.kampanyalar.length > 0 ? (
+                satis.kampanyalar.map((kampanya: Kampanya, i: number) => (
+                  <div key={i} className="kutu-satir">
+                    {kampanya.ad}: {formatPrice(kampanya.tutar)}
+                  </div>
+                ))
+              ) : (
+                <div className="kutu-satir">Kampanya bulunamadı</div>
+              )}
+            </div>
+
+            {/* Yeşil Etiketler - Yeşil Kutu */}
+            <div className="yesil-kutu">
+              <div className="kutu-baslik">YEŞİL ETİKETLER</div>
+              {satis.yesilEtiketler && satis.yesilEtiketler.length > 0 ? (
+                <>
+                  <table className="etiket-tablo">
+                    <thead>
+                      <tr>
+                        <th>ÜRÜN KODU</th>
+                        <th>TUTAR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {satis.yesilEtiketler.map((etiket: YesilEtiket, i: number) => (
+                        <tr key={i}>
+                          <td>{etiket.urunKodu}</td>
+                          <td>{formatPrice(etiket.tutar)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="etiket-toplam">
+                    TOPLAM: {formatPrice(yesilEtiketToplamHesapla())}
+                  </div>
+                </>
+              ) : (
+                <div className="kutu-satir">Yeşil etiket bulunamadı</div>
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* 3. ÖDEME BİLGİLERİ */}
+        <div className="kirmizi-cerceve odeme-bolumu">
+          <div className="kutu-baslik">ÖDEME BİLGİLERİ</div>
+          
+          {/* Peşinat */}
+          {satis.pesinatTutar ? (
+            <div className="odeme-satir">PEŞİN: {formatPrice(satis.pesinatTutar)}</div>
+          ) : null}
+          
+          {/* Havale */}
+          {satis.havaleTutar ? (
+            <div className="odeme-satir">HAVALE: {formatPrice(satis.havaleTutar)}</div>
+          ) : null}
+          
+          {/* Kart Ödemeleri */}
+          {satis.kartOdemeler && satis.kartOdemeler.length > 0 ? (
+            satis.kartOdemeler.map((kart: KartOdeme, index: number) => (
+              <div key={index} className="odeme-satir">
+                KART: ({kart.banka}) / ({kart.taksitSayisi === 1 ? 'TEK' : `${kart.taksitSayisi} TAKSİT`}) / ({formatPrice(kart.tutar)}) 
+                {kart.pesinat ? ` / (PEŞİNAT: ${formatPrice(kart.pesinat)})` : ''}
+              </div>
+            ))
+          ) : null}
+
+          {/* Hesaba Geçen */}
+          {satis.hesabaGecen && (
+            <div className="hesaba-alan">
+              HESABA GEÇEN: {satis.hesabaGecen}
+            </div>
+          )}
+        </div>
+
+        {/* 4. ONAY - Mavi Çerçeve */}
+        <div className="mavi-cerceve">
+          <div className="onay-metin">
+            ONAY: {satis.onayDurumu ? 'ONAYLANDI' : 'ONAY BEKLİYOR'}
+          </div>
+          <div className="imza-metin">
+            İMZA: __________________
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="alt-bilgi">
+          <div>localhost</div>
+          <div>1/1</div>
+        </div>
+
       </div>
     </div>
   );

@@ -5,14 +5,25 @@ import { UserRole } from '../types/user';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu } from '../types/satis';
-import { getSubeByKod, SUBELER } from '../types/sube';
+import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
   const [satislar, setSatislar] = useState<SatisTeklifFormu[]>([]);
+  const [filtreliSatislar, setFiltreliSatislar] = useState<SatisTeklifFormu[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Filtre state'leri
+  const [secilenSube, setSecilenSube] = useState<string>('');
+  const [baslangicTarihi, setBaslangicTarihi] = useState<string>('');
+  const [bitisTarihi, setBitisTarihi] = useState<string>('');
+
+  // Mevcut şubeler ve tarih aralıkları
+  const [mevcutSubeler, setMevcutSubeler] = useState<string[]>([]);
+  const [enEskiTarih, setEnEskiTarih] = useState<string>('');
+  const [enYeniTarih, setEnYeniTarih] = useState<string>('');
 
   useEffect(() => {
     if (!currentUser) {
@@ -20,73 +31,147 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    // Debug için
-    console.log('👤 Current User:', currentUser);
-    console.log('🔑 Role:', currentUser?.role);
-    console.log('🔑 Role Type:', typeof currentUser?.role);
-    console.log('📊 UserRole.ADMIN:', UserRole.ADMIN);
-    console.log('✅ Is Admin?:', currentUser?.role === UserRole.ADMIN);
-    console.log('✅ Role includes ADMIN?:', currentUser?.role?.includes('ADMIN'));
-
     fetchSatislar();
   }, [currentUser]);
 
+  useEffect(() => {
+    filtreyiUygula();
+  }, [satislar, secilenSube, baslangicTarihi, bitisTarihi]);
+
   const fetchSatislar = async () => {
-    try {
-      setLoading(true);
-      const satisListesi: SatisTeklifFormu[] = [];
+  try {
+    setLoading(true);
+    const satisListesi: SatisTeklifFormu[] = [];
+    const subeSet = new Set<string>();
+    let minTarih: Date | undefined;
+    let maxTarih: Date | undefined;
 
-      console.log('🔍 Fetching satislar...');
-      console.log('🔑 Current role:', currentUser?.role);
-      console.log('✅ Is admin check:', currentUser?.role?.trim() === 'ADMIN');
+    const isAdmin = currentUser?.role?.toString().trim() === 'ADMIN';
 
-      const isAdmin = currentUser?.role?.toString().trim() === 'ADMIN';
-      
-      console.log('👑 Is Admin:', isAdmin);
-
-      if (isAdmin) {
-        console.log('👑 ADMIN - Tüm şubelerin satışları yükleniyor...');
-        for (const sube of SUBELER) {
-          try {
-            console.log(`📦 ${sube.ad} yükleniyor...`);
-            const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
-            const snapshot = await getDocs(satisRef);
-            
-            console.log(`✅ ${sube.ad}: ${snapshot.size} satış bulundu`);
-            
-            snapshot.forEach((doc: any) => {
-              satisListesi.push({ 
-                id: doc.id, 
-                ...doc.data(),
-                subeKodu: sube.kod // Şube kodunu ekle
-              } as SatisTeklifFormu);
-            });
-          } catch (error) {
-            console.error(`❌ ${sube.ad} şubesi yüklenemedi:`, error);
-          }
-        }
-      } else {
-        console.log('👤 ÇALIŞAN - Sadece kendi şubesi yükleniyor...');
-        const sube = getSubeByKod(currentUser!.subeKodu);
-        if (sube) {
-          console.log(`📦 ${sube.ad} yükleniyor...`);
+    if (isAdmin) {
+      for (const sube of SUBELER) {
+        try {
           const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
           const snapshot = await getDocs(satisRef);
           
-          console.log(`✅ ${sube.ad}: ${snapshot.size} satış bulundu`);
-          
           snapshot.forEach((doc: any) => {
-            satisListesi.push({ id: doc.id, ...doc.data() } as SatisTeklifFormu);
+            const data = doc.data();
+            satisListesi.push({ 
+              id: doc.id, 
+              ...data,
+              subeKodu: sube.kod
+            } as SatisTeklifFormu);
+
+            subeSet.add(sube.kod);
+
+            const tarih = data.tarih?.toDate ? data.tarih.toDate() : new Date(data.tarih);
+            
+            // TİP KONTROLÜ İLE
+            if (minTarih === undefined) {
+              minTarih = tarih;
+            } else if (tarih < minTarih) {
+              minTarih = tarih;
+            }
+            
+            if (maxTarih === undefined) {
+              maxTarih = tarih;
+            } else if (tarih > maxTarih) {
+              maxTarih = tarih;
+            }
           });
+        } catch (error) {
+          console.error(`❌ ${sube.ad} şubesi yüklenemedi:`, error);
         }
       }
+    } else {
+      const sube = getSubeByKod(currentUser!.subeKodu);
+      if (sube) {
+        const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
+        const snapshot = await getDocs(satisRef);
+        
+        snapshot.forEach((doc: any) => {
+          const data = doc.data();
+          satisListesi.push({ 
+            id: doc.id, 
+            ...data,
+            subeKodu: sube.kod
+          } as SatisTeklifFormu);
 
-      console.log('📊 Toplam yüklenen satış sayısı:', satisListesi.length);
-      setSatislar(satisListesi);
-    } catch (error) {
-      console.error('❌ Satışlar yüklenemedi:', error);
-    } finally {
-      setLoading(false);
+          subeSet.add(sube.kod);
+
+          const tarih = data.tarih?.toDate ? data.tarih.toDate() : new Date(data.tarih);
+          
+          // TİP KONTROLÜ İLE
+          if (minTarih === undefined) {
+            minTarih = tarih;
+          } else if (tarih < minTarih) {
+            minTarih = tarih;
+          }
+          
+          if (maxTarih === undefined) {
+            maxTarih = tarih;
+          } else if (tarih > maxTarih) {
+            maxTarih = tarih;
+          }
+        });
+      }
+    }
+
+    setMevcutSubeler(Array.from(subeSet));
+
+    // TİP KONTROLÜ İLE
+    if (minTarih !== undefined && maxTarih !== undefined) {
+      setEnEskiTarih(minTarih.toISOString().split('T')[0]);
+      setEnYeniTarih(maxTarih.toISOString().split('T')[0]);
+      
+      const birAyOnce = new Date(maxTarih);
+      birAyOnce.setMonth(birAyOnce.getMonth() - 1);
+      setBaslangicTarihi(birAyOnce.toISOString().split('T')[0]);
+      setBitisTarihi(maxTarih.toISOString().split('T')[0]);
+    }
+
+    setSatislar(satisListesi);
+  } catch (error) {
+    console.error('❌ Satışlar yüklenemedi:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const filtreyiUygula = () => {
+    let sonuc = [...satislar];
+
+    if (secilenSube) {
+      sonuc = sonuc.filter(satis => satis.subeKodu === secilenSube);
+    }
+
+    if (baslangicTarihi && bitisTarihi) {
+      sonuc = sonuc.filter(satis => {
+        let satisTarihi: Date;
+        if (satis.tarih && typeof satis.tarih === 'object' && 'toDate' in satis.tarih) {
+          satisTarihi = (satis.tarih as any).toDate();
+        } else {
+          satisTarihi = new Date(satis.tarih);
+        }
+        
+        const baslangic = new Date(baslangicTarihi);
+        const bitis = new Date(bitisTarihi);
+        
+        return satisTarihi >= baslangic && satisTarihi <= bitis;
+      });
+    }
+
+    setFiltreliSatislar(sonuc);
+  };
+
+  const filtreleriSifirla = () => {
+    setSecilenSube('');
+    if (enYeniTarih) {
+      const maxDate = new Date(enYeniTarih);
+      const birAyOnce = new Date(maxDate);
+      birAyOnce.setMonth(birAyOnce.getMonth() - 1);
+      setBaslangicTarihi(birAyOnce.toISOString().split('T')[0]);
+      setBitisTarihi(enYeniTarih);
     }
   };
 
@@ -112,18 +197,20 @@ const Dashboard: React.FC = () => {
     return d.toLocaleDateString('tr-TR');
   };
 
+  const isAdmin = currentUser?.role?.toString().trim() === 'ADMIN';
+
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
         <div className="header-content">
-          <h1>SIEMENS OTOMASYON</h1>
+          <h1>TÜFEKÇİ HOME SİEMENS</h1>
           <div className="user-info">
             <div className="user-details">
               <div className="user-name">{currentUser?.ad} {currentUser?.soyad}</div>
               <div className="user-meta">
                 <span className="user-sube">{getSubeByKod(currentUser!.subeKodu)?.ad}</span>
                 <span className="user-role">
-                  ({currentUser?.role?.toString().trim() === 'ADMIN' ? 'Admin' : 'Çalışan'})
+                  ({isAdmin ? 'Admin' : 'Çalışan'})
                 </span>
               </div>
             </div>
@@ -142,7 +229,7 @@ const Dashboard: React.FC = () => {
         <button onClick={() => navigate('/bekleyen-urunler')} className="nav-btn">
           Bekleyen Ürünler
         </button>
-        {currentUser?.role?.toString().trim() === 'ADMIN' && (
+        {isAdmin && (
           <button onClick={() => navigate('/admin')} className="nav-btn">
             Admin Panel
           </button>
@@ -152,17 +239,69 @@ const Dashboard: React.FC = () => {
       <div className="dashboard-content">
         <div className="content-header">
           <h2>Satış Listesi</h2>
-           <button onClick={fetchSatislar} className="btn-filtre">Şube Filtrele</button>
           <button onClick={fetchSatislar} className="btn-refresh">YENİLE</button>
+        </div>
+
+        <div className="filtre-container">
+          <div className="filtre-grup">
+            <label>Şube:</label>
+            <select 
+              value={secilenSube} 
+              onChange={(e) => setSecilenSube(e.target.value)}
+              className="filtre-select"
+            >
+              <option value="">Tüm Şubeler ({mevcutSubeler.length})</option>
+              {mevcutSubeler.map(kod => {
+                const sube = getSubeByKod(kod as SubeKodu);
+                return sube ? (
+                  <option key={kod} value={kod}>
+                    {sube.ad}
+                  </option>
+                ) : null;
+              })}
+            </select>
+          </div>
+
+          <div className="filtre-grup">
+            <label>Başlangıç Tarihi:</label>
+            <input 
+              type="date" 
+              value={baslangicTarihi}
+              min={enEskiTarih}
+              max={enYeniTarih}
+              onChange={(e) => setBaslangicTarihi(e.target.value)}
+              className="filtre-input"
+            />
+          </div>
+
+          <div className="filtre-grup">
+            <label>Bitiş Tarihi:</label>
+            <input 
+              type="date" 
+              value={bitisTarihi}
+              min={enEskiTarih}
+              max={enYeniTarih}
+              onChange={(e) => setBitisTarihi(e.target.value)}
+              className="filtre-input"
+            />
+          </div>
+
+          <button onClick={filtreleriSifirla} className="btn-sifirla">
+            Filtreleri Sıfırla
+          </button>
+        </div>
+
+        <div className="sonuc-bilgi">
+          <p>Toplam <strong>{filtreliSatislar.length}</strong> satış bulundu</p>
         </div>
 
         {loading ? (
           <div className="loading">Yükleniyor...</div>
-        ) : satislar.length === 0 ? (
+        ) : filtreliSatislar.length === 0 ? (
           <div className="empty-state">
-            <p>Henüz satış kaydı bulunmuyor.</p>
+            <p>Filtreye uygun satış kaydı bulunmuyor.</p>
             <button onClick={() => navigate('/satis-teklif')} className="btn-primary">
-              İLK SATIŞ TEKLİFİNİ OLUŞTUR
+              YENİ SATIŞ TEKLİFİ OLUŞTUR
             </button>
           </div>
         ) : (
@@ -181,7 +320,7 @@ const Dashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {satislar.map((satis: SatisTeklifFormu) => (
+                {filtreliSatislar.map((satis: SatisTeklifFormu) => (
                   <tr key={satis.id}>
                     <td><strong>{satis.satisKodu}</strong></td>
                     <td>{getSubeByKod(satis.subeKodu)?.ad}</td>

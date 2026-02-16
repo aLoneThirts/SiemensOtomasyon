@@ -1,3 +1,7 @@
+/* =============================================
+   AUTH CSS - TEMİZ VERSİYON
+   ============================================= */
+
 .auth-container {
   min-height: 100vh;
   display: flex;
@@ -22,6 +26,7 @@
   to { transform: rotate(360deg); }
 }
 
+/* SOL TARAF - LOGO VE WELCOME */
 .auth-left {
   flex: 1;
   display: flex;
@@ -33,34 +38,55 @@
   z-index: 1;
 }
 
-.siemens-logo {
-  width: 280px;
-  height: auto;
-  margin-bottom: 40px;
-  filter: brightness(0) invert(1);
-  animation: fadeInDown 0.8s ease;
+/* LOGO */
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  margin-bottom: 60px;
+  padding: 25px 40px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.brand-logo img {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
+}
+
+.brand-text h2 {
+  font-size: 42px;
+  font-weight: 900;
+  color: white;
+  letter-spacing: 4px;
+  margin: 0;
+  text-shadow: 3px 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.brand-text p {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 8px;
+  margin: 5px 0 0 0;
+  text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* WELCOME TEXT */
+.auth-welcome {
+  text-align: center;
+  color: white;
+  animation: fadeIn 1s ease;
 }
 
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-.auth-welcome {
-  text-align: center;
-  color: white;
-  animation: fadeIn 1s ease;
 }
 
 .auth-welcome h1 {
@@ -77,6 +103,7 @@
   max-width: 500px;
 }
 
+/* SAĞ TARAF - FORM */
 .auth-right {
   flex: 1;
   display: flex;
@@ -111,7 +138,6 @@
   font-weight: 700;
   color: #1f2937;
   margin: 0 0 10px 0;
-  text-align: left;
   background: linear-gradient(135deg, #009999 0%, #006666 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -123,9 +149,9 @@
   font-size: 15px;
   margin-bottom: 40px;
   font-weight: 400;
-  text-align: left;
 }
 
+/* FORM */
 .form-group {
   margin-bottom: 25px;
 }
@@ -154,7 +180,6 @@
   font-size: 15px;
   transition: all 0.3s ease;
   background: #fafbfc;
-  box-sizing: border-box;
 }
 
 .form-group input:focus,
@@ -166,6 +191,7 @@
   transform: translateY(-1px);
 }
 
+/* BUTTONS */
 .btn-primary {
   width: 100%;
   padding: 16px;
@@ -186,16 +212,12 @@
   box-shadow: 0 6px 24px rgba(0, 153, 153, 0.4);
 }
 
-.btn-primary:active {
-  transform: translateY(-1px);
-}
-
 .btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  transform: none;
 }
 
+/* MESSAGES */
 .error-message {
   background: #fee;
   color: #c33;
@@ -206,16 +228,7 @@
   border-left: 4px solid #c33;
 }
 
-.success-message {
-  background: #d1fae5;
-  color: #065f46;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  font-size: 14px;
-  border-left: 4px solid #10b981;
-}
-
+/* LINK */
 .auth-link {
   text-align: center;
   margin-top: 30px;
@@ -227,14 +240,13 @@
   color: #009999;
   font-weight: 600;
   text-decoration: none;
-  transition: color 0.3s;
 }
 
 .auth-link a:hover {
-  color: #006666;
   text-decoration: underline;
 }
 
+/* RESPONSIVE */
 @media (max-width: 968px) {
   .auth-container {
     flex-direction: column;
@@ -245,17 +257,23 @@
     min-height: 40vh;
   }
 
-.siemens-logo-container {
-  position: relative;
-  z-index: 2;
-  margin-bottom: 50px;
-}
+  .brand-logo {
+    flex-direction: column;
+    padding: 20px 30px;
+  }
 
-.siemens-logo {
-  width: 250px;
-  height: auto;
-  display: block;
+  .brand-logo img {
+    width: 80px;
+    height: 80px;
+  }
 
+  .brand-text h2 {
+    font-size: 32px;
+  }
+
+  .brand-text p {
+    font-size: 18px;
+  }
 
   .auth-welcome h1 {
     font-size: 32px;
@@ -268,14 +286,4 @@
   .form-row {
     grid-template-columns: 1fr;
   }
-.siemens-brand {
-  font-size: 64px;
-  font-weight: 900;
-  letter-spacing: 14px;
-  color: white;
-  margin: 0;
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  font-family: 'Arial', sans-serif;
-}
-}
 }

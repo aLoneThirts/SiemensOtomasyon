@@ -48,12 +48,13 @@ const Login: React.FC = () => {
   return (
     <div className="auth-container">
       <div className="auth-left">
-        <div className="siemens-logo-container">
-          <h1 className="siemens-brand">TUFEKÇİ HOME SIEMENS</h1>
-        </div>
-        <div className="auth-welcome">
-          <h1>İş Takip Sistemine Hoş Geldiniz</h1>
-          <p>Satış süreçlerinizi kolayca yönetin, müşteri bilgilerinizi takip edin ve işletmenizi dijitalleştirin.</p>
+        {/* LOGO RESMİ */}
+        <div className="brand-logo">
+          <img src="/tufekci-logo.jpeg" alt="Tüfekçi Home" />
+          <div className="brand-text">
+            <h2>TÜFEKÇİ HOME</h2>
+            <p>SIEMENS</p>
+          </div>
         </div>
       </div>
       

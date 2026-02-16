@@ -3,9 +3,12 @@ import { SubeKodu } from './sube';
 export interface MusteriBilgileri {
   isim: string;
   adres: string;
-  faturaAdresi: string;
-  isAdresi: string;
-  vergiNumarasi: string;
+  faturaAdresi?: string;
+  isAdresi?: string;
+  vergiNumarasi?: string;
+  vkNo?: string;
+  vd?: string;
+  cep?: string;
 }
 
 export interface Urun {
@@ -14,50 +17,75 @@ export interface Urun {
   ad: string;
   adet: number;
   alisFiyati: number;
+  bip?: number; // BİP tutarı
+}
+
+export interface KartOdeme {
+  id: string;
+  banka: string;
+  taksitSayisi: number; // 1 = Tek, 2-9 = taksit
+  tutar: number;
+  pesinat?: number;
+}
+
+export interface Kampanya {
+  id: string;
+  ad: string;
+  tutar: number;
+}
+
+export interface YesilEtiket {
+  id: string;
+  urunKodu: string;
+  tutar: number;
 }
 
 export enum OdemeYontemi {
-  PESINAT = 'PESINAT',
-  KREDI_KARTI = 'KREDI_KARTI',
+  PESINAT = 'PEŞİNAT',
+  KREDI_KARTI = 'KREDİ KARTI',
   HAVALE = 'HAVALE',
-  ACIK_HESAP = 'ACIK_HESAP',
-  CEK_SENET = 'CEK_SENET'
+  ACIK_HESAP = 'AÇIK HESAP',
+  CEK_SENET = 'ÇEK/SENET'
 }
 
 export interface SatisTeklifFormu {
-  id: string;
-  satisKodu: string; // Örn: 1010-0001, 2030-0001
+  id?: string;
+  satisKodu: string;
   subeKodu: SubeKodu;
-  
-  // Müşteri Bilgileri
   musteriBilgileri: MusteriBilgileri;
-  
-  // Ürünler
+  musteriTemsilcisi: string;
+  musteriTemsilcisiTel: string;
   urunler: Urun[];
   toplamTutar: number;
-  
-  // Tarihler
   tarih: Date;
   teslimatTarihi: Date;
   
-  // Diğer Bilgiler
-  musteriTemsilcisi: string;
-  cevap: string;
-  magaza: string;
+  // Notlar
+  marsNo?: string;
+  magaza?: string;
+  faturaNo?: string;
+  servisNotu?: string;
+  teslimEdildiMi?: boolean;
+  cevap?: string;
   
-  // Seçenekler
+  // Kampanyalar ve İndirimler
+  kampanyalar?: Kampanya[];
+  yesilEtiketler?: YesilEtiket[];
+  
+  // Ödeme
+  pesinatTutar?: number;
+  havaleTutar?: number;
+  kartOdemeler?: KartOdeme[];
+  hesabaGecen?: string;
+  
   fatura: boolean;
   ileriTeslim: boolean;
   servis: boolean;
-  
-  // Ödeme Bilgileri
   odemeYontemi: OdemeYontemi;
-  hesabaGecen: string;
-  
-  // Onay
   onayDurumu: boolean;
   
-  // Meta
+  zarar?: number; // BUNU EKLE!
+  
   olusturanKullanici: string;
   olusturmaTarihi: Date;
   guncellemeTarihi: Date;
@@ -74,7 +102,7 @@ export interface BekleyenUrun {
   siparisTarihi: Date;
   beklenenTeslimTarihi: Date;
   durum: 'BEKLEMEDE' | 'HAZIR' | 'TESLIM_EDILDI';
-  notlar: string;
+  notlar?: string;
   guncellemeTarihi: Date;
 }
 
@@ -87,3 +115,35 @@ export interface SatisLog {
   tarih: Date;
   detay: string;
 }
+
+export const BANKALAR = [
+  'Garanti Bankası',
+  'İş Bankası',
+  'Yapı Kredi',
+  'Akbank',
+  'Ziraat Bankası',
+  'Halkbank',
+  'QNB Finansbank',
+  'Denizbank',
+  'TEB',
+  'ING',
+  'Vakıfbank',
+  'Kuveyt Türk',
+  'Türkiye Finans',
+  'Albaraka Türk',
+  'Şekerbank',
+  'HSBC',
+  'Citibank'
+];
+
+export const TAKSIT_SECENEKLERI = [
+  { label: 'Tek', value: 1 },
+  { label: '2', value: 2 },
+  { label: '3', value: 3 },
+  { label: '4', value: 4 },
+  { label: '5', value: 5 },
+  { label: '6', value: 6 },
+  { label: '7', value: 7 },
+  { label: '8', value: 8 },
+  { label: '9', value: 9 }
+];

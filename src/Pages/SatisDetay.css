@@ -1,202 +1,336 @@
-.satis-detay-container {
-  min-height: 100vh;
-  background: #f8f9fa;
-  padding: 30px 40px;
+/* =============================================
+   SATIŞ DETAY CSS - A4'Ü BÜYÜT, İÇERİK SABİT
+   ============================================= */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.satis-detay-header {
-  max-width: 1400px;
-  margin: 0 auto 30px;
+.detay-container {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding: 20px;
+}
+
+.detay-header {
+  max-width: 1200px;
+  margin: 0 auto 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
 }
 
-.satis-detay-header h1 {
-  margin: 0;
-  flex: 1;
-  text-align: center;
-  color: #1a1a1a;
-  font-size: 28px;
+.detay-header h1 {
+  font-size: 24px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  color: #1a1a1a;
+}
+
+.btn-back, .btn-print {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  font-size: 14px;
+}
+
+.btn-back {
+  background: white;
+  border: 2px solid #009999;
+  color: #009999;
 }
 
 .btn-print {
-  padding: 12px 28px;
   background: #28a745;
   color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
-.btn-print:hover {
-  background: #218838;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
-}
-
-.satis-detay-content {
-  max-width: 1400px;
+.detay-icerik {
+  max-width: 1200px;
   margin: 0 auto;
-}
-
-.detay-section {
   background: white;
-  border-radius: 8px;
   padding: 30px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-left: 4px solid #009999;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.baslik-bolumu {
+  text-align: center;
   margin-bottom: 25px;
   padding-bottom: 15px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 3px solid #009999;
 }
 
-.detay-section h2 {
-  margin: 0 0 25px 0;
+.firma-adi {
+  font-size: 28px;
+  font-weight: 700;
   color: #1a1a1a;
+}
+
+.sayfa-basligi {
+  font-size: 20px;
+  font-weight: 600;
+  color: #009999;
+  margin-top: 5px;
+}
+
+.yesil-cerceve {
+  border: 3px solid #10b981;
+  border-radius: 12px;
+  background: #f0fdf4;
+  padding: 20px 25px;
+  margin-bottom: 25px;
+}
+
+.ust-satir {
+  display: grid;
+  grid-template-columns: 1.2fr 2fr 1.2fr;
+  gap: 20px;
+  padding-bottom: 15px;
+  margin-bottom: 15px;
+  border-bottom: 2px solid #10b981;
+}
+
+.sutun {
+  text-align: center;
+}
+
+.orta-sutun {
+  border-left: 2px solid #10b981;
+  border-right: 2px solid #10b981;
+  padding: 0 20px;
+}
+
+.etiket {
+  font-size: 13px;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.deger {
   font-size: 18px;
   font-weight: 700;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #f0f0f0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 25px;
-}
-
-.info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.info-item label {
-  font-size: 12px;
-  color: #666;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.info-item span,
-.info-item strong {
-  font-size: 15px;
   color: #1a1a1a;
+  word-break: break-word;
 }
 
-.info-item strong {
+.bilgi {
+  font-size: 13px;
+  color: #333;
+  margin-bottom: 3px;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.alt-satir {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.sol-kolon {
+  padding-right: 20px;
+  border-right: 2px solid #10b981;
+}
+
+.sag-kolon {
+  padding-left: 20px;
+}
+
+.baslik-alt {
+  font-size: 15px;
   font-weight: 700;
+  color: #1a1a1a;
+  text-transform: uppercase;
+  margin-bottom: 10px;
 }
 
-.urunler-table {
+.satir-item {
+  font-size: 13px;
+  color: #333;
+  margin-bottom: 5px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.ana-bolum {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 25px;
+  margin-bottom: 25px;
+}
+
+.kirmizi-cerceve {
+  border: 3px solid #ef4444;
+  border-radius: 12px;
+  background: #fef2f2;
+  padding: 20px;
+}
+
+.urun-tablo {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 20px;
+  margin-bottom: 20px;
+  font-size: 14px;
 }
 
-.urunler-table thead {
+.urun-tablo th {
   background: #f8f9fa;
+  padding: 10px 8px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+  border-bottom: 2px solid #ef4444;
 }
 
-.urunler-table th {
+.urun-tablo td {
+  padding: 8px;
+  font-size: 14px;
+  border-bottom: 1px solid #fee2e2;
+}
+
+.urun-tablo .bos-satir td {
+  color: #999;
+  font-style: italic;
+  font-size: 13px;
+}
+
+.toplam-alan {
+  padding: 12px;
+  background: white;
+  border: 2px solid #ef4444;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.yan-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.sari-kutu {
+  border: 2px solid #ffc107;
+  border-radius: 10px;
+  background: #fff3cd;
   padding: 15px;
-  text-align: left;
+}
+
+.kutu-baslik {
+  font-size: 15px;
   font-weight: 700;
   color: #1a1a1a;
-  font-size: 13px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 2px solid #d0d0d0;
+  margin-bottom: 8px;
 }
 
-.urunler-table td {
-  padding: 15px;
-  border-bottom: 1px solid #f0f0f0;
+.kutu-satir {
+  font-size: 14px;
   color: #333;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.yesil-kutu {
+  border: 2px solid #10b981;
+  border-radius: 10px;
+  background: #d1fae5;
+  padding: 15px;
+}
+
+.etiket-tablo {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.etiket-tablo th,
+.etiket-tablo td {
+  padding: 5px;
+  text-align: left;
+  font-size: 13px;
+  border-bottom: 1px solid #10b981;
+}
+
+.etiket-toplam {
+  padding: 8px;
+  background: white;
+  border-radius: 6px;
+  text-align: center;
   font-size: 14px;
-}
-
-.urunler-table tbody tr:hover {
-  background: #f8f9fa;
-}
-
-.urunler-table tfoot {
-  background: #009999;
-  color: white;
-}
-
-.toplam-row td {
-  padding: 18px 15px;
-  font-size: 17px;
   font-weight: 700;
-  border: none;
 }
 
-.checkbox-info {
+.odeme-bolumu {
+  margin-bottom: 20px;
+}
+
+.odeme-satir {
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 5px;
+  padding: 3px 0;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.hesaba-alan {
+  margin-top: 10px;
+  padding: 10px;
+  background: white;
+  border: 2px solid #ef4444;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.mavi-cerceve {
+  border: 3px solid #3b82f6;
+  border-radius: 12px;
+  background: #eff6ff;
+  padding: 25px;
+  margin-bottom: 20px;
+}
+
+.onay-metin {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #3b82f6;
+}
+
+.imza-metin {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.alt-bilgi {
   display: flex;
-  gap: 30px;
-  margin-top: 25px;
-  padding-top: 25px;
-  border-top: 2px solid #f0f0f0;
-}
-
-.checkbox-item span {
-  font-size: 14px;
-  font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 4px;
-  display: inline-block;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.checkbox-item span.checked {
-  background: #28a745;
-  color: white;
-}
-
-.checkbox-item span:not(.checked) {
-  background: #dc3545;
-  color: white;
-}
-
-.status-badge {
-  padding: 8px 20px;
-  border-radius: 4px;
+  justify-content: space-between;
+  padding-top: 15px;
+  border-top: 2px solid #e5e7eb;
   font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: #999;
 }
 
-.status-badge.approved {
-  background: #28a745;
-  color: white;
-}
-
-.status-badge.pending {
-  background: #ffc107;
-  color: #856404;
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+  font-size: 18px;
+  color: #666;
 }
 
 .not-found {
@@ -208,170 +342,117 @@
   gap: 30px;
 }
 
-.not-found h2 {
-  color: #1a1a1a;
-  font-size: 28px;
-}
-
-/* Print Styles */
+/* ========== A4 PRINT CSS - KAĞIDI BÜYÜT, İÇERİK SABİT ========== */
 @media print {
   * {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print {
+    display: none !important;
   }
 
   body {
+    background: white;
     margin: 0;
     padding: 0;
   }
 
-  .satis-detay-container {
+  .detay-container {
     background: white;
-    padding: 10px;
+    padding: 0;
+    min-height: auto;
+  }
+
+  .detay-icerik {
     max-width: 100%;
+    padding: 30px;  /* Aynı padding korundu */
+    box-shadow: none;
+    border-radius: 0;
+    margin: 0;
+    width: 100%;
+    background: white;
+    
+    /* İçerik BOZULMADAN A4'e sığdır */
+    /* ÖNEMLİ: İçeriği küçültmüyoruz, A4 kağıdını genişletiyoruz */
   }
 
-  .satis-detay-header {
-    margin-bottom: 15px;
-  }
-
-  .satis-detay-header button {
+  .bos-satir {
     display: none !important;
   }
 
-  .satis-detay-header h1 {
-    font-size: 20px;
-    margin: 0;
-    text-align: center;
-    color: #009999;
-  }
-
-  .satis-detay-content {
-    max-width: 100%;
-  }
-
-  .detay-section {
-    box-shadow: none;
-    border: 1px solid #d0d0d0;
-    border-radius: 6px;
-    padding: 12px;
-    margin-bottom: 10px;
-    page-break-inside: avoid;
-    background: white;
-    border-left-color: #009999;
-  }
-
-  .detay-section h2 {
-    font-size: 14px;
-    margin: 0 0 10px 0;
-    padding-bottom: 8px;
-    border-bottom: 2px solid #009999;
-  }
-
-  .section-header {
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-  }
-
-  .section-header h2 {
-    font-size: 14px;
-  }
-
-  .status-badge {
-    padding: 4px 10px;
-    font-size: 10px;
-  }
-
-  .info-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    font-size: 11px;
-  }
-
-  .info-item {
-    gap: 4px;
-  }
-
-  .info-item label {
-    font-size: 9px;
-  }
-
-  .info-item span,
-  .info-item strong {
-    font-size: 11px;
-  }
-
-  .urunler-table {
-    font-size: 10px;
-    margin-top: 10px;
-  }
-
-  .urunler-table th,
-  .urunler-table td {
-    padding: 6px 4px;
-    font-size: 10px;
-  }
-
-  .urunler-table thead {
-    background: #f8f9fa;
-  }
-
-  .urunler-table tfoot {
-    background: #009999;
-  }
-
-  .toplam-row td {
-    padding: 10px 8px;
-    font-size: 12px;
-  }
-
-  .checkbox-info {
-    gap: 15px;
-    margin-top: 10px;
-    padding-top: 10px;
-    font-size: 10px;
-  }
-
-  .checkbox-item span {
-    font-size: 11px;
-    padding: 4px 10px;
-  }
-
-  .not-found {
-    display: none;
-  }
-
+  /* A4 sayfasını BÜYÜT - margin'leri küçült ki içerik sığsın */
   @page {
     size: A4;
-    margin: 10mm;
+    margin: 0.5cm;  /* Margin küçültüldü ki sayfa büyüsün */
   }
 
-  html, body {
-    height: 100%;
-    overflow: hidden;
-  }
+  /* Tüm stiller AYNEN KALIYOR, hiçbir şey küçülmüyor! */
+  .firma-adi { font-size: 28px; }
+  .sayfa-basligi { font-size: 20px; }
+  .deger { font-size: 18px; }
+  .etiket { font-size: 13px; }
+  .bilgi { font-size: 13px; }
+  .satir-item { font-size: 13px; }
+  .urun-tablo { font-size: 14px; }
+  .urun-tablo th { font-size: 14px; padding: 10px 8px; }
+  .urun-tablo td { font-size: 14px; padding: 8px; }
+  .toplam-alan { font-size: 16px; padding: 12px; }
+  .kutu-baslik { font-size: 15px; }
+  .kutu-satir { font-size: 14px; }
+  .odeme-satir { font-size: 14px; }
+  .onay-metin { font-size: 18px; }
+  .imza-metin { font-size: 16px; }
+  .alt-bilgi { font-size: 12px; }
 
-  .satis-detay-container {
-    transform: scale(0.95);
-    transform-origin: top center;
-  }
+  /* Margin'ler ve padding'ler AYNI KALIYOR */
+  .baslik-bolumu { margin-bottom: 25px; padding-bottom: 15px; }
+  .yesil-cerceve { padding: 20px 25px; margin-bottom: 25px; }
+  .ust-satir { gap: 20px; padding-bottom: 15px; margin-bottom: 15px; }
+  .alt-satir { gap: 20px; }
+  .ana-bolum { gap: 25px; margin-bottom: 25px; }
+  .mavi-cerceve { padding: 25px; margin-bottom: 20px; }
+  .onay-metin { margin-bottom: 20px; padding-bottom: 15px; }
 }
 
-@media (max-width: 768px) {
-  .satis-detay-header {
-    flex-direction: column;
+/* Küçük ekranlar için responsive */
+@media screen and (max-width: 768px) {
+  .detay-icerik {
+    padding: 15px;
   }
   
-  .info-grid {
+  .ust-satir {
     grid-template-columns: 1fr;
-  }
-  
-  .urunler-table {
-    font-size: 12px;
-  }
-  
-  .checkbox-info {
-    flex-direction: column;
     gap: 15px;
+  }
+  
+  .orta-sutun {
+    border-left: none;
+    border-right: none;
+    border-top: 2px solid #10b981;
+    border-bottom: 2px solid #10b981;
+    padding: 15px 0;
+  }
+  
+  .alt-satir {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  
+  .sol-kolon {
+    border-right: none;
+    border-bottom: 2px solid #10b981;
+    padding-right: 0;
+    padding-bottom: 15px;
+  }
+  
+  .sag-kolon {
+    padding-left: 0;
+  }
+  
+  .ana-bolum {
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
 }

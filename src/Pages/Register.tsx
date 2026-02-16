@@ -58,11 +58,15 @@ const Register: React.FC = () => {
   return (
     <div className="auth-container">
       <div className="auth-left">
-        <svg className="siemens-logo" viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
-          <text x="10" y="30" fontFamily="Arial, sans-serif" fontSize="32" fontWeight="bold" fill="white">
-            SIEMENS
-          </text>
-        </svg>
+        {/* LOGO RESMİ */}
+        <div className="brand-logo">
+          <img src="/tufekci-logo.jpeg" alt="Tüfekçi Home" />
+          <div className="brand-text">
+            <h2>TÜFEKÇİ HOME</h2>
+            <p>SIEMENS</p>
+          </div>
+        </div>
+
         <div className="auth-welcome">
           <h1>Takımınıza Katılın</h1>
           <p>Profesyonel iş takip sistemimizle satış süreçlerinizi optimize edin ve verimliliğinizi artırın.</p>

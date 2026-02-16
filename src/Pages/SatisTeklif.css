@@ -1,322 +1,413 @@
+/* =============================================
+   SATIŞ TEKLİF CSS - SİEMENS KURUMSAL TASARIM
+   ============================================= */
+
 .satis-teklif-container {
   min-height: 100vh;
-  background: #f8f9fa;
-  padding: 30px 40px;
+  background: linear-gradient(to bottom, #f5f7fa 0%, #eef1f5 100%);
+  padding: 24px;
 }
 
+/* HEADER */
 .satis-teklif-header {
   max-width: 1400px;
-  margin: 0 auto 30px;
+  margin: 0 auto 24px;
   display: flex;
   align-items: center;
   gap: 20px;
 }
 
+.satis-teklif-header h1 {
+  flex: 1;
+  text-align: center;
+  font-size: 32px;
+  font-weight: 800;
+  color: #1a1a1a;
+  letter-spacing: -0.5px;
+}
+
 .btn-back {
-  padding: 12px 28px;
+  padding: 12px 24px;
   background: white;
   border: 2px solid #009999;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
   color: #009999;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
   transition: all 0.3s ease;
-  text-transform: uppercase;
   letter-spacing: 0.5px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 12px rgba(0, 153, 153, 0.15);
 }
 
 .btn-back:hover {
   background: #009999;
   color: white;
-  transform: translateX(-3px);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 153, 153, 0.25);
 }
 
-.satis-teklif-header h1 {
-  margin: 0;
-  color: #1a1a1a;
-  font-size: 28px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
+/* FORM */
 .satis-teklif-form {
   max-width: 1400px;
   margin: 0 auto;
+  background: white;
+  padding: 40px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
+/* SECTION */
 .form-section {
-  background: white;
-  border-radius: 8px;
-  padding: 30px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-left: 4px solid #009999;
+  margin-bottom: 40px;
+  padding-bottom: 32px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.form-section:last-child {
+  border-bottom: none;
 }
 
 .form-section h2 {
-  margin: 0 0 25px 0;
-  color: #1a1a1a;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
+  color: #1f2937;
+  margin-bottom: 24px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #f0f0f0;
+  letter-spacing: 1px;
+  padding-bottom: 12px;
+  border-bottom: 3px solid #009999;
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #f0f0f0;
+  margin-bottom: 20px;
 }
 
 .section-header h2 {
-  margin: 0;
-  padding: 0;
-  border: none;
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
+/* GRID */
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
+  gap: 24px;
 }
 
+/* FORM GROUP */
 .form-group {
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 
 .form-group label {
-  margin-bottom: 8px;
-  color: #333;
-  font-weight: 600;
   font-size: 13px;
+  font-weight: 700;
+  color: #374151;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
 }
 
 .form-group input,
-.form-group select {
-  padding: 12px 16px;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  font-size: 14px;
+.form-group select,
+.form-group textarea {
+  padding: 14px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1f2937;
+  background: #f9fafb;
   transition: all 0.3s ease;
-  background: white;
-  font-family: inherit;
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
   outline: none;
   border-color: #009999;
-  box-shadow: 0 0 0 3px rgba(0, 153, 153, 0.1);
-}
-
-.btn-add {
-  padding: 12px 30px;
-  background: #009999;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.btn-add:hover {
-  background: #007777;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 153, 153, 0.3);
-}
-
-.urun-satir {
-  background: #fafafa;
-  padding: 20px;
-  border-radius: 6px;
-  margin-bottom: 15px;
-  position: relative;
-  border: 1px solid #e0e0e0;
-}
-
-.urun-grid {
-  display: grid;
-  grid-template-columns: 1fr 2fr 100px 150px 150px;
-  gap: 15px;
-  align-items: end;
-}
-
-.urun-toplam {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-}
-
-.toplam-fiyat {
-  padding: 12px 15px;
   background: white;
-  border: 2px solid #009999;
-  border-radius: 4px;
-  font-weight: 700;
-  color: #009999;
-  text-align: right;
-  font-size: 15px;
+  box-shadow: 0 0 0 4px rgba(0, 153, 153, 0.1);
 }
 
-.btn-remove {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  padding: 6px 14px;
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  transition: all 0.3s;
-  text-transform: uppercase;
-}
-
-.btn-remove:hover {
-  background: #c82333;
-}
-
-.genel-toplam {
-  margin-top: 20px;
-  padding: 20px 25px;
-  background: #009999;
-  border-radius: 6px;
+/* CHECKBOX */
+.checkbox-label {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  color: white;
-  font-size: 16px;
+  gap: 12px;
+  cursor: pointer;
   font-weight: 600;
+  color: #374151;
 }
 
-.toplam-tutar {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
+.checkbox-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
 }
 
 .checkbox-group {
   display: flex;
-  gap: 30px;
+  gap: 32px;
   flex-wrap: wrap;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  font-weight: 600;
-  color: #333;
-}
-
-.checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  accent-color: #009999;
 }
 
 .onay-checkbox {
   padding: 20px;
-  background: #fff3cd;
-  border-radius: 6px;
-  border: 2px solid #ffc107;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 3px solid #4caf50;
+  border-radius: 12px;
+  margin: 24px 0;
 }
 
+/* ÜRÜN GRID */
+.urun-grid-extended {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 0.8fr 1fr 1fr 1fr;
+  gap: 16px;
+  align-items: end;
+}
+
+.urun-satir {
+  padding: 20px;
+  background: linear-gradient(to right, #f9fafb 0%, #ffffff 100%);
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+}
+
+.urun-satir:hover {
+  border-color: #009999;
+  box-shadow: 0 4px 16px rgba(0, 153, 153, 0.1);
+}
+
+/* KAMPANYA */
+.kampanya-satir {
+  padding: 16px;
+  background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+  border: 2px solid #ffc107;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.kampanya-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
+/* YEŞİL ETİKET */
+.etiket-satir {
+  padding: 16px;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border: 2px solid #10b981;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.etiket-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
+/* KART ÖDEME */
+.kart-odemeler-section {
+  margin-top: 24px;
+  padding: 24px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 2px solid #2196f3;
+  border-radius: 12px;
+}
+
+.kart-satir {
+  padding: 16px;
+  background: white;
+  border: 2px solid #2196f3;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.kart-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
+/* BUTTONS */
+.btn-add {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  color: white;
+  border: none;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-add:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.btn-remove,
+.btn-remove-inline {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-remove:hover,
+.btn-remove-inline:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+/* TOPLAM */
+.genel-toplam {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 3px solid #4caf50;
+  border-radius: 12px;
+  margin-top: 20px;
+  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.2);
+}
+
+.genel-toplam strong {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1b5e20;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.toplam-tutar {
+  font-size: 28px;
+  font-weight: 900;
+  color: #1b5e20;
+}
+
+.info-text {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+  border-left: 5px solid #ffc107;
+  border-radius: 8px;
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #856404;
+}
+
+.zarar-preview {
+  margin-top: 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 3px solid #ef4444;
+  border-radius: 12px;
+  text-align: right;
+  font-size: 16px;
+  color: #dc2626;
+  font-weight: 800;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.2);
+}
+
+/* FORM ACTIONS */
 .form-actions {
   display: flex;
+  gap: 20px;
   justify-content: flex-end;
-  gap: 15px;
-  margin-top: 25px;
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 2px solid #e5e7eb;
 }
 
 .btn-cancel {
-  padding: 12px 30px;
+  padding: 16px 36px;
   background: white;
-  border: 2px solid #6c757d;
-  border-radius: 6px;
+  border: 2px solid #e5e7eb;
+  color: #6b7280;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 15px;
   cursor: pointer;
-  font-weight: 600;
-  color: #6c757d;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
 .btn-cancel:hover {
-  background: #6c757d;
-  color: white;
+  background: #f9fafb;
+  border-color: #d1d5db;
 }
 
 .btn-submit {
-  padding: 12px 40px;
-  background: #009999;
+  padding: 16px 48px;
+  background: linear-gradient(135deg, #009999 0%, #007373 100%);
   color: white;
   border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
+  border-radius: 30px;
+  font-weight: 700;
   font-size: 15px;
-  transition: all 0.3s;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 20px rgba(0, 153, 153, 0.35);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
 .btn-submit:hover:not(:disabled) {
-  background: #007777;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 153, 153, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 32px rgba(0, 153, 153, 0.45);
 }
 
 .btn-submit:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
+/* RESPONSIVE */
 @media (max-width: 768px) {
-  .satis-teklif-container {
-    padding: 15px;
-  }
-
-  .form-section {
-    padding: 20px 15px;
-  }
-
-  .urun-grid {
-    grid-template-columns: 1fr;
+  .satis-teklif-form {
+    padding: 24px;
   }
 
   .form-grid {
     grid-template-columns: 1fr;
   }
 
-  .btn-remove {
-    position: static;
-    width: 100%;
-    margin-top: 10px;
-  }
-
-  .genel-toplam {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
+  .urun-grid-extended,
+  .kampanya-grid,
+  .etiket-grid,
+  .kart-grid {
+    grid-template-columns: 1fr;
   }
 
   .form-actions {
