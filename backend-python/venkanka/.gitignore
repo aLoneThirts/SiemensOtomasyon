@@ -1,0 +1,42 @@
+# Virtual Environment
+venv/
+venkanka/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+.Python
+
+# Uploads
+uploads/
+*.xlsx
+*.xls
+*.csv
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables
+.env
+*.env
+
+# Logs
+*.log
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
