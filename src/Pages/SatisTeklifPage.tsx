@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { collection, addDoc } from 'firebase/firestore';
@@ -34,6 +34,7 @@ const SatisTeklifPage: React.FC = () => {
   const [tarih, setTarih] = useState(new Date().toISOString().split('T')[0]);
   const [teslimatTarihi, setTeslimatTarihi] = useState('');
   const [musteriTemsilcisi, setMusteriTemsilcisi] = useState('');
+  const [musteriTemsilcisiTel, setMusteriTemsilcisiTel] = useState(''); // <-- EKLENDİ
   const [cevap, setCevap] = useState('');
   const [magaza, setMagaza] = useState('');
 
@@ -48,7 +49,6 @@ const SatisTeklifPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [excelYukleniyor, setExcelYukleniyor] = useState(false);
   
-  // GERÇEK EXCEL ÜRÜNLERİ BURADA TUTULACAK
   const [excelUrunler, setExcelUrunler] = useState<ExcelUrun[]>([]);
   const [aramaModaliAcik, setAramaModaliAcik] = useState(false);
   const [seciliSatirIndex, setSeciliSatirIndex] = useState<number | null>(null);
@@ -89,7 +89,6 @@ const SatisTeklifPage: React.FC = () => {
     }, 0);
   };
 
-  // GERÇEK EXCEL YÜKLEME FONKSİYONU
   const excelYukle = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -103,24 +102,13 @@ const SatisTeklifPage: React.FC = () => {
       const sheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(sheet);
       
-      console.log("Excel'den gelen ham data:", jsonData);
-      
-      // Excel'deki sütun isimlerini bul
-      const ilkSatir = jsonData[0] as any;
-      console.log("İlk satır:", ilkSatir);
-      
-      // Ürünleri formatla - SÜTUN İSİMLERİNİ KENDİ EXCEL'İNE GÖRE DÜZENLE
       const urunlerList: ExcelUrun[] = jsonData.map((row: any) => {
-        // BURAYI KENDİ EXCEL'İNE GÖRE DÜZENLE!
-        // Örnek: 
         return {
           urun_kodu: row['Ürün Kodu'] || row['Stok Kodu'] || row['Malzeme'] || Object.values(row)[0] || '',
           urun_adi: row['Ürün Adı'] || row['Açıklama'] || Object.values(row)[1] || '',
           fiyat: parseFloat(row['Fiyat'] || row['Birim Fiyat'] || Object.values(row)[2] || 0)
         };
-      }).filter(u => u.urun_kodu); // Boş olanları filtrele
-      
-      console.log("Formatlanmış ürünler:", urunlerList);
+      }).filter(u => u.urun_kodu);
       
       setExcelUrunler(urunlerList);
       alert(`✅ ${urunlerList.length} ürün yüklendi!`);
@@ -134,7 +122,6 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  // Ürün seçme fonksiyonu
   const urunSec = (urun: ExcelUrun) => {
     if (seciliSatirIndex !== null) {
       const yeniUrunler = [...urunler];
@@ -151,7 +138,6 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  // Filtrelenmiş ürünler
   const filtrelenmisUrunler = excelUrunler.filter(urun =>
     urun.urun_kodu.toLowerCase().includes(aramaMetni.toLowerCase()) ||
     urun.urun_adi.toLowerCase().includes(aramaMetni.toLowerCase())
@@ -212,6 +198,7 @@ const SatisTeklifPage: React.FC = () => {
         tarih: new Date(tarih),
         teslimatTarihi: new Date(teslimatTarihi),
         musteriTemsilcisi,
+        musteriTemsilcisiTel, // <-- BURADA KULLANILIYOR
         cevap,
         magaza,
         fatura,
@@ -311,7 +298,6 @@ const SatisTeklifPage: React.FC = () => {
           <div className="section-header">
             <h2>Ürünler</h2>
             <div style={{ display: 'flex', gap: '10px' }}>
-              {/* Excel Yükle Butonu */}
               <input
                 type="file"
                 ref={fileInputRef}
@@ -328,14 +314,12 @@ const SatisTeklifPage: React.FC = () => {
                 {excelYukleniyor ? '📊 Yükleniyor...' : '📊 Excel Yükle'}
               </button>
               
-              {/* Ürün Ekle Butonu */}
               <button type="button" onClick={urunEkle} className="btn-add">
                 + Ürün Ekle
               </button>
             </div>
           </div>
 
-          {/* Excel'den yüklenen ürün sayısı gösterge */}
           {excelUrunler.length > 0 && (
             <div style={{
               background: '#e8f5e9',
@@ -483,6 +467,16 @@ const SatisTeklifPage: React.FC = () => {
             </div>
 
             <div className="form-group">
+              <label>Temsilci Telefon</label> {/* <-- EKLENDİ */}
+              <input
+                type="text"
+                value={musteriTemsilcisiTel}
+                onChange={(e) => setMusteriTemsilcisiTel(e.target.value)}
+                placeholder="Telefon"
+              />
+            </div>
+
+            <div className="form-group">
               <label>Cevap</label>
               <input
                 type="text"
@@ -588,7 +582,7 @@ const SatisTeklifPage: React.FC = () => {
         </div>
       </form>
 
-      {/* EXCEL ÜRÜN ARAMA MODALI - GERÇEK ÜRÜNLER BURADA */}
+      {/* EXCEL ÜRÜN ARAMA MODALI */}
       {aramaModaliAcik && (
         <div style={{
           position: 'fixed',
