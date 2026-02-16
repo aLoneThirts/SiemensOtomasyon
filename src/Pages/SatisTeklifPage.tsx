@@ -1,15 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, MusteriBilgileri, Urun, OdemeYontemi, SatisLog } from '../types/satis';
 import { getSubeByKod } from '../types/sube';
+import * as XLSX from 'xlsx';
 import './SatisTeklif.css';
+
+interface ExcelUrun {
+  urun_kodu: string;
+  urun_adi: string;
+  fiyat: number;
+}
 
 const SatisTeklifPage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>({
     isim: '',
@@ -38,6 +46,13 @@ const SatisTeklifPage: React.FC = () => {
   const [onayDurumu, setOnayDurumu] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [excelYukleniyor, setExcelYukleniyor] = useState(false);
+  
+  // GERÇEK EXCEL ÜRÜNLERİ BURADA TUTULACAK
+  const [excelUrunler, setExcelUrunler] = useState<ExcelUrun[]>([]);
+  const [aramaModaliAcik, setAramaModaliAcik] = useState(false);
+  const [seciliSatirIndex, setSeciliSatirIndex] = useState<number | null>(null);
+  const [aramaMetni, setAramaMetni] = useState('');
 
   const handleMusteriChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setMusteriBilgileri({
@@ -74,11 +89,85 @@ const SatisTeklifPage: React.FC = () => {
     }, 0);
   };
 
+  // GERÇEK EXCEL YÜKLEME FONKSİYONU
+  const excelYukle = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setExcelYukleniyor(true);
+    
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(sheet);
+      
+      console.log("Excel'den gelen ham data:", jsonData);
+      
+      // Excel'deki sütun isimlerini bul
+      const ilkSatir = jsonData[0] as any;
+      console.log("İlk satır:", ilkSatir);
+      
+      // Ürünleri formatla - SÜTUN İSİMLERİNİ KENDİ EXCEL'İNE GÖRE DÜZENLE
+      const urunlerList: ExcelUrun[] = jsonData.map((row: any) => {
+        // BURAYI KENDİ EXCEL'İNE GÖRE DÜZENLE!
+        // Örnek: 
+        return {
+          urun_kodu: row['Ürün Kodu'] || row['Stok Kodu'] || row['Malzeme'] || Object.values(row)[0] || '',
+          urun_adi: row['Ürün Adı'] || row['Açıklama'] || Object.values(row)[1] || '',
+          fiyat: parseFloat(row['Fiyat'] || row['Birim Fiyat'] || Object.values(row)[2] || 0)
+        };
+      }).filter(u => u.urun_kodu); // Boş olanları filtrele
+      
+      console.log("Formatlanmış ürünler:", urunlerList);
+      
+      setExcelUrunler(urunlerList);
+      alert(`✅ ${urunlerList.length} ürün yüklendi!`);
+      
+    } catch (error) {
+      console.error('Excel yükleme hatası:', error);
+      alert('❌ Excel yüklenirken hata oluştu!');
+    } finally {
+      setExcelYukleniyor(false);
+      event.target.value = '';
+    }
+  };
+
+  // Ürün seçme fonksiyonu
+  const urunSec = (urun: ExcelUrun) => {
+    if (seciliSatirIndex !== null) {
+      const yeniUrunler = [...urunler];
+      yeniUrunler[seciliSatirIndex] = {
+        ...yeniUrunler[seciliSatirIndex],
+        kod: urun.urun_kodu,
+        ad: urun.urun_adi,
+        alisFiyati: urun.fiyat
+      };
+      setUrunler(yeniUrunler);
+      setAramaModaliAcik(false);
+      setSeciliSatirIndex(null);
+      setAramaMetni('');
+    }
+  };
+
+  // Filtrelenmiş ürünler
+  const filtrelenmisUrunler = excelUrunler.filter(urun =>
+    urun.urun_kodu.toLowerCase().includes(aramaMetni.toLowerCase()) ||
+    urun.urun_adi.toLowerCase().includes(aramaMetni.toLowerCase())
+  );
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('tr-TR', {
+      style: 'currency',
+      currency: 'TRY'
+    }).format(price);
+  };
+
   const satisKoduOlustur = async () => {
     const sube = getSubeByKod(currentUser!.subeKodu);
     if (!sube) return '';
 
-    // Son satış numarasını al ve bir artır
     const tarihStr = new Date().getTime();
     const satisNo = tarihStr.toString().slice(-4);
     return `${sube.satisKoduPrefix}-${satisNo}`;
@@ -136,15 +225,8 @@ const SatisTeklifPage: React.FC = () => {
         guncellemeTarihi: new Date()
       };
 
-      // Satış teklifini kaydet
       await addDoc(collection(db, `subeler/${sube.dbPath}/satislar`), satisTeklifi);
-
-      // Log kaydet
-      await logKaydet(
-        satisKodu,
-        'YENİ_SATIS',
-        `Yeni satış teklifi oluşturuldu. Müşteri: ${musteriBilgileri.isim}, Tutar: ${toplamTutar} TL`
-      );
+      await logKaydet(satisKodu, 'YENİ_SATIS', `Yeni satış teklifi oluşturuldu. Müşteri: ${musteriBilgileri.isim}, Tutar: ${toplamTutar} TL`);
 
       alert('Satış teklifi başarıyla oluşturuldu!');
       navigate('/dashboard');
@@ -154,13 +236,6 @@ const SatisTeklifPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('tr-TR', {
-      style: 'currency',
-      currency: 'TRY'
-    }).format(price);
   };
 
   return (
@@ -235,22 +310,83 @@ const SatisTeklifPage: React.FC = () => {
         <div className="form-section">
           <div className="section-header">
             <h2>Ürünler</h2>
-            <button type="button" onClick={urunEkle} className="btn-add">
-              + Ürün Ekle
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {/* Excel Yükle Butonu */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={excelYukle}
+                accept=".xlsx,.xls,.csv"
+                style={{ display: 'none' }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn-excel"
+                disabled={excelYukleniyor}
+              >
+                {excelYukleniyor ? '📊 Yükleniyor...' : '📊 Excel Yükle'}
+              </button>
+              
+              {/* Ürün Ekle Butonu */}
+              <button type="button" onClick={urunEkle} className="btn-add">
+                + Ürün Ekle
+              </button>
+            </div>
           </div>
+
+          {/* Excel'den yüklenen ürün sayısı gösterge */}
+          {excelUrunler.length > 0 && (
+            <div style={{
+              background: '#e8f5e9',
+              padding: '8px 15px',
+              borderRadius: '4px',
+              marginBottom: '15px',
+              color: '#2e7d32',
+              fontSize: '14px',
+              fontWeight: '600'
+            }}>
+              📦 {excelUrunler.length} ürün yüklendi
+            </div>
+          )}
 
           {urunler.map((urun, index) => (
             <div key={urun.id} className="urun-satir">
               <div className="urun-grid">
                 <div className="form-group">
                   <label>Ürün Kodu</label>
-                  <input
-                    type="text"
-                    value={urun.kod}
-                    onChange={(e) => handleUrunChange(index, 'kod', e.target.value)}
-                    required
-                  />
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    <input
+                      type="text"
+                      value={urun.kod}
+                      onChange={(e) => handleUrunChange(index, 'kod', e.target.value)}
+                      required
+                      style={{ flex: 1 }}
+                      placeholder="Ürün kodu"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (excelUrunler.length === 0) {
+                          alert('Önce Excel yükleyin!');
+                          return;
+                        }
+                        setSeciliSatirIndex(index);
+                        setAramaModaliAcik(true);
+                      }}
+                      style={{
+                        padding: '0 15px',
+                        background: excelUrunler.length > 0 ? '#10b981' : '#9ca3af',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: excelUrunler.length > 0 ? 'pointer' : 'not-allowed',
+                        fontSize: '16px'
+                      }}
+                    >
+                      🔍
+                    </button>
+                  </div>
                 </div>
 
                 <div className="form-group">
@@ -260,6 +396,7 @@ const SatisTeklifPage: React.FC = () => {
                     value={urun.ad}
                     onChange={(e) => handleUrunChange(index, 'ad', e.target.value)}
                     required
+                    placeholder="Ürün adı"
                   />
                 </div>
 
@@ -450,6 +587,130 @@ const SatisTeklifPage: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* EXCEL ÜRÜN ARAMA MODALI - GERÇEK ÜRÜNLER BURADA */}
+      {aramaModaliAcik && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            width: '700px',
+            maxWidth: '95%',
+            maxHeight: '80vh',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{
+              padding: '20px',
+              background: '#10b981',
+              color: 'white',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0 }}>📦 Excel'den Ürün Seç ({excelUrunler.length} ürün)</h3>
+              <button 
+                onClick={() => {
+                  setAramaModaliAcik(false);
+                  setSeciliSatirIndex(null);
+                  setAramaMetni('');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '24px',
+                  cursor: 'pointer'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div style={{ padding: '20px' }}>
+              <input
+                type="text"
+                placeholder="Ürün kodu veya adı ile ara..."
+                value={aramaMetni}
+                onChange={(e) => setAramaMetni(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '15px',
+                  border: '2px solid #10b981',
+                  borderRadius: '8px',
+                  marginBottom: '20px',
+                  fontSize: '16px'
+                }}
+                autoFocus
+              />
+              
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {filtrelenmisUrunler.length > 0 ? (
+                  filtrelenmisUrunler.map((urun, index) => (
+                    <div
+                      key={index}
+                      onClick={() => urunSec(urun)}
+                      style={{
+                        padding: '15px',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '8px',
+                        marginBottom: '10px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        background: '#f9f9f9'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#e8f5e9';
+                        e.currentTarget.style.borderColor = '#10b981';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#f9f9f9';
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                      }}
+                    >
+                      <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#10b981' }}>
+                        {urun.urun_kodu}
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#333', margin: '5px 0' }}>
+                        {urun.urun_adi}
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: '600', color: '#059669' }}>
+                        {urun.fiyat.toLocaleString('tr-TR')} TL
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                    {excelUrunler.length === 0 ? (
+                      <>
+                        <div style={{ fontSize: '48px', marginBottom: '20px' }}>📭</div>
+                        <div style={{ fontSize: '18px' }}>Hiç ürün yok!</div>
+                        <div style={{ fontSize: '14px', marginTop: '10px' }}>Önce Excel yükle butonuna tıkla</div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔍</div>
+                        <div style={{ fontSize: '18px' }}>Ürün bulunamadı</div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
