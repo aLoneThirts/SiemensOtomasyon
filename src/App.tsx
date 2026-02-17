@@ -8,7 +8,8 @@ import SatisTeklifPage from './Pages/SatisTeklifPage';
 import BekleyenUrunlerPage from './Pages/BekleyenUrunlerPage';
 import AdminPanel from './Pages/AdminPanel';
 import SatisDetayPage from './Pages/SatisDetayPage';
-import Kasa from './Pages/Kasa';
+import Kasa from './Pages/Kasa'; // DÜZELTİLDİ: ./Pages/Kasa
+import CiroPerformans from './Pages/CiroPerformans'; 
 import './App.css';
 
 const PrivateRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -63,7 +64,7 @@ function App() {
               </PrivateRoute>
             }
           />
-             <Route
+          <Route
             path="/kasa"
             element={
               <PrivateRoute>
@@ -71,11 +72,11 @@ function App() {
               </PrivateRoute>
             }
           />
-             <Route
-            path="/ciro/performans"
+          <Route
+            path="/ciro-performans"
             element={
               <PrivateRoute>
-                <Kasa />
+                <CiroPerformans />
               </PrivateRoute>
             }
           />

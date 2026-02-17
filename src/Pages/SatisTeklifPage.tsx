@@ -33,68 +33,71 @@ const SatisTeklifPage: React.FC = () => {
   // ========== STATE TANIMLAMALARI ==========
   
   // Müşteri Bilgileri
-  const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>({
-    isim: '',
-    adres: '',
-    faturaAdresi: '',
-    isAdresi: '',
-    vergiNumarasi: '',
-    vkNo: '',
-    vd: '',
-    cep: ''
-  });
-
-  const [musteriTemsilcisi, setMusteriTemsilcisi] = useState('');
-  const [musteriTemsilcisiTel, setMusteriTemsilcisiTel] = useState('');
-
-  // Ürünler
-  const [urunler, setUrunler] = useState<Urun[]>([
-    { id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }
-  ]);
-
-  // Tarihler
-  const [tarih, setTarih] = useState(new Date().toISOString().split('T')[0]);
-  const [teslimatTarihi, setTeslimatTarihi] = useState('');
-
-  // Notlar
-  const [marsNo, setMarsNo] = useState('');
-  const [marsNoHata, setMarsNoHata] = useState(false);
-  const [magaza, setMagaza] = useState('');
-  const [faturaNo, setFaturaNo] = useState('');
-  const [faturaNoHata, setFaturaNoHata] = useState(false);
-  const [servisNotu, setServisNotu] = useState('');
+  // ========== STATE TANIMLAMALARI ==========
   
-  // BOOLEAN STATE'LER - DÜZELTİLDİ
-  const [teslimEdildiMi, setTeslimEdildiMi] = useState<boolean>(false);
-  const [cevap, setCevap] = useState('');
-  const [fatura, setFatura] = useState<boolean>(false);
-  const [ileriTeslim, setIleriTeslim] = useState<boolean>(false);
-  const [servis, setServis] = useState<boolean>(false);
+// Müşteri Bilgileri
+const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>({
+  isim: '',
+  adres: '',
+  faturaAdresi: '',
+  isAdresi: '',
+  vergiNumarasi: '',
+  vkNo: '',
+  vd: '',
+  cep: ''
+});
 
-  // Kampanyalar ve Yeşil Etiketler
-  const [kampanyalar, setKampanyalar] = useState<Kampanya[]>([]);
-  const [yesilEtiketler, setYesilEtiketler] = useState<YesilEtiket[]>([]);
+const [musteriTemsilcisi, setMusteriTemsilcisi] = useState('');
+const [musteriTemsilcisiTel, setMusteriTemsilcisiTel] = useState('');
 
-  // Ödeme
-  const [pesinatTutar, setPesinatTutar] = useState<number>(0);
-  const [havaleTutar, setHavaleTutar] = useState<number>(0);
-  const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>([]);
+// Ürünler
+const [urunler, setUrunler] = useState<Urun[]>([
+  { id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }
+]);
 
-  const [odemeYontemi, setOdemeYontemi] = useState<OdemeYontemi>(OdemeYontemi.PESINAT);
-  const [hesabaGecen, setHesabaGecen] = useState('');
-  const [onayDurumu, setOnayDurumu] = useState<boolean>(false);
+// Tarihler
+const [tarih, setTarih] = useState(new Date().toISOString().split('T')[0]);
+const [teslimatTarihi, setTeslimatTarihi] = useState('');
 
-  const [loading, setLoading] = useState(false);
-  const [excelYukleniyor, setExcelYukleniyor] = useState(false);
-  
-  // Excel ürünleri
-  const [excelUrunler, setExcelUrunler] = useState<ExcelUrun[]>([]);
-  const [aramaModaliAcik, setAramaModaliAcik] = useState(false);
-  const [seciliSatirIndex, setSeciliSatirIndex] = useState<number | null>(null);
-  const [aramaMetni, setAramaMetni] = useState('');
+// NOTLAR - BURAYA EKLE !!!
+const [marsNo, setMarsNo] = useState<string>(''); // <--- BUNU EKLE
+const [marsNoHata, setMarsNoHata] = useState<boolean>(false); // <--- BUNU EKLE
+const [magaza, setMagaza] = useState('');
+const [faturaNo, setFaturaNo] = useState('');
+const [faturaNoHata, setFaturaNoHata] = useState(false);
+const [servisNotu, setServisNotu] = useState('');
 
-  // Satış Kodu
-  const [satisKodu, setSatisKodu] = useState<string>('');
+// BOOLEAN STATE'LER
+const [teslimEdildiMi, setTeslimEdildiMi] = useState<boolean>(false);
+const [cevap, setCevap] = useState<string>(''); // <--- string yap
+const [fatura, setFatura] = useState<boolean>(false);
+const [ileriTeslim, setIleriTeslim] = useState<boolean>(false);
+const [servis, setServis] = useState<boolean>(false);
+
+// Kampanyalar ve Yeşil Etiketler
+const [kampanyalar, setKampanyalar] = useState<Kampanya[]>([]);
+const [yesilEtiketler, setYesilEtiketler] = useState<YesilEtiket[]>([]);
+
+// Ödeme
+const [pesinatTutar, setPesinatTutar] = useState<number>(0);
+const [havaleTutar, setHavaleTutar] = useState<number>(0);
+const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>([]);
+
+const [odemeYontemi, setOdemeYontemi] = useState<OdemeYontemi>(OdemeYontemi.PESINAT);
+const [hesabaGecen, setHesabaGecen] = useState('');
+const [onayDurumu, setOnayDurumu] = useState<boolean>(false);
+
+const [loading, setLoading] = useState(false);
+const [excelYukleniyor, setExcelYukleniyor] = useState(false);
+
+// Excel ürünleri
+const [excelUrunler, setExcelUrunler] = useState<ExcelUrun[]>([]);
+const [aramaModaliAcik, setAramaModaliAcik] = useState(false);
+const [seciliSatirIndex, setSeciliSatirIndex] = useState<number | null>(null);
+const [aramaMetni, setAramaMetni] = useState('');
+
+// Satış Kodu
+const [satisKodu, setSatisKodu] = useState<string>('');
 
   // ========== YARDIMCI FONKSİYONLAR ==========
 
@@ -142,11 +145,15 @@ const SatisTeklifPage: React.FC = () => {
   };
 
 
-  const validateMarsNo = (no: string): boolean => {
-    if (!no) return true; 
-    const regex = /^2026\d{6}$/;
-    return regex.test(no);
-  };
+const validateMarsNo = (no: string): boolean => {
+  if (!no) return true; // Boş olabilir
+  // Sadece uyarı ver, engelleme
+  if (no.length !== 10 || !no.startsWith('2026')) {
+    console.warn('MARS No önerilen formatta değil:', no);
+    // Ama yine de kaydet
+  }
+  return true; // Her türlü true döndür, kaydet
+};
 
   // Fatura No kontrolü (zorunlu)
   const validateFaturaNo = (no: string): boolean => {
@@ -277,26 +284,34 @@ const getOdemeDurumu = (): OdemeDurumu => {
   };
 
   // MARS No değişiklik
- const handleMarsNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  setMarsNo(e.target.value);
+const handleMarsNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const value = e.target.value;
+  setMarsNo(value); // Kullanıcı ne yazdıysa aynen al
+  setMarsNoHata(false); // Hatayı temizle
 };
 
   // MARS No düzelt - DÜZELTİLDİ
- const fixMarsNo = () => {
+const fixMarsNo = () => {
   if (!marsNo) {
-    setMarsNo('2026000000');
-  } else {
-    // Sadece rakamları al
-    const sadeceRakam = marsNo.replace(/\D/g, '');
-    // 2026 ile başlat, 10 haneye tamamla
-    let yeniNo = sadeceRakam;
-    if (!yeniNo.startsWith('2026')) {
-      yeniNo = '2026' + yeniNo;
-    }
-    // 10 haneye kırp veya tamamla
-    yeniNo = yeniNo.slice(0, 10).padEnd(10, '0');
-    setMarsNo(yeniNo);
+    setMarsNo('2026000000'); // Boşsa varsayılan
+    return;
   }
+  
+  // Sadece rakamları al
+  const sadeceRakam = marsNo.replace(/\D/g, '');
+  
+  // Eğer 2026 ile başlamıyorsa başına 2026 ekle
+  let yeniNo = sadeceRakam;
+  if (!yeniNo.startsWith('2026')) {
+    yeniNo = '2026' + yeniNo;
+  }
+  
+  // 10 haneyi geçme, ama EKLEME!
+  if (yeniNo.length > 10) {
+    yeniNo = yeniNo.slice(0, 10);
+  }
+  
+  setMarsNo(yeniNo);
 };
   // Fatura No değişiklik
   const handleFaturaNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -673,30 +688,29 @@ const getOdemeDurumu = (): OdemeDurumu => {
         <div className="form-section">
           <h2>Notlar ve Zorunlu Alanlar</h2>
           <div className="form-grid">
-            <div className="form-group">
-              <label>MARS No (2026 ile başlayan 10 haneli)</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  value={marsNo}
-                  onChange={handleMarsNoChange}
-                  placeholder="2026123456"
-                  className={marsNoHata ? 'input-error' : ''}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  onClick={fixMarsNo}
-                  className="btn-fix"
-                  title="MARS numarasını düzelt"
-                >
-                  ✏️ Düzelt
-                </button>
-              </div>
-              {marsNoHata && (
-                <small style={{ color: 'red' }}>MARS numarası 2026 ile başlamalı ve 10 haneli olmalı</small>
-              )}
-            </div>
+          <div className="form-group">
+  <label>MARS No (2026 ile başlayan 10 haneli)</label>
+  <div style={{ display: 'flex', gap: '8px' }}>
+    <input
+      type="text"
+      value={marsNo}
+      onChange={handleMarsNoChange} // Hiç karışma, direkt al
+      placeholder="2026131500"
+      style={{ flex: 1 }}
+    />
+    <button
+      type="button"
+      onClick={fixMarsNo}
+      className="btn-fix"
+      title="MARS numarasını düzelt (2026 ile başlat, 10 haneli yap)"
+    >
+      ✏️ Düzelt
+    </button>
+  </div>
+  <small style={{ color: '#666' }}>
+    İstediğiniz gibi yazın, sonra Düzelt butonu ile formatlayın
+  </small>
+</div>
 
             <div className="form-group">
               <label>MAĞAZA</label>
@@ -1031,13 +1045,6 @@ const getOdemeDurumu = (): OdemeDurumu => {
                 placeholder="Örn: 20.450₺"
               />
             </div>
-
-            <div className="form-group">
-              <label>Ödeme Durumu</label>
-              <div className={`odeme-durumu-badge ${getOdemeDurumu() === OdemeDurumu.ODENDI ? 'odendi' : 'acik-hesap'}`}>
-                {getOdemeDurumu()}
-              </div>
-            </div>
           </div>
 
           {/* Kart Ödemeleri */}
@@ -1048,7 +1055,7 @@ const getOdemeDurumu = (): OdemeDurumu => {
                 + Kart Ekle
               </button>
             </div>
-
+          
             {kartOdemeler.map((kart, index) => (
               <div key={kart.id} className="kart-satir">
                 <div className="kart-grid">
