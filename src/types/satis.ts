@@ -48,6 +48,11 @@ export enum OdemeYontemi {
   CEK_SENET = 'ÇEK/SENET'
 }
 
+export enum OdemeDurumu {
+  ODENDI = 'ÖDENDİ',
+  ACIK_HESAP = 'AÇIK HESAP'
+}
+
 export interface SatisTeklifFormu {
   id?: string;
   satisKodu: string;
@@ -61,9 +66,9 @@ export interface SatisTeklifFormu {
   teslimatTarihi: Date;
   
   // Notlar
-  marsNo?: string;
+  marsNo?: string; // 2026 ile başlayan 10 haneli
   magaza?: string;
-  faturaNo?: string;
+  faturaNo: string; // ZORUNLU!
   servisNotu?: string;
   teslimEdildiMi?: boolean;
   cevap?: string;
@@ -77,6 +82,7 @@ export interface SatisTeklifFormu {
   havaleTutar?: number;
   kartOdemeler?: KartOdeme[];
   hesabaGecen?: string;
+  odemeDurumu: OdemeDurumu; // ÖDENDİ veya AÇIK HESAP
   
   fatura: boolean;
   ileriTeslim: boolean;
@@ -84,7 +90,7 @@ export interface SatisTeklifFormu {
   odemeYontemi: OdemeYontemi;
   onayDurumu: boolean;
   
-  zarar?: number; // BUNU EKLE!
+  zarar?: number;
   
   olusturanKullanici: string;
   olusturmaTarihi: Date;

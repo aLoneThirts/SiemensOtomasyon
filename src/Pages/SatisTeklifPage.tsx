@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { 
   SatisTeklifFormu, 
@@ -13,9 +13,10 @@ import {
   OdemeYontemi, 
   SatisLog,
   BANKALAR,
-  TAKSIT_SECENEKLERI
+  TAKSIT_SECENEKLERI,
+  OdemeDurumu
 } from '../types/satis';
-import { getSubeByKod } from '../types/sube';
+import { getSubeByKod, SubeKodu } from '../types/sube';
 import * as XLSX from 'xlsx';
 import './SatisTeklif.css';
 
@@ -57,11 +58,18 @@ const SatisTeklifPage: React.FC = () => {
 
   // Notlar
   const [marsNo, setMarsNo] = useState('');
+  const [marsNoHata, setMarsNoHata] = useState(false);
   const [magaza, setMagaza] = useState('');
   const [faturaNo, setFaturaNo] = useState('');
+  const [faturaNoHata, setFaturaNoHata] = useState(false);
   const [servisNotu, setServisNotu] = useState('');
-  const [teslimEdildiMi, setTeslimEdildiMi] = useState(false);
+  
+  // BOOLEAN STATE'LER - DÜZELTİLDİ
+  const [teslimEdildiMi, setTeslimEdildiMi] = useState<boolean>(false);
   const [cevap, setCevap] = useState('');
+  const [fatura, setFatura] = useState<boolean>(false);
+  const [ileriTeslim, setIleriTeslim] = useState<boolean>(false);
+  const [servis, setServis] = useState<boolean>(false);
 
   // Kampanyalar ve Yeşil Etiketler
   const [kampanyalar, setKampanyalar] = useState<Kampanya[]>([]);
@@ -72,13 +80,9 @@ const SatisTeklifPage: React.FC = () => {
   const [havaleTutar, setHavaleTutar] = useState<number>(0);
   const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>([]);
 
-  const [fatura, setFatura] = useState(false);
-  const [ileriTeslim, setIleriTeslim] = useState(false);
-  const [servis, setServis] = useState(false);
-
   const [odemeYontemi, setOdemeYontemi] = useState<OdemeYontemi>(OdemeYontemi.PESINAT);
   const [hesabaGecen, setHesabaGecen] = useState('');
-  const [onayDurumu, setOnayDurumu] = useState(false);
+  const [onayDurumu, setOnayDurumu] = useState<boolean>(false);
 
   const [loading, setLoading] = useState(false);
   const [excelYukleniyor, setExcelYukleniyor] = useState(false);
@@ -88,6 +92,178 @@ const SatisTeklifPage: React.FC = () => {
   const [aramaModaliAcik, setAramaModaliAcik] = useState(false);
   const [seciliSatirIndex, setSeciliSatirIndex] = useState<number | null>(null);
   const [aramaMetni, setAramaMetni] = useState('');
+
+  // Satış Kodu
+  const [satisKodu, setSatisKodu] = useState<string>('');
+
+  // ========== YARDIMCI FONKSİYONLAR ==========
+
+  // Satış kodu servis fonksiyonları - ÖNCE TANIMLA
+  const getSonSatisKodu = async (subeKodu: SubeKodu, subeDbPath: string): Promise<string | null> => {
+    try {
+      const satisRef = collection(db, `subeler/${subeDbPath}/satislar`);
+      const q = query(satisRef, orderBy('satisKodu', 'desc'), limit(1));
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) {
+        return null;
+      }
+      
+      return snapshot.docs[0].data().satisKodu as string;
+    } catch (error) {
+      console.error('Son satış kodu alınamadı:', error);
+      return null;
+    }
+  };
+
+  const getSiraNumarasi = (sonKod: string | null, subePrefix: string): string => {
+    if (!sonKod) {
+      return `${subePrefix}-001`;
+    }
+    
+    const parts = sonKod.split('-');
+    if (parts.length !== 2) {
+      return `${subePrefix}-001`;
+    }
+    
+    const sonSayi = parseInt(parts[1], 10);
+    if (isNaN(sonSayi)) {
+      return `${subePrefix}-001`;
+    }
+    
+    const yeniSayi = sonSayi + 1;
+    // DÜZELTİLDİ: number'ı string'e çevirip padStart uygula
+    return `${subePrefix}-${yeniSayi.toString().padStart(3, '0')}`;
+  };
+
+  const yeniSatisKoduOlustur = async (subeKodu: SubeKodu, subeDbPath: string, subePrefix: string): Promise<string> => {
+    const sonKod = await getSonSatisKodu(subeKodu, subeDbPath);
+    return getSiraNumarasi(sonKod, subePrefix);
+  };
+
+
+  const validateMarsNo = (no: string): boolean => {
+    if (!no) return true; 
+    const regex = /^2026\d{6}$/;
+    return regex.test(no);
+  };
+
+  // Fatura No kontrolü (zorunlu)
+  const validateFaturaNo = (no: string): boolean => {
+    return no.trim() !== '';
+  };
+
+  // Toplam tutar hesapla
+  const toplamTutarHesapla = (): number => {
+    return urunler.reduce((toplam, urun) => {
+      return toplam + (urun.adet * urun.alisFiyati);
+    }, 0);
+  };
+
+  // Alış toplam hesapla
+  const alisToplamHesapla = (): number => {
+    return urunler.reduce((toplam, urun) => {
+      return toplam + (urun.adet * urun.alisFiyati);
+    }, 0);
+  };
+
+  // BİP toplam hesapla
+  const bipToplamHesapla = (): number => {
+    return urunler.reduce((toplam, urun) => {
+      return toplam + ((urun.bip || 0) * urun.adet);
+    }, 0);
+  };
+
+  // Toplam maliyet hesapla
+  const toplamMaliyetHesapla = (): number => {
+    return alisToplamHesapla() - bipToplamHesapla();
+  };
+
+  // Zarar hesapla - DÜZELTİLDİ
+  const zararHesapla = (): number => {
+    const maliyet = toplamMaliyetHesapla();
+    let hesabaGecenSayi = 0;
+    
+    if (hesabaGecen) {
+      // String'den sayıya çevir
+      const temizlenmis = hesabaGecen.replace(/\./g, '').replace('₺', '').replace(',', '.');
+      hesabaGecenSayi = parseFloat(temizlenmis) || 0;
+    }
+    
+    return maliyet - hesabaGecenSayi;
+  };
+
+  // Format price - DÜZELTİLDİ (number alır string döndürür)
+  const formatPrice = (price: number): string => {
+    return new Intl.NumberFormat('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(price);
+  };
+
+  // Ödeme durumunu hesapla - DÜZELTİLDİ
+const getOdemeDurumu = (): OdemeDurumu => {
+  const maliyet = toplamMaliyetHesapla();
+    
+    // Hesaba geçen sayıya çevir
+    let hesabaGecenSayi = 0;
+    if (hesabaGecen) {
+      const temizlenmis = hesabaGecen.replace(/\./g, '').replace('₺', '').replace(',', '.');
+      hesabaGecenSayi = parseFloat(temizlenmis) || 0;
+    }
+    
+    // Peşinat + havale + kart ödemeleri toplamı
+  const kartToplam = kartOdemeler.reduce((sum, kart) => sum + (kart.tutar || 0), 0);
+  const toplamOdeme = (pesinatTutar || 0) + (havaleTutar || 0) + kartToplam;
+    
+    // Eğer toplam ödeme maliyetten büyük veya eşitse ÖDENDİ
+      return toplamOdeme >= maliyet ? OdemeDurumu.ODENDI : OdemeDurumu.ACIK_HESAP;
+  };
+
+  // Log kaydet
+  const logKaydet = async (satisKodu: string, islem: string, detay: string) => {
+    const sube = getSubeByKod(currentUser!.subeKodu);
+    if (!sube) return;
+
+    const log: Omit<SatisLog, 'id'> = {
+      satisKodu,
+      subeKodu: currentUser!.subeKodu,
+      islem,
+      kullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
+      tarih: new Date(),
+      detay
+    };
+
+    await addDoc(collection(db, `subeler/${sube.dbPath}/loglar`), log);
+  };
+
+  // ========== USEEFFECT ==========
+  useEffect(() => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    
+    // Satış kodunu oluştur
+    const generateSatisKodu = async () => {
+      if (!currentUser) return;
+      
+      const sube = getSubeByKod(currentUser.subeKodu);
+      if (!sube) return;
+      
+
+    const yeniKod = await yeniSatisKoduOlustur(
+      currentUser.subeKodu,
+      sube.dbPath,
+      String(sube.satisKoduPrefix)  
+    );   
+      setSatisKodu(yeniKod);
+    };
+
+    generateSatisKodu();
+  }, [currentUser]);
 
   // ========== HANDLER FONKSİYONLARI ==========
 
@@ -100,13 +276,42 @@ const SatisTeklifPage: React.FC = () => {
     }));
   };
 
-  // Ürün Handler
+  // MARS No değişiklik
+ const handleMarsNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  setMarsNo(e.target.value);
+};
+
+  // MARS No düzelt - DÜZELTİLDİ
+ const fixMarsNo = () => {
+  if (!marsNo) {
+    setMarsNo('2026000000');
+  } else {
+    // Sadece rakamları al
+    const sadeceRakam = marsNo.replace(/\D/g, '');
+    // 2026 ile başlat, 10 haneye tamamla
+    let yeniNo = sadeceRakam;
+    if (!yeniNo.startsWith('2026')) {
+      yeniNo = '2026' + yeniNo;
+    }
+    // 10 haneye kırp veya tamamla
+    yeniNo = yeniNo.slice(0, 10).padEnd(10, '0');
+    setMarsNo(yeniNo);
+  }
+};
+  // Fatura No değişiklik
+  const handleFaturaNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFaturaNo(value);
+    setFaturaNoHata(false);
+  };
+
+  // Ürün Handler - DÜZELTİLDİ
   const handleUrunChange = (index: number, field: keyof Urun, value: any) => {
     const yeniUrunler = [...urunler];
     yeniUrunler[index] = {
       ...yeniUrunler[index],
       [field]: field === 'adet' || field === 'alisFiyati' || field === 'bip' 
-        ? parseFloat(value) || 0 
+        ? (value === '' ? 0 : parseFloat(value) || 0)
         : value
     };
     setUrunler(yeniUrunler);
@@ -132,7 +337,7 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  // Kart Ödeme Handler
+  // Kart Ödeme Handler - DÜZELTİLDİ
   const kartEkle = () => {
     setKartOdemeler(prev => [
       ...prev,
@@ -140,8 +345,7 @@ const SatisTeklifPage: React.FC = () => {
         id: Date.now().toString(), 
         banka: BANKALAR[0], 
         taksitSayisi: 1, 
-        tutar: 0, 
-        pesinat: 0 
+        tutar: 0
       }
     ]);
   };
@@ -154,8 +358,10 @@ const SatisTeklifPage: React.FC = () => {
     const yeniKartlar = [...kartOdemeler];
     yeniKartlar[index] = {
       ...yeniKartlar[index],
-      [field]: field === 'tutar' || field === 'pesinat' || field === 'taksitSayisi'
-        ? parseFloat(value) || 0
+      [field]: field === 'tutar' 
+        ? (value === '' ? 0 : parseFloat(value) || 0)
+        : field === 'taksitSayisi'
+        ? parseInt(value) || 1
         : value
     };
     setKartOdemeler(yeniKartlar);
@@ -177,7 +383,7 @@ const SatisTeklifPage: React.FC = () => {
     const yeniKampanyalar = [...kampanyalar];
     yeniKampanyalar[index] = {
       ...yeniKampanyalar[index],
-      [field]: field === 'tutar' ? parseFloat(value) || 0 : value
+      [field]: field === 'tutar' ? (value === '' ? 0 : parseFloat(value) || 0) : value
     };
     setKampanyalar(yeniKampanyalar);
   };
@@ -198,75 +404,9 @@ const SatisTeklifPage: React.FC = () => {
     const yeniEtiketler = [...yesilEtiketler];
     yeniEtiketler[index] = {
       ...yeniEtiketler[index],
-      [field]: field === 'tutar' ? parseFloat(value) || 0 : value
+      [field]: field === 'tutar' ? (value === '' ? 0 : parseFloat(value) || 0) : value
     };
     setYesilEtiketler(yeniEtiketler);
-  };
-
-  // ========== YARDIMCI FONKSİYONLAR ==========
-
-  const toplamTutarHesapla = (): number => {
-    return urunler.reduce((toplam, urun) => {
-      return toplam + (urun.adet * urun.alisFiyati);
-    }, 0);
-  };
-
-  const alisToplamHesapla = (): number => {
-    return urunler.reduce((toplam, urun) => {
-      return toplam + (urun.adet * urun.alisFiyati);
-    }, 0);
-  };
-
-  const bipToplamHesapla = (): number => {
-    return urunler.reduce((toplam, urun) => {
-      return toplam + ((urun.bip || 0) * urun.adet);
-    }, 0);
-  };
-
-  const toplamMaliyetHesapla = (): number => {
-    return alisToplamHesapla() - bipToplamHesapla();
-  };
-
-  const zararHesapla = (): number => {
-    const maliyet = toplamMaliyetHesapla();
-    const hesabaGecenSayi = hesabaGecen ? 
-      parseFloat(hesabaGecen.replace(/\./g, '').replace('₺', '')) || 0 : 0;
-    return maliyet - hesabaGecenSayi;
-  };
-
-  // TEK BİR formatPrice FONKSİYONU (sadece bu kalsın)
-  const formatPrice = (price: number): string => {
-    return new Intl.NumberFormat('tr-TR', {
-      style: 'currency',
-      currency: 'TRY',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(price);
-  };
-
-  const satisKoduOlustur = async (): Promise<string> => {
-    const sube = getSubeByKod(currentUser!.subeKodu);
-    if (!sube) return '';
-
-    const tarihStr = new Date().getTime();
-    const satisNo = tarihStr.toString().slice(-4);
-    return `${sube.satisKoduPrefix}-${satisNo}`;
-  };
-
-  const logKaydet = async (satisKodu: string, islem: string, detay: string) => {
-    const sube = getSubeByKod(currentUser!.subeKodu);
-    if (!sube) return;
-
-    const log: Omit<SatisLog, 'id'> = {
-      satisKodu,
-      subeKodu: currentUser!.subeKodu,
-      islem,
-      kullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
-      tarih: new Date(),
-      detay
-    };
-
-    await addDoc(collection(db, `subeler/${sube.dbPath}/loglar`), log);
   };
 
   // Excel Yükleme Fonksiyonu
@@ -283,22 +423,12 @@ const SatisTeklifPage: React.FC = () => {
       const sheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(sheet);
       
-      console.log("Excel'den gelen ham data:", jsonData);
-      
-      // Excel'deki sütun isimlerini bul
-      const ilkSatir = jsonData[0] as any;
-      console.log("İlk satır:", ilkSatir);
-      
-      // Ürünleri formatla
       const urunlerList: ExcelUrun[] = jsonData.map((row: any) => {
         return {
           urun_kodu: row['Ürün Kodu'] || row['Stok Kodu'] || row['Malzeme'] || Object.values(row)[0] || '',
           urun_adi: row['Ürün Adı'] || row['Açıklama'] || Object.values(row)[1] || '',
-  
         };
       }).filter(u => u.urun_kodu);
-      
-      console.log("Formatlanmış ürünler:", urunlerList);
       
       setExcelUrunler(urunlerList);
       alert(`✅ ${urunlerList.length} ürün yüklendi!`);
@@ -320,7 +450,6 @@ const SatisTeklifPage: React.FC = () => {
         ...yeniUrunler[seciliSatirIndex],
         kod: urun.urun_kodu,
         ad: urun.urun_adi,
-
       };
       setUrunler(yeniUrunler);
       setAramaModaliAcik(false);
@@ -338,6 +467,21 @@ const SatisTeklifPage: React.FC = () => {
   // ========== SUBMIT HANDLER ==========
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Fatura No kontrolü
+    if (!validateFaturaNo(faturaNo)) {
+      setFaturaNoHata(true);
+      alert('❌ Fatura numarası zorunludur!');
+      return;
+    }
+    
+    // MARS No format kontrolü (eğer girildiyse)
+    if (marsNo && !validateMarsNo(marsNo)) {
+      setMarsNoHata(true);
+      alert('❌ MARS numarası 2026 ile başlamalı ve 10 haneli olmalıdır! (Örn: 2026123456)');
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -347,8 +491,8 @@ const SatisTeklifPage: React.FC = () => {
         return;
       }
 
-      const satisKodu = await satisKoduOlustur();
       const toplamTutar = toplamTutarHesapla();
+      const odemeDurumu = getOdemeDurumu();
 
       const satisTeklifi: Omit<SatisTeklifFormu, 'id'> = {
         satisKodu,
@@ -372,11 +516,13 @@ const SatisTeklifPage: React.FC = () => {
         havaleTutar,
         kartOdemeler,
         hesabaGecen,
+        odemeDurumu,
         fatura,
         ileriTeslim,
         servis,
         odemeYontemi,
         onayDurumu,
+        zarar: zararHesapla(),
         olusturanKullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
         olusturmaTarihi: new Date(),
         guncellemeTarihi: new Date()
@@ -390,11 +536,11 @@ const SatisTeklifPage: React.FC = () => {
         `Yeni satış teklifi oluşturuldu. Müşteri: ${musteriBilgileri.isim}, Tutar: ${toplamTutar} TL`
       );
 
-      alert('Satış teklifi başarıyla oluşturuldu!');
+      alert('✅ Satış teklifi başarıyla oluşturuldu!');
       navigate('/dashboard');
     } catch (error) {
       console.error('Satış teklifi oluşturulamadı:', error);
-      alert('Bir hata oluştu!');
+      alert('❌ Bir hata oluştu!');
     } finally {
       setLoading(false);
     }
@@ -406,7 +552,7 @@ const SatisTeklifPage: React.FC = () => {
         <button onClick={() => navigate('/dashboard')} className="btn-back">
           ← Geri
         </button>
-        <h1>Yeni Satış Teklif Formu</h1>
+        <h1>Yeni Satış Teklif Formu - {satisKodu}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="satis-teklif-form">
@@ -436,7 +582,7 @@ const SatisTeklifPage: React.FC = () => {
               />
             </div>
 
-                <div className="form-group">
+            <div className="form-group">
               <label>Adres</label>
               <input
                 type="text"
@@ -493,6 +639,25 @@ const SatisTeklifPage: React.FC = () => {
             </div>
 
             <div className="form-group">
+              <label>Müşteri Temsilcisi Tel</label>
+              <input
+                type="text"
+                value={musteriTemsilcisiTel}
+                onChange={(e) => setMusteriTemsilcisiTel(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Tarih</label>
+              <input
+                type="date"
+                value={tarih}
+                onChange={(e) => setTarih(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group">
               <label>Teslimat Tarihi *</label>
               <input
                 type="date"
@@ -506,47 +671,105 @@ const SatisTeklifPage: React.FC = () => {
 
         {/* ===== NOTLAR ===== */}
         <div className="form-section">
-          <h2>Notlar</h2>
+          <h2>Notlar ve Zorunlu Alanlar</h2>
           <div className="form-grid">
             <div className="form-group">
-              <label>MARS No (NOT)</label>
-              <input
-                type="text"
-                value={marsNo}
-                onChange={(e) => setMarsNo(e.target.value)}
-              />
+              <label>MARS No (2026 ile başlayan 10 haneli)</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={marsNo}
+                  onChange={handleMarsNoChange}
+                  placeholder="2026123456"
+                  className={marsNoHata ? 'input-error' : ''}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={fixMarsNo}
+                  className="btn-fix"
+                  title="MARS numarasını düzelt"
+                >
+                  ✏️ Düzelt
+                </button>
+              </div>
+              {marsNoHata && (
+                <small style={{ color: 'red' }}>MARS numarası 2026 ile başlamalı ve 10 haneli olmalı</small>
+              )}
             </div>
-           
-
-
-
 
             <div className="form-group">
-              <label>MAĞAZA (NOT)</label>
+              <label>MAĞAZA</label>
               <input
                 type="text"
                 value={magaza}
                 onChange={(e) => setMagaza(e.target.value)}
+                placeholder="Mağaza adı"
               />
             </div>
 
             <div className="form-group">
-              <label>FATURA No (NOT)</label>
+              <label>FATURA No *</label>
               <input
                 type="text"
                 value={faturaNo}
-                onChange={(e) => setFaturaNo(e.target.value)}
+                onChange={handleFaturaNoChange}
+                required
+                placeholder="Fatura numarası zorunlu"
+                className={faturaNoHata ? 'input-error' : ''}
               />
+              {faturaNoHata && (
+                <small style={{ color: 'red' }}>Fatura numarası zorunludur!</small>
+              )}
             </div>
 
             <div className="form-group">
-              <label>SERVİS (NOT)</label>
+              <label>SERVİS Notu</label>
               <input
                 type="text"
                 value={servisNotu}
                 onChange={(e) => setServisNotu(e.target.value)}
+                placeholder="Servis notu"
               />
             </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '20px', marginTop: '16px' }}>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={teslimEdildiMi}
+                onChange={(e) => setTeslimEdildiMi(e.target.checked)}
+              />
+              Teslim Edildi
+            </label>
+
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={fatura}
+                onChange={(e) => setFatura(e.target.checked)}
+              />
+              Fatura Kesildi
+            </label>
+
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={ileriTeslim}
+                onChange={(e) => setIleriTeslim(e.target.checked)}
+              />
+              İleri Teslim
+            </label>
+
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={servis}
+                onChange={(e) => setServis(e.target.checked)}
+              />
+              Servis Gerekli
+            </label>
           </div>
         </div>
 
@@ -607,6 +830,7 @@ const SatisTeklifPage: React.FC = () => {
                         setAramaModaliAcik(true);
                       }}
                       className="btn-search"
+                      title="Excel'den ürün seç"
                     >
                       🔍
                     </button>
@@ -638,8 +862,8 @@ const SatisTeklifPage: React.FC = () => {
                 <div className="form-group">
                   <label>Alış (TL)</label>
                   <input
-                    type=""
-                    min=""
+                    type="number"
+                    min="0"
                     step="0.01"
                     value={urun.alisFiyati}
                     onChange={(e) => handleUrunChange(index, 'alisFiyati', e.target.value)}
@@ -779,11 +1003,11 @@ const SatisTeklifPage: React.FC = () => {
             <div className="form-group">
               <label>Peşinat (TL)</label>
               <input
-                type=""
-                min=""
+                type="number"
+                min="0"
                 step="0.01"
                 value={pesinatTutar}
-                onChange={(e) => setPesinatTutar(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setPesinatTutar(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
               />
             </div>
 
@@ -794,7 +1018,7 @@ const SatisTeklifPage: React.FC = () => {
                 min="0"
                 step="0.01"
                 value={havaleTutar}
-                onChange={(e) => setHavaleTutar(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setHavaleTutar(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
               />
             </div>
 
@@ -806,6 +1030,13 @@ const SatisTeklifPage: React.FC = () => {
                 onChange={(e) => setHesabaGecen(e.target.value)}
                 placeholder="Örn: 20.450₺"
               />
+            </div>
+
+            <div className="form-group">
+              <label>Ödeme Durumu</label>
+              <div className={`odeme-durumu-badge ${getOdemeDurumu() === OdemeDurumu.ODENDI ? 'odendi' : 'acik-hesap'}`}>
+                {getOdemeDurumu()}
+              </div>
             </div>
           </div>
 
@@ -860,8 +1091,6 @@ const SatisTeklifPage: React.FC = () => {
                     />
                   </div>
 
-                
-
                   <button
                     type="button"
                     onClick={() => kartSil(index)}
@@ -879,7 +1108,6 @@ const SatisTeklifPage: React.FC = () => {
             <strong>ZARAR: {formatPrice(zararHesapla())}</strong>
           </div>
         </div>
-
 
         {/* ===== ONAY ===== */}
         <div className="form-section">

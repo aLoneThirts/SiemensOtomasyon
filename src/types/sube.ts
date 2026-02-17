@@ -9,7 +9,7 @@ export enum SubeKodu {
 export interface Sube {
   kod: SubeKodu;
   ad: string;
-  satisKoduPrefix: number; // Örn: 1010, 2030, vs.
+  satisKoduPrefix: number; 
   dbPath: string;
 }
 
