@@ -9,7 +9,7 @@ import BekleyenUrunlerPage from './Pages/BekleyenUrunlerPage';
 import AdminPanel from './Pages/AdminPanel';
 import SatisDetayPage from './Pages/SatisDetayPage';
 import Kasa from './Pages/Kasa'; // DÜZELTİLDİ: ./Pages/Kasa
-import CiroPerformans from './Pages/CiroPerformans'; 
+import CiroPerformansPage from './Pages/CiroPerformans';
 import './App.css';
 
 const PrivateRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -48,6 +48,7 @@ function App() {
               </PrivateRoute>
             }
           />
+       
           <Route
             path="/bekleyen-urunler"
             element={
@@ -72,14 +73,8 @@ function App() {
               </PrivateRoute>
             }
           />
-          <Route
-            path="/ciro-performans"
-            element={
-              <PrivateRoute>
-                <CiroPerformans />
-              </PrivateRoute>
-            }
-          />
+    <Route path="/ciro/performans" element={<CiroPerformansPage />} />
+
           <Route path="/" element={<Navigate to="/login" />} />
         </Routes>
       </AuthProvider>

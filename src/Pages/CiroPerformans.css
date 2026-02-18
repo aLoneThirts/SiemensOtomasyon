@@ -1,0 +1,401 @@
+/* ===== LOADING ===== */
+.cp-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 16px;
+  color: #009999;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.cp-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e8eaed;
+  border-top-color: #009999;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== CONTAINER ===== */
+.cp-container {
+  min-height: 100vh;
+  background: #f5f7fa;
+  padding: 24px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ===== HEADER ===== */
+.cp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1a2332;
+  border-radius: 12px;
+  padding: 16px 24px;
+  border-bottom: 3px solid #009999;
+}
+
+.cp-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cp-header h1 {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin: 0;
+}
+
+.cp-header h1::before {
+  content: '// ';
+  color: #009999;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.cp-btn-back {
+  background: rgba(0,153,153,0.15);
+  color: #009999;
+  border: 1px solid #009999;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.cp-btn-back:hover {
+  background: #009999;
+  color: #fff;
+}
+
+/* ===== ZAMAN TOGGLE ===== */
+.cp-zaman-toggle {
+  display: flex;
+  background: rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.cp-toggle-btn {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  padding: 8px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+}
+
+.cp-toggle-btn.active {
+  background: #009999;
+  color: #fff;
+}
+
+.cp-toggle-btn:hover:not(.active) {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+}
+
+/* ===== ÖZET KARTLAR ===== */
+.cp-ozet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.cp-ozet-kart {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid #e8eaed;
+  border-left: 4px solid #009999;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.cp-ozet-kart:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+.cp-ozet-kart.kar { border-left-color: #16a34a; }
+.cp-ozet-kart.zarar { border-left-color: #dc2626; }
+
+.cp-ozet-ikon {
+  font-size: 28px;
+}
+
+.cp-ozet-bilgi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cp-ozet-label {
+  font-size: 11px;
+  color: #80868b;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 600;
+}
+
+.cp-ozet-deger {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a2332;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ===== GRAFİK GRID ===== */
+.cp-grafik-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 16px;
+}
+
+/* ===== KART ===== */
+.cp-kart {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #e8eaed;
+}
+
+.cp-kart-baslik {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.cp-kart-baslik h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a2332;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cp-alt-baslik {
+  font-size: 12px;
+  color: #80868b;
+  font-weight: 500;
+}
+
+.cp-bos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #80868b;
+  font-size: 14px;
+}
+
+/* ===== SATICILAR ===== */
+.cp-saticilar {
+  /* full width */
+}
+
+.cp-satici-listesi {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cp-satici-satir {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e8eaed;
+  transition: border-color 0.2s;
+}
+
+.cp-satici-satir:hover {
+  border-color: #009999;
+}
+
+/* Sol - Avatar + İsim */
+.cp-satici-sol {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 180px;
+}
+
+.cp-satici-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #009999;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.cp-satici-bilgi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cp-satici-ad {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a2332;
+}
+
+.cp-satici-sube {
+  font-size: 11px;
+  color: #80868b;
+}
+
+/* Orta - Progress Bar */
+.cp-satici-orta {
+  flex: 1;
+}
+
+.cp-progress-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cp-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #80868b;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.cp-progress-current {
+  color: #009999;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.cp-progress-track {
+  width: 100%;
+  height: 28px;
+  background: #e8eaed;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.cp-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #007575, #009999, #33dddd);
+  border-radius: 6px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  min-width: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.cp-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  to { left: 200%; }
+}
+
+.cp-progress-yuzde {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.cp-satici-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: #80868b;
+}
+
+.cp-satici-stats .kar { color: #16a34a; font-weight: 600; }
+.cp-satici-stats .zarar { color: #dc2626; font-weight: 600; }
+
+/* Sağ - Yıldızlar */
+.cp-satici-sag {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 120px;
+}
+
+.cp-yildizlar {
+  display: flex;
+  gap: 1px;
+}
+
+.cp-yildiz {
+  font-size: 14px;
+  transition: transform 0.15s;
+}
+
+.cp-yildiz.dolu { color: #f59e0b; }
+.cp-yildiz.bos { color: #e8eaed; }
+
+.cp-yildiz-skor {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1a2332;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1100px) {
+  .cp-grafik-grid {
+    grid-template-columns: 1fr;
+  }
+  .cp-ozet-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .cp-container { padding: 12px; }
+  .cp-header { flex-direction: column; gap: 12px; }
+  .cp-ozet-grid { grid-template-columns: 1fr 1fr; }
+  .cp-satici-satir { flex-direction: column; align-items: flex-start; }
+  .cp-satici-orta { width: 100%; }
+}

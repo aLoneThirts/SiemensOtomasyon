@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { SatisTeklifFormu } from '../types/satis';
+import { SatisTeklifFormu, OdemeDurumu } from '../types/satis';
 import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
+import { UserRole } from '../types/user';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -13,7 +14,8 @@ const Dashboard: React.FC = () => {
   const [satislar, setSatislar] = useState<SatisTeklifFormu[]>([]);
   const [filtreliSatislar, setFiltreliSatislar] = useState<SatisTeklifFormu[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const [guncellemeyorum, setGuncellemeyorum] = useState<string | null>(null);
+
   // Filtre state'leri
   const [secilenSube, setSecilenSube] = useState<string>('');
   const [zararOlanlar, setZararOlanlar] = useState<string>('all');
@@ -22,15 +24,15 @@ const Dashboard: React.FC = () => {
   const [acikHesap, setAcikHesap] = useState<string>('all');
   const [satisTarihi, setSatisTarihi] = useState<string>('');
   const [satisKoduAra, setSatisKoduAra] = useState<string>('');
-
-  // Mevcut şubeler
   const [mevcutSubeler, setMevcutSubeler] = useState<string[]>([]);
 
+  const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
+  const kullaniciAdi = currentUser?.ad || '';
+  const kullaniciSoyadi = currentUser?.soyad || '';
+  const kullaniciSube = getSubeByKod(currentUser?.subeKodu as SubeKodu)?.ad || '';
+
   useEffect(() => {
-    if (!currentUser) {
-      navigate('/login');
-      return;
-    }
+    if (!currentUser) { navigate('/login'); return; }
     fetchSatislar();
   }, [currentUser]);
 
@@ -38,189 +40,139 @@ const Dashboard: React.FC = () => {
     filtreyiUygula();
   }, [satislar, secilenSube, zararOlanlar, durum, teslimTarihi, acikHesap, satisTarihi, satisKoduAra]);
 
-  const fetchSatislar = async () => {
+const fetchSatislar = async () => {
     try {
       setLoading(true);
       const satisListesi: SatisTeklifFormu[] = [];
       const subeSet = new Set<string>();
 
-      const isAdmin = currentUser?.role?.toString().trim() === 'ADMIN';
-
       if (isAdmin) {
         for (const sube of SUBELER) {
           try {
-            const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
-            const snapshot = await getDocs(satisRef);
-            
-            snapshot.forEach((doc) => {
-              const data = doc.data();
-              satisListesi.push({ 
-                id: doc.id, 
-                ...data,
-                subeKodu: sube.kod
-              } as SatisTeklifFormu);
+            const snapshot = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`));
+            snapshot.forEach(d => {
+              satisListesi.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu);
               subeSet.add(sube.kod);
             });
-          } catch (error) {
-            console.error(`❌ ${sube.ad} şubesi yüklenemedi:`, error);
+          } catch (err) {
+            console.error(`${sube.ad} yüklenemedi:`, err);
           }
         }
       } else {
         const sube = getSubeByKod(currentUser!.subeKodu);
         if (sube) {
-          const satisRef = collection(db, `subeler/${sube.dbPath}/satislar`);
-          const snapshot = await getDocs(satisRef);
-          
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            satisListesi.push({ 
-              id: doc.id, 
-              ...data,
-              subeKodu: sube.kod
-            } as SatisTeklifFormu);
+          const snapshot = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`));
+          snapshot.forEach(d => {
+            satisListesi.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu);
             subeSet.add(sube.kod);
           });
         }
       }
 
+      // En yeni tarihten başlayarak sırala
+      satisListesi.sort((a: any, b: any) => {
+        const tarihA = a.olusturmaTarihi?.toDate ? a.olusturmaTarihi.toDate() : new Date(a.olusturmaTarihi || 0);
+        const tarihB = b.olusturmaTarihi?.toDate ? b.olusturmaTarihi.toDate() : new Date(b.olusturmaTarihi || 0);
+        return tarihB.getTime() - tarihA.getTime();
+      });
+
       setMevcutSubeler(Array.from(subeSet));
       setSatislar(satisListesi);
     } catch (error) {
-      console.error('❌ Satışlar yüklenemedi:', error);
+      console.error('Satışlar yüklenemedi:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Tarih formatlama yardımcı fonksiyonu
   const dateToString = (date: any): string => {
     if (!date) return '';
-    if (date instanceof Timestamp) {
-      return date.toDate().toISOString().split('T')[0];
-    }
-    if (date instanceof Date) {
-      return date.toISOString().split('T')[0];
-    }
+    if (date instanceof Timestamp) return date.toDate().toISOString().split('T')[0];
+    if (date instanceof Date) return date.toISOString().split('T')[0];
     return '';
   };
 
   const filtreyiUygula = () => {
     let sonuc = [...satislar];
 
-    // Şube filtresi
-    if (secilenSube) {
-      sonuc = sonuc.filter(satis => satis.subeKodu === secilenSube);
-    }
+    if (secilenSube) sonuc = sonuc.filter(s => s.subeKodu === secilenSube);
 
-    // Zarar olanlar filtresi
-    if (zararOlanlar !== 'all') {
-      sonuc = sonuc.filter(satis => {
-        const maliyet = (satis as any).maliyetToplami || 0;
-        const karZarar = satis.toplamTutar - maliyet;
-        return zararOlanlar === 'zarar' ? karZarar < 0 : karZarar > 0;
-      });
-    }
+    if (zararOlanlar === 'zarar') sonuc = sonuc.filter(s => (s.zarar ?? 0) < 0);
+    else if (zararOlanlar === 'kar') sonuc = sonuc.filter(s => (s.zarar ?? 0) >= 0);
 
-    // Durum filtresi
-    if (durum !== 'all') {
-      sonuc = sonuc.filter(satis => 
-        durum === 'approved' ? satis.onayDurumu : !satis.onayDurumu
-      );
-    }
+    if (durum === 'approved') sonuc = sonuc.filter(s => s.onayDurumu === true);
+    else if (durum === 'pending') sonuc = sonuc.filter(s => s.onayDurumu === false);
 
-    // Teslim tarihi filtresi
-    if (teslimTarihi) {
-      sonuc = sonuc.filter(satis => {
-        const tarih = dateToString(satis.teslimatTarihi);
-        return tarih === teslimTarihi;
-      });
-    }
+    if (teslimTarihi) sonuc = sonuc.filter(s => dateToString(s.teslimatTarihi) === teslimTarihi);
 
-    // Açık hesap filtresi
-    if (acikHesap !== 'all') {
-      sonuc = sonuc.filter(satis => {
-        const acik = (satis as any).acikHesap || false;
-        return acikHesap === 'acik' ? acik : !acik;
-      });
-    }
+    if (acikHesap === 'acik') sonuc = sonuc.filter(s => s.odemeDurumu === OdemeDurumu.ACIK_HESAP);
+    else if (acikHesap === 'kapali') sonuc = sonuc.filter(s => s.odemeDurumu === OdemeDurumu.ODENDI);
 
-    // Satış tarihi filtresi
-    if (satisTarihi) {
-      sonuc = sonuc.filter(satis => {
-        const tarih = dateToString(satis.tarih);
-        return tarih === satisTarihi;
-      });
-    }
+    if (satisTarihi) sonuc = sonuc.filter(s => dateToString(s.tarih) === satisTarihi);
 
-    // Satış kodu arama
-    if (satisKoduAra) {
-      sonuc = sonuc.filter(satis => 
-        satis.satisKodu?.toLowerCase().includes(satisKoduAra.toLowerCase())
-      );
-    }
+    if (satisKoduAra) sonuc = sonuc.filter(s => s.satisKodu?.toLowerCase().includes(satisKoduAra.toLowerCase()));
 
     setFiltreliSatislar(sonuc);
   };
 
   const filtreleriSifirla = () => {
-    setSecilenSube('');
-    setZararOlanlar('all');
-    setDurum('all');
-    setTeslimTarihi('');
-    setAcikHesap('all');
-    setSatisTarihi('');
-    setSatisKoduAra('');
+    setSecilenSube(''); setZararOlanlar('all'); setDurum('all');
+    setTeslimTarihi(''); setAcikHesap('all'); setSatisTarihi(''); setSatisKoduAra('');
+  };
+
+  // ===== ADMIN: ONAY TOGGLE =====
+  const onayDurumuToggle = async (satis: SatisTeklifFormu) => {
+    if (!isAdmin || !satis.id) return;
+    const sube = getSubeByKod(satis.subeKodu);
+    if (!sube) return;
+    setGuncellemeyorum(satis.id);
+    try {
+      const yeniDurum = !satis.onayDurumu;
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        onayDurumu: yeniDurum,
+        guncellemeTarihi: new Date()
+      });
+      setSatislar(prev => prev.map(s => s.id === satis.id ? { ...s, onayDurumu: yeniDurum } : s));
+    } catch { alert('❌ Güncelleme başarısız!'); }
+    finally { setGuncellemeyorum(null); }
+  };
+
+  // ===== ADMIN: ÖDEME TOGGLE =====
+  const odemeDurumuToggle = async (satis: SatisTeklifFormu) => {
+    if (!isAdmin || !satis.id) return;
+    const sube = getSubeByKod(satis.subeKodu);
+    if (!sube) return;
+    setGuncellemeyorum(satis.id + '_odeme');
+    try {
+      const yeniDurum = satis.odemeDurumu === OdemeDurumu.ODENDI ? OdemeDurumu.ACIK_HESAP : OdemeDurumu.ODENDI;
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        odemeDurumu: yeniDurum,
+        guncellemeTarihi: new Date()
+      });
+      setSatislar(prev => prev.map(s => s.id === satis.id ? { ...s, odemeDurumu: yeniDurum } : s));
+    } catch { alert('❌ Güncelleme başarısız!'); }
+    finally { setGuncellemeyorum(null); }
   };
 
   const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Çıkış yapılamadı:', error);
-    }
+    try { await logout(); navigate('/login'); }
+    catch (error) { console.error('Çıkış yapılamadı:', error); }
   };
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('tr-TR', {
-      style: 'currency',
-      currency: 'TRY',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      style: 'currency', currency: 'TRY',
+      minimumFractionDigits: 0, maximumFractionDigits: 0
     }).format(price);
   };
 
   const formatDate = (date: any) => {
     if (!date) return '';
     try {
-      if (date instanceof Timestamp) {
-        return date.toDate().toLocaleDateString('tr-TR');
-      }
-      if (date instanceof Date) {
-        return date.toLocaleDateString('tr-TR');
-      }
+      if (date instanceof Timestamp) return date.toDate().toLocaleDateString('tr-TR');
+      if (date instanceof Date) return date.toLocaleDateString('tr-TR');
       return new Date(date).toLocaleDateString('tr-TR');
-    } catch {
-      return '';
-    }
-  };
-
-  const isAdmin = currentUser?.role?.toString().trim() === 'ADMIN';
-  const kullaniciAdi = currentUser?.ad || '';
-  const kullaniciSoyadi = currentUser?.soyad || '';
-  const kullaniciSube = getSubeByKod(currentUser?.subeKodu as SubeKodu)?.ad || '';
-
-  const karZararHesapla = (satis: SatisTeklifFormu) => {
-    const maliyet = (satis as any).maliyetToplami || 0;
-    return satis.toplamTutar - maliyet;
-  };
-
-  const acikHesapKontrol = (satis: SatisTeklifFormu): boolean => {
-    return (satis as any).acikHesap || false;
-  };
-
-  const navigateTo = (path: string) => {
-    navigate(path);
+    } catch { return ''; }
   };
 
   return (
@@ -228,62 +180,31 @@ const Dashboard: React.FC = () => {
       {/* SOL SIDEBAR */}
       <div className="dashboard-sidebar">
         <div className="sidebar-header">
-          <h1>
-            TÜFEKÇİ HOME
-            <span>SİEMENS</span>
-          </h1>
+          <h1>TÜFEKÇİ HOME<span>SİEMENS</span></h1>
         </div>
 
         <div className="sidebar-nav">
-          <button 
-            onClick={() => navigateTo('/dashboard')} 
-            className="sidebar-nav-item active"
-          >
-            <i className="fas fa-chart-line"></i>
-            SATIŞLAR
+          <button onClick={() => navigate('/dashboard')} className="sidebar-nav-item active">
+            <i className="fas fa-chart-line"></i> SATIŞLAR
           </button>
-          <button 
-            onClick={() => navigateTo('/satis-teklif')} 
-            className="sidebar-nav-item"
-          >
-            <i className="fas fa-plus-circle"></i>
-            YENİ SATIŞ TEKLİFİ
+          <button onClick={() => navigate('/satis-teklif')} className="sidebar-nav-item">
+            <i className="fas fa-plus-circle"></i> YENİ SATIŞ TEKLİFİ
           </button>
-          <button 
-            onClick={() => navigateTo('/bekleyen-urunler')} 
-            className="sidebar-nav-item"
-          >
-            <i className="fas fa-clock"></i>
-            İLERİ TESLİM
+          <button onClick={() => navigate('/bekleyen-urunler')} className="sidebar-nav-item">
+            <i className="fas fa-clock"></i> İLERİ TESLİM
           </button>
-          <button 
-            onClick={() => navigateTo('/kontrol')} 
-            className="sidebar-nav-item"
-          >
-            <i className="fas fa-check-circle"></i>
-            KONTROL ET
+          <button onClick={() => navigate('/kontrol')} className="sidebar-nav-item">
+            <i className="fas fa-check-circle"></i> KONTROL ET
           </button>
-          <button 
-            onClick={() => navigateTo('/kasa')} 
-            className="sidebar-nav-item"
-          >
-            <i className="fas fa-cash-register"></i>
-            KASA
+          <button onClick={() => navigate('/kasa')} className="sidebar-nav-item">
+            <i className="fas fa-cash-register"></i> KASA
           </button>
-          <button 
-            onClick={() => navigateTo('/ciro/performans')} 
-            className="sidebar-nav-item"
-          >
-            <i className="fas fa-tachometer-alt"></i>
-            CİRO/PERFORMANS
+          <button onClick={() => navigate('/ciro/performans')} className="sidebar-nav-item">
+            <i className="fas fa-tachometer-alt"></i> CİRO/PERFORMANS
           </button>
           {isAdmin && (
-            <button 
-              onClick={() => navigateTo('/admin')} 
-              className="sidebar-nav-item"
-            >
-              <i className="fas fa-shield-alt"></i>
-              ADMIN PANEL
+            <button onClick={() => navigate('/admin')} className="sidebar-nav-item">
+              <i className="fas fa-shield-alt"></i> ADMIN PANEL
             </button>
           )}
         </div>
@@ -302,8 +223,7 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <button onClick={handleLogout} className="sidebar-logout">
-            <i className="fas fa-sign-out-alt"></i>
-            ÇIKIŞ
+            <i className="fas fa-sign-out-alt"></i> ÇIKIŞ
           </button>
         </div>
       </div>
@@ -315,16 +235,11 @@ const Dashboard: React.FC = () => {
         </header>
 
         <div className="content-wrapper">
-          {/* FİLTRE CONTAİNER */}
+          {/* FİLTRELER */}
           <div className="filtre-container">
-            {/* Şube */}
             <div className="filtre-item">
               <label>ŞUBE:</label>
-              <select 
-                value={secilenSube} 
-                onChange={(e) => setSecilenSube(e.target.value)}
-                className="filtre-select"
-              >
+              <select value={secilenSube} onChange={e => setSecilenSube(e.target.value)} className="filtre-select">
                 <option value="">Tüm Şubeler ({mevcutSubeler.length})</option>
                 {mevcutSubeler.map(kod => {
                   const sube = getSubeByKod(kod as SubeKodu);
@@ -333,79 +248,51 @@ const Dashboard: React.FC = () => {
               </select>
             </div>
 
-            {/* Zarar Olanlar */}
             <div className="filtre-item">
               <label>ZARAR OLANLAR:</label>
-              <select 
-                value={zararOlanlar} 
-                onChange={(e) => setZararOlanlar(e.target.value)}
-                className="filtre-select"
-              >
+              <select value={zararOlanlar} onChange={e => setZararOlanlar(e.target.value)} className="filtre-select">
                 <option value="all">Tümü</option>
                 <option value="zarar">Sadece Zararlı</option>
                 <option value="kar">Sadece Karlı</option>
               </select>
             </div>
 
-            {/* Durum */}
             <div className="filtre-item">
               <label>DURUM:</label>
-              <select 
-                value={durum} 
-                onChange={(e) => setDurum(e.target.value)}
-                className="filtre-select"
-              >
+              <select value={durum} onChange={e => setDurum(e.target.value)} className="filtre-select">
                 <option value="all">Tümü</option>
                 <option value="approved">Onaylı</option>
                 <option value="pending">Beklemede</option>
               </select>
             </div>
 
-            {/* Teslim Tarihi */}
             <div className="filtre-item">
               <label>TESLİM TARİHİ:</label>
-              <input 
-                type="date" 
-                value={teslimTarihi}
-                onChange={(e) => setTeslimTarihi(e.target.value)}
-                className="filtre-input" 
-              />
+              <input type="date" value={teslimTarihi} onChange={e => setTeslimTarihi(e.target.value)} className="filtre-input" />
             </div>
 
-            {/* Açık Hesap */}
             <div className="filtre-item">
               <label>AÇIK HESAP:</label>
-              <select 
-                value={acikHesap}
-                onChange={(e) => setAcikHesap(e.target.value)}
-                className="filtre-select"
-              >
+              <select value={acikHesap} onChange={e => setAcikHesap(e.target.value)} className="filtre-select">
                 <option value="all">Tümü</option>
                 <option value="acik">Açık Hesaplar</option>
                 <option value="kapali">Kapalı Hesaplar</option>
               </select>
             </div>
 
-            {/* Satış Tarihi */}
             <div className="filtre-item">
               <label>SATIŞ TARİHİ:</label>
-              <input 
-                type="date" 
-                value={satisTarihi}
-                onChange={(e) => setSatisTarihi(e.target.value)}
-                className="filtre-input" 
-              />
+              <input type="date" value={satisTarihi} onChange={e => setSatisTarihi(e.target.value)} className="filtre-input" />
             </div>
 
-            {/* Satış Kodu - Geniş */}
             <div className="filtre-item wide">
               <label>SATIŞ KODU:</label>
               <div className="search-container">
-                <input 
-                  type="text" 
-                  placeholder="Satış kodu ara..." 
+                <input
+                  type="text"
+                  placeholder="Satış kodu ara..."
                   value={satisKoduAra}
-                  onChange={(e) => setSatisKoduAra(e.target.value)}
+                  onChange={e => setSatisKoduAra(e.target.value)}
                   className="search-input"
                 />
                 <button className="search-btn">
@@ -414,12 +301,9 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Filtreleri Sıfırla Butonu */}
             <div className="filtre-item">
               <label>&nbsp;</label>
-              <button onClick={filtreleriSifirla} className="btn-sifirla">
-                FİLTRELERİ SIFIRLA
-              </button>
+              <button onClick={filtreleriSifirla} className="btn-sifirla">FİLTRELERİ SIFIRLA</button>
             </div>
           </div>
 
@@ -456,9 +340,13 @@ const Dashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtreliSatislar.map((satis: SatisTeklifFormu) => {
-                    const karZarar = karZararHesapla(satis);
-                    const acikHesapDurum = acikHesapKontrol(satis);
+                  {filtreliSatislar.map(satis => {
+                    const kar = satis.zarar ?? 0;
+                    const isOnaylandi = satis.onayDurumu === true;
+                    const isOdendi = satis.odemeDurumu === OdemeDurumu.ODENDI;
+                    const onayYukleniyor = guncellemeyorum === satis.id;
+                    const odemeYukleniyor = guncellemeyorum === satis.id + '_odeme';
+
                     return (
                       <tr key={satis.id}>
                         <td><strong>{satis.satisKodu}</strong></td>
@@ -466,24 +354,51 @@ const Dashboard: React.FC = () => {
                         <td>{satis.musteriBilgileri?.isim || '-'}</td>
                         <td><strong>{formatPrice(satis.toplamTutar)}</strong></td>
                         <td>
-                          <span className={`kar-zarar-badge ${karZarar >= 0 ? 'kar' : 'zarar'}`}>
-                            {karZarar >= 0 ? '+' : '-'}{formatPrice(Math.abs(karZarar))}
+                          <span className={`kar-zarar-badge ${kar >= 0 ? 'kar' : 'zarar'}`}>
+                            {kar >= 0 ? '+' : ''}{formatPrice(kar)}
                           </span>
                         </td>
                         <td>{formatDate(satis.tarih)}</td>
                         <td>{formatDate(satis.teslimatTarihi)}</td>
+
+                        {/* DURUM - Admin tıklayabilir */}
                         <td>
-                          <span className={`status-badge ${satis.onayDurumu ? 'approved' : 'pending'}`}>
-                            {satis.onayDurumu ? 'ONAYLI' : 'BEKLEMEDE'}
-                          </span>
+                          {isAdmin ? (
+                            <button
+                              className={`status-badge clickable ${isOnaylandi ? 'approved' : 'pending'}`}
+                              onClick={() => onayDurumuToggle(satis)}
+                              disabled={onayYukleniyor}
+                              title="Tıklayarak değiştir"
+                            >
+                              {onayYukleniyor ? '...' : isOnaylandi ? 'ONAYLI' : 'BEKLEMEDE'}
+                            </button>
+                          ) : (
+                            <span className={`status-badge ${isOnaylandi ? 'approved' : 'pending'}`}>
+                              {isOnaylandi ? 'ONAYLI' : 'BEKLEMEDE'}
+                            </span>
+                          )}
                         </td>
+
+                        {/* ÖDEME - Admin tıklayabilir */}
                         <td>
-                          <span className={`status-badge ${acikHesapDurum ? 'acik-hesap' : 'odendi'}`}>
-                            {acikHesapDurum ? 'AÇIK HESAP' : 'ÖDENDİ'}
-                          </span>
+                          {isAdmin ? (
+                            <button
+                              className={`status-badge clickable ${isOdendi ? 'odendi' : 'acik-hesap'}`}
+                              onClick={() => odemeDurumuToggle(satis)}
+                              disabled={odemeYukleniyor}
+                              title="Tıklayarak değiştir"
+                            >
+                              {odemeYukleniyor ? '...' : isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
+                            </button>
+                          ) : (
+                            <span className={`status-badge ${isOdendi ? 'odendi' : 'acik-hesap'}`}>
+                              {isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
+                            </span>
+                          )}
                         </td>
+
                         <td>
-                          <button 
+                          <button
                             onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
                             className="btn-view"
                           >

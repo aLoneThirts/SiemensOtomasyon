@@ -3,18 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { collection, addDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { 
-  SatisTeklifFormu, 
-  MusteriBilgileri, 
-  Urun, 
-  KartOdeme, 
-  Kampanya, 
+import {
+  SatisTeklifFormu,
+  MusteriBilgileri,
+  Urun,
+  KartOdeme,
+  Kampanya,
   YesilEtiket,
-  OdemeYontemi, 
+  OdemeYontemi,
   SatisLog,
   BANKALAR,
   TAKSIT_SECENEKLERI,
-  OdemeDurumu
+  OdemeDurumu,
+  BekleyenUrun, 
 } from '../types/satis';
 import { getSubeByKod, SubeKodu } from '../types/sube';
 import * as XLSX from 'xlsx';
@@ -30,302 +31,154 @@ const SatisTeklifPage: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ========== STATE TANIMLAMALARI ==========
-  
-  // Müşteri Bilgileri
-  // ========== STATE TANIMLAMALARI ==========
-  
-// Müşteri Bilgileri
-const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>({
-  isim: '',
-  adres: '',
-  faturaAdresi: '',
-  isAdresi: '',
-  vergiNumarasi: '',
-  vkNo: '',
-  vd: '',
-  cep: ''
-});
-
-const [musteriTemsilcisi, setMusteriTemsilcisi] = useState('');
-const [musteriTemsilcisiTel, setMusteriTemsilcisiTel] = useState('');
-
-// Ürünler
-const [urunler, setUrunler] = useState<Urun[]>([
-  { id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }
-]);
-
-// Tarihler
-const [tarih, setTarih] = useState(new Date().toISOString().split('T')[0]);
-const [teslimatTarihi, setTeslimatTarihi] = useState('');
-
-// NOTLAR - BURAYA EKLE !!!
-const [marsNo, setMarsNo] = useState<string>(''); // <--- BUNU EKLE
-const [marsNoHata, setMarsNoHata] = useState<boolean>(false); // <--- BUNU EKLE
-const [magaza, setMagaza] = useState('');
-const [faturaNo, setFaturaNo] = useState('');
-const [faturaNoHata, setFaturaNoHata] = useState(false);
-const [servisNotu, setServisNotu] = useState('');
-
-// BOOLEAN STATE'LER
-const [teslimEdildiMi, setTeslimEdildiMi] = useState<boolean>(false);
-const [cevap, setCevap] = useState<string>(''); // <--- string yap
-const [fatura, setFatura] = useState<boolean>(false);
-const [ileriTeslim, setIleriTeslim] = useState<boolean>(false);
-const [servis, setServis] = useState<boolean>(false);
-
-// Kampanyalar ve Yeşil Etiketler
-const [kampanyalar, setKampanyalar] = useState<Kampanya[]>([]);
-const [yesilEtiketler, setYesilEtiketler] = useState<YesilEtiket[]>([]);
-
-// Ödeme
-const [pesinatTutar, setPesinatTutar] = useState<number>(0);
-const [havaleTutar, setHavaleTutar] = useState<number>(0);
-const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>([]);
-
-const [odemeYontemi, setOdemeYontemi] = useState<OdemeYontemi>(OdemeYontemi.PESINAT);
-const [hesabaGecen, setHesabaGecen] = useState('');
-const [onayDurumu, setOnayDurumu] = useState<boolean>(false);
-
-const [loading, setLoading] = useState(false);
-const [excelYukleniyor, setExcelYukleniyor] = useState(false);
-
-// Excel ürünleri
-const [excelUrunler, setExcelUrunler] = useState<ExcelUrun[]>([]);
-const [aramaModaliAcik, setAramaModaliAcik] = useState(false);
-const [seciliSatirIndex, setSeciliSatirIndex] = useState<number | null>(null);
-const [aramaMetni, setAramaMetni] = useState('');
-
-// Satış Kodu
-const [satisKodu, setSatisKodu] = useState<string>('');
+  // ========== STATE'LER ==========
+  const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>({
+    isim: '', adres: '', faturaAdresi: '', isAdresi: '',
+    vergiNumarasi: '', vkNo: '', vd: '', cep: ''
+  });
+  const [musteriTemsilcisi, setMusteriTemsilcisi] = useState('');
+  const [musteriTemsilcisiTel, setMusteriTemsilcisiTel] = useState('');
+  const [urunler, setUrunler] = useState<Urun[]>([
+    { id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }
+  ]);
+  const [tarih, setTarih] = useState(new Date().toISOString().split('T')[0]);
+  const [teslimatTarihi, setTeslimatTarihi] = useState('');
+  const [marsNo, setMarsNo] = useState('');
+  const [marsNoHata, setMarsNoHata] = useState(false);
+  const [magaza, setMagaza] = useState('');
+  const [faturaNo, setFaturaNo] = useState('');
+  const [faturaNoHata, setFaturaNoHata] = useState(false);
+  const [servisNotu, setServisNotu] = useState('');
+  const [teslimEdildiMi, setTeslimEdildiMi] = useState(false);
+  const [cevap, setCevap] = useState('');
+  const [fatura, setFatura] = useState(false);
+  const [ileriTeslim, setIleriTeslim] = useState(false);
+  const [servis, setServis] = useState(false);
+  const [kampanyalar, setKampanyalar] = useState<Kampanya[]>([]);
+  const [yesilEtiketler, setYesilEtiketler] = useState<YesilEtiket[]>([]);
+  const [pesinatTutar, setPesinatTutar] = useState<number>(0);
+  const [havaleTutar, setHavaleTutar] = useState<number>(0);
+  const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>([]);
+  const [odemeYontemi, setOdemeYontemi] = useState<OdemeYontemi>(OdemeYontemi.PESINAT);
+  const [hesabaGecen, setHesabaGecen] = useState('');
+  const [onayDurumu, setOnayDurumu] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [excelYukleniyor, setExcelYukleniyor] = useState(false);
+  const [excelUrunler, setExcelUrunler] = useState<ExcelUrun[]>([]);
+  const [aramaModaliAcik, setAramaModaliAcik] = useState(false);
+  const [seciliSatirIndex, setSeciliSatirIndex] = useState<number | null>(null);
+  const [aramaMetni, setAramaMetni] = useState('');
+  const [satisKodu, setSatisKodu] = useState('');
 
   // ========== YARDIMCI FONKSİYONLAR ==========
 
-  // Satış kodu servis fonksiyonları - ÖNCE TANIMLA
-  const getSonSatisKodu = async (subeKodu: SubeKodu, subeDbPath: string): Promise<string | null> => {
+  const getSonSatisKodu = async (subeDbPath: string): Promise<string | null> => {
     try {
       const satisRef = collection(db, `subeler/${subeDbPath}/satislar`);
       const q = query(satisRef, orderBy('satisKodu', 'desc'), limit(1));
       const snapshot = await getDocs(q);
-      
-      if (snapshot.empty) {
-        return null;
-      }
-      
+      if (snapshot.empty) return null;
       return snapshot.docs[0].data().satisKodu as string;
-    } catch (error) {
-      console.error('Son satış kodu alınamadı:', error);
+    } catch {
       return null;
     }
   };
 
   const getSiraNumarasi = (sonKod: string | null, subePrefix: string): string => {
-    if (!sonKod) {
-      return `${subePrefix}-001`;
-    }
-    
+    if (!sonKod) return `${subePrefix}-001`;
     const parts = sonKod.split('-');
-    if (parts.length !== 2) {
-      return `${subePrefix}-001`;
-    }
-    
+    if (parts.length !== 2) return `${subePrefix}-001`;
     const sonSayi = parseInt(parts[1], 10);
-    if (isNaN(sonSayi)) {
-      return `${subePrefix}-001`;
-    }
-    
-    const yeniSayi = sonSayi + 1;
-    // DÜZELTİLDİ: number'ı string'e çevirip padStart uygula
-    return `${subePrefix}-${yeniSayi.toString().padStart(3, '0')}`;
+    if (isNaN(sonSayi)) return `${subePrefix}-001`;
+    return `${subePrefix}-${(sonSayi + 1).toString().padStart(3, '0')}`;
   };
 
-  const yeniSatisKoduOlustur = async (subeKodu: SubeKodu, subeDbPath: string, subePrefix: string): Promise<string> => {
-    const sonKod = await getSonSatisKodu(subeKodu, subeDbPath);
-    return getSiraNumarasi(sonKod, subePrefix);
-  };
-
-
-const validateMarsNo = (no: string): boolean => {
-  if (!no) return true; // Boş olabilir
-  // Sadece uyarı ver, engelleme
-  if (no.length !== 10 || !no.startsWith('2026')) {
-    console.warn('MARS No önerilen formatta değil:', no);
-    // Ama yine de kaydet
-  }
-  return true; // Her türlü true döndür, kaydet
-};
-
-  // Fatura No kontrolü (zorunlu)
-  const validateFaturaNo = (no: string): boolean => {
-    return no.trim() !== '';
-  };
-
-  // Toplam tutar hesapla
-  const toplamTutarHesapla = (): number => {
-    return urunler.reduce((toplam, urun) => {
-      return toplam + (urun.adet * urun.alisFiyati);
-    }, 0);
-  };
-
-  // Alış toplam hesapla
-  const alisToplamHesapla = (): number => {
-    return urunler.reduce((toplam, urun) => {
-      return toplam + (urun.adet * urun.alisFiyati);
-    }, 0);
-  };
-
-  // BİP toplam hesapla
-  const bipToplamHesapla = (): number => {
-    return urunler.reduce((toplam, urun) => {
-      return toplam + ((urun.bip || 0) * urun.adet);
-    }, 0);
-  };
-
-  // Toplam maliyet hesapla
-  const toplamMaliyetHesapla = (): number => {
-    return alisToplamHesapla() - bipToplamHesapla();
-  };
-
-  // Zarar hesapla - DÜZELTİLDİ
-  const zararHesapla = (): number => {
-    const maliyet = toplamMaliyetHesapla();
-    let hesabaGecenSayi = 0;
-    
-    if (hesabaGecen) {
-      // String'den sayıya çevir
-      const temizlenmis = hesabaGecen.replace(/\./g, '').replace('₺', '').replace(',', '.');
-      hesabaGecenSayi = parseFloat(temizlenmis) || 0;
-    }
-    
-    return maliyet - hesabaGecenSayi;
-  };
-
-  // Format price - DÜZELTİLDİ (number alır string döndürür)
   const formatPrice = (price: number): string => {
     return new Intl.NumberFormat('tr-TR', {
-      style: 'currency',
-      currency: 'TRY',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      style: 'currency', currency: 'TRY',
+      minimumFractionDigits: 0, maximumFractionDigits: 0
     }).format(price);
   };
 
-  // Ödeme durumunu hesapla - DÜZELTİLDİ
-const getOdemeDurumu = (): OdemeDurumu => {
-  const maliyet = toplamMaliyetHesapla();
-    
-    // Hesaba geçen sayıya çevir
-    let hesabaGecenSayi = 0;
-    if (hesabaGecen) {
-      const temizlenmis = hesabaGecen.replace(/\./g, '').replace('₺', '').replace(',', '.');
-      hesabaGecenSayi = parseFloat(temizlenmis) || 0;
-    }
-    
-    // Peşinat + havale + kart ödemeleri toplamı
-  const kartToplam = kartOdemeler.reduce((sum, kart) => sum + (kart.tutar || 0), 0);
-  const toplamOdeme = (pesinatTutar || 0) + (havaleTutar || 0) + kartToplam;
-    
-    // Eğer toplam ödeme maliyetten büyük veya eşitse ÖDENDİ
-      return toplamOdeme >= maliyet ? OdemeDurumu.ODENDI : OdemeDurumu.ACIK_HESAP;
+  // ========== HESAPLAMA FONKSİYONLARI ==========
+
+  const alisToplamHesapla = (): number =>
+    urunler.reduce((toplam, urun) => toplam + urun.adet * urun.alisFiyati, 0);
+
+  const bipToplamHesapla = (): number =>
+    urunler.reduce((toplam, urun) => toplam + (urun.bip || 0) * urun.adet, 0);
+
+  const toplamTutarHesapla = (): number => alisToplamHesapla();
+
+  const toplamMaliyetHesapla = (): number => alisToplamHesapla() - bipToplamHesapla();
+
+  const hesabaGecenToplamHesapla = (): number => {
+    const kartToplam = kartOdemeler.reduce((sum, kart) => sum + (kart.tutar || 0), 0);
+    return (pesinatTutar || 0) + (havaleTutar || 0) + kartToplam;
   };
 
-  // Log kaydet
-  const logKaydet = async (satisKodu: string, islem: string, detay: string) => {
-    const sube = getSubeByKod(currentUser!.subeKodu);
-    if (!sube) return;
+  // Kâr/Zarar = Hesaba Geçen - Maliyet
+  const karZararHesapla = (): number =>
+    hesabaGecenToplamHesapla() - toplamMaliyetHesapla();
 
-    const log: Omit<SatisLog, 'id'> = {
-      satisKodu,
-      subeKodu: currentUser!.subeKodu,
-      islem,
-      kullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
-      tarih: new Date(),
-      detay
-    };
-
-    await addDoc(collection(db, `subeler/${sube.dbPath}/loglar`), log);
+  const getOdemeDurumu = (): OdemeDurumu => {
+    const maliyet = toplamMaliyetHesapla();
+    const toplamOdeme = hesabaGecenToplamHesapla();
+    return toplamOdeme >= maliyet ? OdemeDurumu.ODENDI : OdemeDurumu.ACIK_HESAP;
   };
 
-  // ========== USEEFFECT ==========
-  useEffect(() => {
-    if (!currentUser) {
-      navigate('/login');
-      return;
-    }
-    
-    // Satış kodunu oluştur
-    const generateSatisKodu = async () => {
-      if (!currentUser) return;
-      
-      const sube = getSubeByKod(currentUser.subeKodu);
-      if (!sube) return;
-      
+  // ========== MARS NO ==========
 
-    const yeniKod = await yeniSatisKoduOlustur(
-      currentUser.subeKodu,
-      sube.dbPath,
-      String(sube.satisKoduPrefix)  
-    );   
-      setSatisKodu(yeniKod);
-    };
-
-    generateSatisKodu();
-  }, [currentUser]);
-
-  // ========== HANDLER FONKSİYONLARI ==========
-
-  // Müşteri Bilgileri Handler
-  const handleMusteriChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setMusteriBilgileri(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  const isMarsNoGecerli = (): boolean => {
+    if (!marsNo) return true;
+    return marsNo.length === 10 && marsNo.startsWith('2026');
   };
 
-  // MARS No değişiklik
-const handleMarsNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const value = e.target.value;
-  setMarsNo(value); // Kullanıcı ne yazdıysa aynen al
-  setMarsNoHata(false); // Hatayı temizle
-};
+  const handleMarsNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '');
+    setMarsNo(value);
+    setMarsNoHata(false);
+  };
 
-  // MARS No düzelt - DÜZELTİLDİ
-const fixMarsNo = () => {
-  if (!marsNo) {
-    setMarsNo('2026000000'); // Boşsa varsayılan
-    return;
-  }
-  
-  // Sadece rakamları al
-  const sadeceRakam = marsNo.replace(/\D/g, '');
-  
-  // Eğer 2026 ile başlamıyorsa başına 2026 ekle
-  let yeniNo = sadeceRakam;
-  if (!yeniNo.startsWith('2026')) {
-    yeniNo = '2026' + yeniNo;
-  }
-  
-  // 10 haneyi geçme, ama EKLEME!
-  if (yeniNo.length > 10) {
-    yeniNo = yeniNo.slice(0, 10);
-  }
-  
-  setMarsNo(yeniNo);
-};
-  // Fatura No değişiklik
+  const fixMarsNo = () => {
+    let val = marsNo.replace(/\D/g, '');
+    if (!val.startsWith('2026')) val = '2026' + val;
+    if (val.length > 10) val = val.slice(0, 10);
+    setMarsNo(val);
+    setMarsNoHata(val.length !== 10);
+  };
+
+  // ========== FATURA NO ==========
+
   const handleFaturaNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setFaturaNo(value);
     setFaturaNoHata(false);
+    setFatura(value.trim() !== ''); // Otomatik tik
   };
 
-  // Ürün Handler - DÜZELTİLDİ
+  // ========== SERVİS NOTU ==========
+
+  const handleServisNotuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setServisNotu(value);
+    setServis(value.trim() !== ''); // Otomatik tik
+  };
+
+  // ========== MÜŞTERİ ==========
+
+  const handleMusteriChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setMusteriBilgileri(prev => ({ ...prev, [name]: value }));
+  };
+
+  // ========== ÜRÜNLER ==========
+
   const handleUrunChange = (index: number, field: keyof Urun, value: any) => {
     const yeniUrunler = [...urunler];
     yeniUrunler[index] = {
       ...yeniUrunler[index],
-      [field]: field === 'adet' || field === 'alisFiyati' || field === 'bip' 
+      [field]: field === 'adet' || field === 'alisFiyati' || field === 'bip'
         ? (value === '' ? 0 : parseFloat(value) || 0)
         : value
     };
@@ -335,14 +188,7 @@ const fixMarsNo = () => {
   const urunEkle = () => {
     setUrunler(prev => [
       ...prev,
-      { 
-        id: Date.now().toString(), 
-        kod: '', 
-        ad: '', 
-        adet: 1, 
-        alisFiyati: 0, 
-        bip: 0 
-      }
+      { id: Date.now().toString(), kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }
     ]);
   };
 
@@ -352,16 +198,12 @@ const fixMarsNo = () => {
     }
   };
 
-  // Kart Ödeme Handler - DÜZELTİLDİ
+  // ========== KART ==========
+
   const kartEkle = () => {
     setKartOdemeler(prev => [
       ...prev,
-      { 
-        id: Date.now().toString(), 
-        banka: BANKALAR[0], 
-        taksitSayisi: 1, 
-        tutar: 0
-      }
+      { id: Date.now().toString(), banka: BANKALAR[0], taksitSayisi: 1, tutar: 0 }
     ]);
   };
 
@@ -373,7 +215,7 @@ const fixMarsNo = () => {
     const yeniKartlar = [...kartOdemeler];
     yeniKartlar[index] = {
       ...yeniKartlar[index],
-      [field]: field === 'tutar' 
+      [field]: field === 'tutar'
         ? (value === '' ? 0 : parseFloat(value) || 0)
         : field === 'taksitSayisi'
         ? parseInt(value) || 1
@@ -382,12 +224,10 @@ const fixMarsNo = () => {
     setKartOdemeler(yeniKartlar);
   };
 
-  // Kampanya Handler
+  // ========== KAMPANYA ==========
+
   const kampanyaEkle = () => {
-    setKampanyalar(prev => [
-      ...prev,
-      { id: Date.now().toString(), ad: '', tutar: 0 }
-    ]);
+    setKampanyalar(prev => [...prev, { id: Date.now().toString(), ad: '', tutar: 0 }]);
   };
 
   const kampanyaSil = (index: number) => {
@@ -403,12 +243,10 @@ const fixMarsNo = () => {
     setKampanyalar(yeniKampanyalar);
   };
 
-  // Yeşil Etiket Handler
+  // ========== YEŞİL ETİKET ==========
+
   const yesilEtiketEkle = () => {
-    setYesilEtiketler(prev => [
-      ...prev,
-      { id: Date.now().toString(), urunKodu: '', tutar: 0 }
-    ]);
+    setYesilEtiketler(prev => [...prev, { id: Date.now().toString(), urunKodu: '', tutar: 0 }]);
   };
 
   const yesilEtiketSil = (index: number) => {
@@ -424,32 +262,24 @@ const fixMarsNo = () => {
     setYesilEtiketler(yeniEtiketler);
   };
 
-  // Excel Yükleme Fonksiyonu
+  // ========== EXCEL ==========
+
   const excelYukle = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     setExcelYukleniyor(true);
-    
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(sheet);
-      
-      const urunlerList: ExcelUrun[] = jsonData.map((row: any) => {
-        return {
-          urun_kodu: row['Ürün Kodu'] || row['Stok Kodu'] || row['Malzeme'] || Object.values(row)[0] || '',
-          urun_adi: row['Ürün Adı'] || row['Açıklama'] || Object.values(row)[1] || '',
-        };
-      }).filter(u => u.urun_kodu);
-      
-      setExcelUrunler(urunlerList);
-      alert(`✅ ${urunlerList.length} ürün yüklendi!`);
-      
-    } catch (error) {
-      console.error('Excel yükleme hatası:', error);
+      const list: ExcelUrun[] = (jsonData as any[]).map(row => ({
+        urun_kodu: row['Ürün Kodu'] || row['Stok Kodu'] || row['Malzeme'] || Object.values(row)[0] || '',
+        urun_adi: row['Ürün Adı'] || row['Açıklama'] || Object.values(row)[1] || '',
+      })).filter(u => u.urun_kodu);
+      setExcelUrunler(list);
+      alert(`✅ ${list.length} ürün yüklendi!`);
+    } catch {
       alert('❌ Excel yüklenirken hata oluştu!');
     } finally {
       setExcelYukleniyor(false);
@@ -457,7 +287,6 @@ const fixMarsNo = () => {
     }
   };
 
-  // Ürün seçme fonksiyonu
   const urunSec = (urun: ExcelUrun) => {
     if (seciliSatirIndex !== null) {
       const yeniUrunler = [...urunler];
@@ -473,41 +302,65 @@ const fixMarsNo = () => {
     }
   };
 
-  // Filtrelenmiş ürünler
   const filtrelenmisUrunler = excelUrunler.filter(urun =>
     urun.urun_kodu.toLowerCase().includes(aramaMetni.toLowerCase()) ||
     urun.urun_adi.toLowerCase().includes(aramaMetni.toLowerCase())
   );
 
-  // ========== SUBMIT HANDLER ==========
+  // ========== LOG ==========
+
+  const logKaydet = async (kod: string, islem: string, detay: string) => {
+    const sube = getSubeByKod(currentUser!.subeKodu);
+    if (!sube) return;
+    const log: Omit<SatisLog, 'id'> = {
+      satisKodu: kod,
+      subeKodu: currentUser!.subeKodu,
+      islem,
+      kullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
+      tarih: new Date(),
+      detay
+    };
+    await addDoc(collection(db, `subeler/${sube.dbPath}/loglar`), log);
+  };
+
+  // ========== USEEFFECT ==========
+
+  useEffect(() => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    const generateSatisKodu = async () => {
+      const sube = getSubeByKod(currentUser.subeKodu);
+      if (!sube) return;
+      const sonKod = await getSonSatisKodu(sube.dbPath);
+      const yeniKod = getSiraNumarasi(sonKod, String(sube.satisKoduPrefix));
+      setSatisKodu(yeniKod);
+    };
+    generateSatisKodu();
+  }, [currentUser]);
+
+  // ========== SUBMIT ==========
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Fatura No kontrolü
-    if (!validateFaturaNo(faturaNo)) {
+
+    if (!faturaNo.trim()) {
       setFaturaNoHata(true);
       alert('❌ Fatura numarası zorunludur!');
       return;
     }
-    
-    // MARS No format kontrolü (eğer girildiyse)
-    if (marsNo && !validateMarsNo(marsNo)) {
+
+    if (marsNo && !isMarsNoGecerli()) {
       setMarsNoHata(true);
-      alert('❌ MARS numarası 2026 ile başlamalı ve 10 haneli olmalıdır! (Örn: 2026123456)');
+      alert('❌ MARS No 2026 ile başlayan 10 haneli olmalıdır! (Örn: 2026123456)');
       return;
     }
-    
-    setLoading(true);
 
+ setLoading(true);
     try {
       const sube = getSubeByKod(currentUser!.subeKodu);
-      if (!sube) {
-        alert('Şube bilgisi bulunamadı!');
-        return;
-      }
-
-      const toplamTutar = toplamTutarHesapla();
-      const odemeDurumu = getOdemeDurumu();
+      if (!sube) { alert('Şube bilgisi bulunamadı!'); return; }
 
       const satisTeklifi: Omit<SatisTeklifFormu, 'id'> = {
         satisKodu,
@@ -516,7 +369,7 @@ const fixMarsNo = () => {
         musteriTemsilcisi,
         musteriTemsilcisiTel,
         urunler,
-        toplamTutar,
+        toplamTutar: toplamTutarHesapla(),
         tarih: new Date(tarih),
         teslimatTarihi: new Date(teslimatTarihi),
         marsNo,
@@ -531,13 +384,13 @@ const fixMarsNo = () => {
         havaleTutar,
         kartOdemeler,
         hesabaGecen,
-        odemeDurumu,
+        odemeDurumu: getOdemeDurumu(),
         fatura,
         ileriTeslim,
         servis,
         odemeYontemi,
         onayDurumu,
-        zarar: zararHesapla(),
+        zarar: karZararHesapla(),
         olusturanKullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
         olusturmaTarihi: new Date(),
         guncellemeTarihi: new Date()
@@ -545,97 +398,79 @@ const fixMarsNo = () => {
 
       await addDoc(collection(db, `subeler/${sube.dbPath}/satislar`), satisTeklifi);
 
+      // Onay durumu false ise (beklemede) → bekleyen ürünlere otomatik ekle
+      if (!onayDurumu) {
+        for (const urun of urunler) {
+          const bekleyenUrun: Omit<BekleyenUrun, 'id'> = {
+            satisKodu,
+            subeKodu: currentUser!.subeKodu,
+            urunKodu: urun.kod,
+            urunAdi: urun.ad,
+            adet: urun.adet,
+            musteriIsmi: musteriBilgileri.isim,
+            siparisTarihi: new Date(),
+            beklenenTeslimTarihi: teslimatTarihi ? new Date(teslimatTarihi) : new Date(),
+            durum: 'BEKLEMEDE',
+            notlar: servisNotu || '',
+            guncellemeTarihi: new Date()
+          };
+          await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), bekleyenUrun);
+        }
+      }
+
       await logKaydet(
-        satisKodu,
-        'YENİ_SATIS',
-        `Yeni satış teklifi oluşturuldu. Müşteri: ${musteriBilgileri.isim}, Tutar: ${toplamTutar} TL`
+        satisKodu, 'YENİ_SATIS',
+        `Yeni satış teklifi. Müşteri: ${musteriBilgileri.isim}, Tutar: ${toplamTutarHesapla()} TL`
       );
 
       alert('✅ Satış teklifi başarıyla oluşturuldu!');
       navigate('/dashboard');
     } catch (error) {
-      console.error('Satış teklifi oluşturulamadı:', error);
+      console.error(error);
       alert('❌ Bir hata oluştu!');
     } finally {
       setLoading(false);
     }
   };
 
+  // ========== RENDER ==========
+
   return (
     <div className="satis-teklif-container">
       <div className="satis-teklif-header">
-        <button onClick={() => navigate('/dashboard')} className="btn-back">
-          ← Geri
-        </button>
+        <button onClick={() => navigate('/dashboard')} className="btn-back">← Geri</button>
         <h1>Yeni Satış Teklif Formu - {satisKodu}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="satis-teklif-form">
-        
+
         {/* ===== MÜŞTERİ BİLGİLERİ ===== */}
         <div className="form-section">
           <h2>Müşteri Bilgileri</h2>
           <div className="form-grid">
             <div className="form-group">
               <label>İsim/Adı *</label>
-              <input
-                type="text"
-                name="isim"
-                value={musteriBilgileri.isim}
-                onChange={handleMusteriChange}
-                required
-              />
+              <input type="text" name="isim" value={musteriBilgileri.isim} onChange={handleMusteriChange} required />
             </div>
-
             <div className="form-group">
               <label>VK No</label>
-              <input
-                type="text"
-                name="vkNo"
-                value={musteriBilgileri.vkNo}
-                onChange={handleMusteriChange}
-              />
+              <input type="text" name="vkNo" value={musteriBilgileri.vkNo} onChange={handleMusteriChange} />
             </div>
-
             <div className="form-group">
               <label>Adres</label>
-              <input
-                type="text"
-                name="adres"
-                value={musteriBilgileri.adres}
-                onChange={handleMusteriChange}
-              />
+              <input type="text" name="adres" value={musteriBilgileri.adres} onChange={handleMusteriChange} />
             </div>
-
             <div className="form-group">
               <label>VD</label>
-              <input
-                type="text"
-                name="vd"
-                value={musteriBilgileri.vd}
-                onChange={handleMusteriChange}
-                required
-              />
+              <input type="text" name="vd" value={musteriBilgileri.vd} onChange={handleMusteriChange} />
             </div>
-
             <div className="form-group">
               <label>Fatura Adresi</label>
-              <input
-                type="text"
-                name="faturaAdresi"
-                value={musteriBilgileri.faturaAdresi}
-                onChange={handleMusteriChange}
-              />
+              <input type="text" name="faturaAdresi" value={musteriBilgileri.faturaAdresi} onChange={handleMusteriChange} />
             </div>
-
             <div className="form-group">
               <label>Cep Tel</label>
-              <input
-                type="text"
-                name="cep"
-                value={musteriBilgileri.cep}
-                onChange={handleMusteriChange}
-              />
+              <input type="text" name="cep" value={musteriBilgileri.cep} onChange={handleMusteriChange} />
             </div>
           </div>
         </div>
@@ -646,84 +481,79 @@ const fixMarsNo = () => {
           <div className="form-grid">
             <div className="form-group">
               <label>Müşteri Temsilcisi</label>
-              <input
-                type="text"
-                value={musteriTemsilcisi}
-                onChange={(e) => setMusteriTemsilcisi(e.target.value)}
-              />
+              <input type="text" value={musteriTemsilcisi} onChange={e => setMusteriTemsilcisi(e.target.value)} />
             </div>
-
             <div className="form-group">
               <label>Müşteri Temsilcisi Tel</label>
-              <input
-                type="text"
-                value={musteriTemsilcisiTel}
-                onChange={(e) => setMusteriTemsilcisiTel(e.target.value)}
-              />
+              <input type="text" value={musteriTemsilcisiTel} onChange={e => setMusteriTemsilcisiTel(e.target.value)} />
             </div>
-
             <div className="form-group">
               <label>Tarih</label>
-              <input
-                type="date"
-                value={tarih}
-                onChange={(e) => setTarih(e.target.value)}
-                required
-              />
+              <input type="date" value={tarih} onChange={e => setTarih(e.target.value)} required />
             </div>
-
             <div className="form-group">
               <label>Teslimat Tarihi *</label>
-              <input
-                type="date"
-                value={teslimatTarihi}
-                onChange={(e) => setTeslimatTarihi(e.target.value)}
-                required
-              />
+              <input type="date" value={teslimatTarihi} onChange={e => setTeslimatTarihi(e.target.value)} required />
             </div>
           </div>
         </div>
 
-        {/* ===== NOTLAR ===== */}
+        {/* ===== NOTLAR VE ZORUNLU ALANLAR ===== */}
         <div className="form-section">
           <h2>Notlar ve Zorunlu Alanlar</h2>
           <div className="form-grid">
-          <div className="form-group">
-  <label>MARS No (2026 ile başlayan 10 haneli)</label>
-  <div style={{ display: 'flex', gap: '8px' }}>
-    <input
-      type="text"
-      value={marsNo}
-      onChange={handleMarsNoChange} // Hiç karışma, direkt al
-      placeholder="2026131500"
-      style={{ flex: 1 }}
-    />
-    <button
-      type="button"
-      onClick={fixMarsNo}
-      className="btn-fix"
-      title="MARS numarasını düzelt (2026 ile başlat, 10 haneli yap)"
-    >
-      ✏️ Düzelt
-    </button>
-  </div>
-  <small style={{ color: '#666' }}>
-    İstediğiniz gibi yazın, sonra Düzelt butonu ile formatlayın
-  </small>
-</div>
 
+            {/* MARS NO */}
             <div className="form-group">
-              <label>MAĞAZA</label>
-              <input
-                type="text"
-                value={magaza}
-                onChange={(e) => setMagaza(e.target.value)}
-                placeholder="Mağaza adı"
-              />
+              <label>
+                MARS No
+                <span style={{ color: '#999', fontWeight: 400, textTransform: 'none', marginLeft: '6px' }}>
+                  (2026 ile başlayan 10 haneli)
+                </span>
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={marsNo}
+                  onChange={handleMarsNoChange}
+                  placeholder="2026131500"
+                  maxLength={10}
+                  style={{
+                    flex: 1,
+                    borderColor: marsNoHata
+                      ? '#dc2626'
+                      : marsNo && !isMarsNoGecerli()
+                      ? '#f59e0b'
+                      : undefined
+                  }}
+                />
+                <button type="button" onClick={fixMarsNo} className="btn-fix-mars" title="Otomatik düzelt">
+                  ✏️ Düzelt
+                </button>
+              </div>
+              {marsNo && (
+                <small style={{ marginTop: '4px', color: isMarsNoGecerli() ? '#16a34a' : '#f59e0b', fontWeight: 600 }}>
+                  {isMarsNoGecerli()
+                    ? '✅ Geçerli format'
+                    : `⚠️ ${marsNo.length}/10 hane${!marsNo.startsWith('2026') ? ' · 2026 ile başlamalı' : ''}`
+                  }
+                </small>
+              )}
+              {marsNoHata && (
+                <small style={{ color: '#dc2626', fontWeight: 600 }}>
+                  ❌ Düzelttikten sonra hâlâ eksik hane var!
+                </small>
+              )}
             </div>
 
             <div className="form-group">
-              <label>FATURA No *</label>
+              <label>Mağaza</label>
+              <input type="text" value={magaza} onChange={e => setMagaza(e.target.value)} placeholder="Mağaza adı" />
+            </div>
+
+            {/* FATURA NO */}
+            <div className="form-group">
+              <label>Fatura No *</label>
               <input
                 type="text"
                 value={faturaNo}
@@ -732,56 +562,37 @@ const fixMarsNo = () => {
                 placeholder="Fatura numarası zorunlu"
                 className={faturaNoHata ? 'input-error' : ''}
               />
-              {faturaNoHata && (
-                <small style={{ color: 'red' }}>Fatura numarası zorunludur!</small>
-              )}
+              {faturaNoHata && <small style={{ color: 'red' }}>Fatura numarası zorunludur!</small>}
             </div>
 
+            {/* SERVİS NOTU - otomatik tik */}
             <div className="form-group">
-              <label>SERVİS Notu</label>
+              <label>Servis Notu</label>
               <input
                 type="text"
                 value={servisNotu}
-                onChange={(e) => setServisNotu(e.target.value)}
-                placeholder="Servis notu"
+                onChange={handleServisNotuChange}
+                placeholder="Not girilirse Servis Gerekli otomatik işaretlenir"
               />
             </div>
+
           </div>
 
-          <div style={{ display: 'flex', gap: '20px', marginTop: '16px' }}>
+          <div style={{ display: 'flex', gap: '20px', marginTop: '16px', flexWrap: 'wrap' }}>
             <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={teslimEdildiMi}
-                onChange={(e) => setTeslimEdildiMi(e.target.checked)}
-              />
+              <input type="checkbox" checked={teslimEdildiMi} onChange={e => setTeslimEdildiMi(e.target.checked)} />
               Teslim Edildi
             </label>
-
             <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={fatura}
-                onChange={(e) => setFatura(e.target.checked)}
-              />
+              <input type="checkbox" checked={fatura} onChange={e => setFatura(e.target.checked)} />
               Fatura Kesildi
             </label>
-
             <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={ileriTeslim}
-                onChange={(e) => setIleriTeslim(e.target.checked)}
-              />
+              <input type="checkbox" checked={ileriTeslim} onChange={e => setIleriTeslim(e.target.checked)} />
               İleri Teslim
             </label>
-
             <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={servis}
-                onChange={(e) => setServis(e.target.checked)}
-              />
+              <input type="checkbox" checked={servis} onChange={e => setServis(e.target.checked)} />
               Servis Gerekli
             </label>
           </div>
@@ -799,24 +610,15 @@ const fixMarsNo = () => {
                 accept=".xlsx,.xls,.csv"
                 style={{ display: 'none' }}
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="btn-excel"
-                disabled={excelYukleniyor}
-              >
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="btn-excel" disabled={excelYukleniyor}>
                 {excelYukleniyor ? '📊 Yükleniyor...' : '📊 Excel Yükle'}
               </button>
-              <button type="button" onClick={urunEkle} className="btn-add">
-                + Ürün Ekle
-              </button>
+              <button type="button" onClick={urunEkle} className="btn-add">+ Ürün Ekle</button>
             </div>
           </div>
 
           {excelUrunler.length > 0 && (
-            <div className="excel-bilgi">
-              📦 {excelUrunler.length} ürün yüklendi
-            </div>
+            <div className="excel-bilgi">📦 {excelUrunler.length} ürün yüklendi</div>
           )}
 
           {urunler.map((urun, index) => (
@@ -828,7 +630,7 @@ const fixMarsNo = () => {
                     <input
                       type="text"
                       value={urun.kod}
-                      onChange={(e) => handleUrunChange(index, 'kod', e.target.value)}
+                      onChange={e => handleUrunChange(index, 'kod', e.target.value)}
                       required
                       style={{ flex: 1 }}
                       placeholder="Ürün kodu"
@@ -836,75 +638,34 @@ const fixMarsNo = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        if (excelUrunler.length === 0) {
-                          alert('Önce Excel yükleyin!');
-                          return;
-                        }
+                        if (excelUrunler.length === 0) { alert('Önce Excel yükleyin!'); return; }
                         setSeciliSatirIndex(index);
                         setAramaModaliAcik(true);
                       }}
                       className="btn-search"
-                      title="Excel'den ürün seç"
-                    >
-                      🔍
-                    </button>
+                      title="Excel'den seç"
+                    >🔍</button>
                   </div>
                 </div>
-
                 <div className="form-group">
                   <label>Ürün Adı</label>
-                  <input
-                    type="text"
-                    value={urun.ad}
-                    onChange={(e) => handleUrunChange(index, 'ad', e.target.value)}
-                    required
-                    placeholder="Ürün adı"
-                  />
+                  <input type="text" value={urun.ad} onChange={e => handleUrunChange(index, 'ad', e.target.value)} required placeholder="Ürün adı" />
                 </div>
-
                 <div className="form-group">
                   <label>Adet</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={urun.adet}
-                    onChange={(e) => handleUrunChange(index, 'adet', e.target.value)}
-                    required
-                  />
+                  <input type="number" min="1" value={urun.adet} onChange={e => handleUrunChange(index, 'adet', e.target.value)} required />
                 </div>
-
                 <div className="form-group">
                   <label>Alış (TL)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={urun.alisFiyati}
-                    onChange={(e) => handleUrunChange(index, 'alisFiyati', e.target.value)}
-                    required
-                  />
+                  <input type="number" min="0" step="0.01" value={urun.alisFiyati} onChange={e => handleUrunChange(index, 'alisFiyati', e.target.value)} required />
                 </div>
-
                 <div className="form-group">
                   <label>BİP (TL)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={urun.bip || 0}
-                    onChange={(e) => handleUrunChange(index, 'bip', e.target.value)}
-                  />
+                  <input type="number" min="0" step="0.01" value={urun.bip || 0} onChange={e => handleUrunChange(index, 'bip', e.target.value)} />
                 </div>
               </div>
-
               {urunler.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => urunSil(index)}
-                  className="btn-remove"
-                >
-                  Sil
-                </button>
+                <button type="button" onClick={() => urunSil(index)} className="btn-remove">Sil</button>
               )}
             </div>
           ))}
@@ -913,7 +674,6 @@ const fixMarsNo = () => {
             <strong>Genel Toplam:</strong>
             <span className="toplam-tutar">{formatPrice(toplamTutarHesapla())}</span>
           </div>
-
           <div className="info-text">
             <p><strong>NOT:</strong> TOPLAM MALİYET = ALIŞ TOPLAM - BİP TOPLAM = {formatPrice(toplamMaliyetHesapla())}</p>
           </div>
@@ -923,42 +683,20 @@ const fixMarsNo = () => {
         <div className="form-section">
           <div className="section-header">
             <h2>Kampanyalar</h2>
-            <button type="button" onClick={kampanyaEkle} className="btn-add">
-              + Kampanya Ekle
-            </button>
+            <button type="button" onClick={kampanyaEkle} className="btn-add">+ Kampanya Ekle</button>
           </div>
-
           {kampanyalar.map((kampanya, index) => (
             <div key={kampanya.id} className="kampanya-satir">
               <div className="kampanya-grid">
                 <div className="form-group">
                   <label>Kampanya Adı</label>
-                  <input
-                    type="text"
-                    value={kampanya.ad}
-                    onChange={(e) => handleKampanyaChange(index, 'ad', e.target.value)}
-                    placeholder="Örn: 3 LÜ ÜRÜN KAMP"
-                  />
+                  <input type="text" value={kampanya.ad} onChange={e => handleKampanyaChange(index, 'ad', e.target.value)} placeholder="Örn: 3 LÜ ÜRÜN KAMP" />
                 </div>
-
                 <div className="form-group">
                   <label>Tutar (TL)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={kampanya.tutar}
-                    onChange={(e) => handleKampanyaChange(index, 'tutar', e.target.value)}
-                  />
+                  <input type="number" min="0" step="0.01" value={kampanya.tutar} onChange={e => handleKampanyaChange(index, 'tutar', e.target.value)} />
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => kampanyaSil(index)}
-                  className="btn-remove-inline"
-                >
-                  Sil
-                </button>
+                <button type="button" onClick={() => kampanyaSil(index)} className="btn-remove-inline">Sil</button>
               </div>
             </div>
           ))}
@@ -968,42 +706,20 @@ const fixMarsNo = () => {
         <div className="form-section">
           <div className="section-header">
             <h2>Yeşil Etiketler (İndirimli Eski Ürünler)</h2>
-            <button type="button" onClick={yesilEtiketEkle} className="btn-add">
-              + Yeşil Etiket Ekle
-            </button>
+            <button type="button" onClick={yesilEtiketEkle} className="btn-add">+ Yeşil Etiket Ekle</button>
           </div>
-
           {yesilEtiketler.map((etiket, index) => (
             <div key={etiket.id} className="etiket-satir">
               <div className="etiket-grid">
                 <div className="form-group">
                   <label>Ürün Kodu</label>
-                  <input
-                    type="text"
-                    value={etiket.urunKodu}
-                    onChange={(e) => handleYesilEtiketChange(index, 'urunKodu', e.target.value)}
-                    placeholder="Ürün kodu"
-                  />
+                  <input type="text" value={etiket.urunKodu} onChange={e => handleYesilEtiketChange(index, 'urunKodu', e.target.value)} placeholder="Ürün kodu" />
                 </div>
-
                 <div className="form-group">
                   <label>İndirim Tutarı (TL)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={etiket.tutar}
-                    onChange={(e) => handleYesilEtiketChange(index, 'tutar', e.target.value)}
-                  />
+                  <input type="number" min="0" step="0.01" value={etiket.tutar} onChange={e => handleYesilEtiketChange(index, 'tutar', e.target.value)} />
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => yesilEtiketSil(index)}
-                  className="btn-remove-inline"
-                >
-                  Sil
-                </button>
+                <button type="button" onClick={() => yesilEtiketSil(index)} className="btn-remove-inline">Sil</button>
               </div>
             </div>
           ))}
@@ -1012,38 +728,15 @@ const fixMarsNo = () => {
         {/* ===== ÖDEME BİLGİLERİ ===== */}
         <div className="form-section">
           <h2>Ödeme Bilgileri</h2>
-          
+
           <div className="form-grid">
             <div className="form-group">
               <label>Peşinat (TL)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={pesinatTutar}
-                onChange={(e) => setPesinatTutar(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
-              />
+              <input type="number" min="0" step="0.01" value={pesinatTutar} onChange={e => setPesinatTutar(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)} />
             </div>
-
             <div className="form-group">
               <label>Havale (TL)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={havaleTutar}
-                onChange={(e) => setHavaleTutar(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Hesaba Geçen</label>
-              <input
-                type="text"
-                value={hesabaGecen}
-                onChange={(e) => setHesabaGecen(e.target.value)}
-                placeholder="Örn: 20.450₺"
-              />
+              <input type="number" min="0" step="0.01" value={havaleTutar} onChange={e => setHavaleTutar(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)} />
             </div>
           </div>
 
@@ -1051,148 +744,97 @@ const fixMarsNo = () => {
           <div className="kart-odemeler-section">
             <div className="section-header">
               <h3>Kart ile Ödemeler</h3>
-              <button type="button" onClick={kartEkle} className="btn-add">
-                + Kart Ekle
-              </button>
+              <button type="button" onClick={kartEkle} className="btn-add">+ Kart Ekle</button>
             </div>
-          
             {kartOdemeler.map((kart, index) => (
               <div key={kart.id} className="kart-satir">
                 <div className="kart-grid">
                   <div className="form-group">
                     <label>Banka</label>
-                    <select
-                      value={kart.banka}
-                      onChange={(e) => handleKartChange(index, 'banka', e.target.value)}
-                    >
-                      {BANKALAR.map((banka) => (
-                        <option key={banka} value={banka}>
-                          {banka}
-                        </option>
-                      ))}
+                    <select value={kart.banka} onChange={e => handleKartChange(index, 'banka', e.target.value)}>
+                      {BANKALAR.map(banka => <option key={banka} value={banka}>{banka}</option>)}
                     </select>
                   </div>
-
                   <div className="form-group">
                     <label>Taksit Sayısı</label>
-                    <select
-                      value={kart.taksitSayisi}
-                      onChange={(e) => handleKartChange(index, 'taksitSayisi', e.target.value)}
-                    >
-                      {TAKSIT_SECENEKLERI.map((taksit) => (
-                        <option key={taksit.value} value={taksit.value}>
-                          {taksit.label}
-                        </option>
-                      ))}
+                    <select value={kart.taksitSayisi} onChange={e => handleKartChange(index, 'taksitSayisi', e.target.value)}>
+                      {TAKSIT_SECENEKLERI.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
-
                   <div className="form-group">
                     <label>Tutar (TL)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={kart.tutar}
-                      onChange={(e) => handleKartChange(index, 'tutar', e.target.value)}
-                    />
+                    <input type="number" min="0" step="0.01" value={kart.tutar} onChange={e => handleKartChange(index, 'tutar', e.target.value)} />
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => kartSil(index)}
-                    className="btn-remove-inline"
-                  >
-                    Sil
-                  </button>
+                  <button type="button" onClick={() => kartSil(index)} className="btn-remove-inline">Sil</button>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Zarar Bilgisi */}
-          <div className="zarar-preview">
-            <strong>ZARAR: {formatPrice(zararHesapla())}</strong>
+          {/* Kâr/Zarar */}
+          <div
+            className="zarar-preview"
+            style={{ color: karZararHesapla() >= 0 ? '#16a34a' : '#dc2626' }}
+          >
+            <strong>
+              {karZararHesapla() >= 0
+                ? `KÂR: ${formatPrice(karZararHesapla())}`
+                : `ZARAR: ${formatPrice(Math.abs(karZararHesapla()))}`
+              }
+            </strong>
+            <small style={{ marginLeft: '12px', fontWeight: 'normal', color: '#666' }}>
+              (Hesaba Geçen: {formatPrice(hesabaGecenToplamHesapla())} — Maliyet: {formatPrice(toplamMaliyetHesapla())})
+            </small>
           </div>
         </div>
 
         {/* ===== ONAY ===== */}
         <div className="form-section">
           <label className="checkbox-label onay-checkbox">
-            <input
-              type="checkbox"
-              checked={onayDurumu}
-              onChange={(e) => setOnayDurumu(e.target.checked)}
-            />
+            <input type="checkbox" checked={onayDurumu} onChange={e => setOnayDurumu(e.target.checked)} />
             <span><strong>Onaylıyorum</strong></span>
           </label>
         </div>
 
-        {/* ===== SUBMIT BUTONLARI ===== */}
+        {/* ===== BUTONLAR ===== */}
         <div className="form-actions">
-          <button type="button" onClick={() => navigate('/dashboard')} className="btn-cancel">
-            İptal
-          </button>
+          <button type="button" onClick={() => navigate('/dashboard')} className="btn-cancel">İptal</button>
           <button type="submit" disabled={loading} className="btn-submit">
             {loading ? 'Kaydediliyor...' : 'Kaydet'}
           </button>
         </div>
+
       </form>
 
-      {/* EXCEL ÜRÜN ARAMA MODALI */}
+      {/* ===== EXCEL MODAL ===== */}
       {aramaModaliAcik && (
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
               <h3>📦 Excel'den Ürün Seç ({excelUrunler.length} ürün)</h3>
-              <button 
-                onClick={() => {
-                  setAramaModaliAcik(false);
-                  setSeciliSatirIndex(null);
-                  setAramaMetni('');
-                }}
-                className="btn-close"
-              >
-                ✕
-              </button>
+              <button onClick={() => { setAramaModaliAcik(false); setSeciliSatirIndex(null); setAramaMetni(''); }} className="btn-close">✕</button>
             </div>
-            
             <div className="modal-body">
               <input
                 type="text"
                 placeholder="Ürün kodu veya adı ile ara..."
                 value={aramaMetni}
-                onChange={(e) => setAramaMetni(e.target.value)}
+                onChange={e => setAramaMetni(e.target.value)}
                 className="modal-search"
                 autoFocus
               />
-              
               <div className="modal-list">
                 {filtrelenmisUrunler.length > 0 ? (
                   filtrelenmisUrunler.map((urun, index) => (
-                    <div
-                      key={index}
-                      onClick={() => urunSec(urun)}
-                      className="modal-item"
-                    >
+                    <div key={index} onClick={() => urunSec(urun)} className="modal-item">
                       <div className="modal-item-kod">{urun.urun_kodu}</div>
                       <div className="modal-item-ad">{urun.urun_adi}</div>
                     </div>
                   ))
                 ) : (
                   <div className="modal-empty">
-                    {excelUrunler.length === 0 ? (
-                      <>
-                        <div className="modal-empty-icon">📭</div>
-                        <div>Hiç ürün yok!</div>
-                        <small>Önce Excel yükle butonuna tıkla</small>
-                      </>
-                    ) : (
-                      <>
-                        <div className="modal-empty-icon">🔍</div>
-                        <div>Ürün bulunamadı</div>
-                      </>
-                    )}
+                    <div className="modal-empty-icon">🔍</div>
+                    <div>{excelUrunler.length === 0 ? 'Önce Excel yükle!' : 'Ürün bulunamadı'}</div>
                   </div>
                 )}
               </div>
@@ -1200,6 +842,7 @@ const fixMarsNo = () => {
           </div>
         </div>
       )}
+
     </div>
   );
 };
