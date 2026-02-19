@@ -1,0 +1,514 @@
+/* =============================================
+   SATIŞ DÜZENLE CSS - SİEMENS KURUMSAL TASARIM
+   MODERN & PROFESSIONAL
+   ============================================= */
+
+.duzenle-container {
+  min-height: 100vh;
+  background: linear-gradient(to bottom, #f5f7fa 0%, #eef1f5 100%);
+  padding: 32px;
+}
+
+/* =============================================
+   HEADER
+   ============================================= */
+
+.duzenle-header {
+  max-width: 1600px;
+  margin: 0 auto 32px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.duzenle-header h1 {
+  flex: 1;
+  text-align: center;
+  font-size: 36px;
+  font-weight: 900;
+  color: #1a1a1a;
+  letter-spacing: -1px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #009999 0%, #006666 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.btn-back {
+  padding: 14px 28px;
+  background: white;
+  border: 3px solid #009999;
+  color: #009999;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 16px rgba(0, 153, 153, 0.2);
+}
+
+.btn-back:hover {
+  background: #009999;
+  color: white;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 153, 153, 0.35);
+}
+
+/* =============================================
+   FORM CONTAINER
+   ============================================= */
+
+.duzenle-form {
+  max-width: 1600px;
+  margin: 0 auto;
+  background: white;
+  padding: 48px;
+  border-radius: 24px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e5e7eb;
+}
+
+/* =============================================
+   FORM SECTIONS
+   ============================================= */
+
+.form-section {
+  margin-bottom: 48px;
+  padding-bottom: 40px;
+  border-bottom: 3px solid #f3f4f6;
+}
+
+.form-section:last-child {
+  border-bottom: none;
+}
+
+.form-section h2 {
+  font-size: 24px;
+  font-weight: 900;
+  color: #1f2937;
+  margin-bottom: 28px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding-bottom: 16px;
+  border-bottom: 4px solid #009999;
+  display: inline-block;
+}
+
+.form-section h3 {
+  font-size: 20px;
+  font-weight: 800;
+  color: #374151;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.section-header h2,
+.section-header h3 {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* =============================================
+   FORM GRID
+   ============================================= */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 28px;
+}
+
+/* =============================================
+   FORM GROUPS
+   ============================================= */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 800;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 16px 18px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1f2937;
+  background: #f9fafb;
+  transition: all 0.3s ease;
+}
+
+.form-group input:hover,
+.form-group select:hover,
+.form-group textarea:hover {
+  border-color: #009999;
+  background: white;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #009999;
+  background: white;
+  box-shadow: 0 0 0 5px rgba(0, 153, 153, 0.12);
+  transform: translateY(-1px);
+}
+
+/* =============================================
+   ÜRÜN SATIRLARI
+   ============================================= */
+
+.urun-satir {
+  padding: 24px;
+  background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.urun-satir:hover {
+  border-color: #009999;
+  box-shadow: 0 8px 24px rgba(0, 153, 153, 0.15);
+  transform: translateY(-2px);
+}
+
+.urun-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 0.8fr 1fr 1fr;
+  gap: 20px;
+  align-items: end;
+}
+
+/* =============================================
+   KAMPANYA SATIRLARI
+   ============================================= */
+
+.kampanya-satir {
+  padding: 20px;
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+  border: 3px solid #ffc107;
+  border-radius: 16px;
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 20px;
+  align-items: end;
+  box-shadow: 0 4px 16px rgba(255, 193, 7, 0.2);
+  transition: all 0.3s ease;
+}
+
+.kampanya-satir:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 193, 7, 0.3);
+}
+
+/* =============================================
+   KART ÖDEMELERI
+   ============================================= */
+
+.kart-satir {
+  padding: 20px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 3px solid #2196f3;
+  border-radius: 16px;
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr auto;
+  gap: 20px;
+  align-items: end;
+  box-shadow: 0 4px 16px rgba(33, 150, 243, 0.2);
+  transition: all 0.3s ease;
+}
+
+.kart-satir:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(33, 150, 243, 0.3);
+}
+
+/* =============================================
+   BUTTONS
+   ============================================= */
+
+.btn-add {
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.35);
+}
+
+.btn-add:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 32px rgba(76, 175, 80, 0.45);
+  background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+}
+
+.btn-remove {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
+}
+
+.btn-remove:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.45);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+/* =============================================
+   FORM ACTIONS
+   ============================================= */
+
+.form-actions {
+  display: flex;
+  gap: 24px;
+  justify-content: flex-end;
+  margin-top: 48px;
+  padding-top: 40px;
+  border-top: 3px solid #e5e7eb;
+}
+
+.btn-cancel {
+  padding: 18px 40px;
+  background: white;
+  border: 3px solid #e5e7eb;
+  color: #6b7280;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.btn-cancel:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.btn-submit {
+  padding: 18px 56px;
+  background: linear-gradient(135deg, #009999 0%, #007373 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 900;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 28px rgba(0, 153, 153, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+.btn-submit:hover:not(:disabled) {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 40px rgba(0, 153, 153, 0.5);
+  background: linear-gradient(135deg, #00b3b3 0%, #008c8c 100%);
+}
+
+.btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* =============================================
+   LOADING & NOT FOUND
+   ============================================= */
+
+.loading {
+  text-align: center;
+  padding: 100px 40px;
+  font-size: 22px;
+  color: #009999;
+  font-weight: 700;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.not-found {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  background: linear-gradient(to bottom, #f5f7fa 0%, #eef1f5 100%);
+}
+
+.not-found h2 {
+  font-size: 40px;
+  color: #1a1a1a;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -1px;
+}
+
+.not-found p {
+  font-size: 20px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* =============================================
+   RESPONSIVE
+   ============================================= */
+
+@media (max-width: 1400px) {
+  .duzenle-form {
+    padding: 40px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .urun-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .duzenle-container {
+    padding: 20px;
+  }
+
+  .duzenle-form {
+    padding: 28px;
+  }
+
+  .duzenle-header {
+    flex-direction: column;
+  }
+
+  .duzenle-header h1 {
+    font-size: 26px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .urun-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kampanya-satir {
+    grid-template-columns: 1fr;
+  }
+
+  .kart-satir {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .btn-cancel,
+  .btn-submit {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .duzenle-header h1 {
+    font-size: 22px;
+  }
+
+  .form-section h2 {
+    font-size: 20px;
+  }
+
+  .btn-back {
+    padding: 12px 20px;
+    font-size: 12px;
+  }
+  /* TOPLAM VE ZARAR ÖNİZLEME */
+.toplam-preview {
+  padding: 20px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 3px solid #2196f3;
+  border-radius: 16px;
+  text-align: center;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(33, 150, 243, 0.2);
+}
+
+.toplam-preview h3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 900;
+  color: #0d47a1;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.zarar-preview {
+  padding: 20px;
+  border: 3px solid;
+  border-radius: 16px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.zarar-preview.kar {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-color: #4caf50;
+  color: #1b5e20;
+}
+
+.zarar-preview.zarar {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-color: #ef4444;
+  color: #991b1b;
+}
+}

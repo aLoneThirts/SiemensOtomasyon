@@ -10,6 +10,7 @@ import AdminPanel from './Pages/AdminPanel';
 import SatisDetayPage from './Pages/SatisDetayPage';
 import Kasa from './Pages/Kasa'; // DÜZELTİLDİ: ./Pages/Kasa
 import CiroPerformansPage from './Pages/CiroPerformans';
+import SatisDuzenlePage from './Pages/SatisDuzenlePage';
 import './App.css';
 
 const PrivateRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -74,6 +75,8 @@ function App() {
             }
           />
     <Route path="/ciro/performans" element={<CiroPerformansPage />} />
+
+    <Route path="/satis-duzenle/:subeKodu/:id" element={<SatisDuzenlePage />} />
 
           <Route path="/" element={<Navigate to="/login" />} />
         </Routes>

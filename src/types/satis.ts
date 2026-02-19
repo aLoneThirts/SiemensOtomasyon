@@ -37,6 +37,8 @@ export interface Kampanya {
 export interface YesilEtiket {
   id: string;
   urunKodu: string;
+  ad: string;
+  alisFiyati: number;
   tutar: number;
 }
 
@@ -153,3 +155,16 @@ export const TAKSIT_SECENEKLERI = [
   { label: '8', value: 8 },
   { label: '9', value: 9 }
 ];
+
+
+export interface SatisCounter {
+  id: string;
+  currentNumber: number;
+  lastUpdated: Date;
+}
+
+export enum SatisStatusu {
+  BEKLIYOR = 'BEKLIYOR',
+  ONAYLANDI = 'ONAYLANDI',
+  KILIT = 'KILIT'
+}

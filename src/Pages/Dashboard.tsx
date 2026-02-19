@@ -26,6 +26,10 @@ const Dashboard: React.FC = () => {
   const [satisKoduAra, setSatisKoduAra] = useState<string>('');
   const [mevcutSubeler, setMevcutSubeler] = useState<string[]>([]);
 
+  // SAYFALAMA STATE'LERİ
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
+
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
   const kullaniciAdi = currentUser?.ad || '';
   const kullaniciSoyadi = currentUser?.soyad || '';
@@ -40,7 +44,12 @@ const Dashboard: React.FC = () => {
     filtreyiUygula();
   }, [satislar, secilenSube, zararOlanlar, durum, teslimTarihi, acikHesap, satisTarihi, satisKoduAra]);
 
-const fetchSatislar = async () => {
+  // Filtre değiştiğinde sayfayı 1'e döndür
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [secilenSube, zararOlanlar, durum, teslimTarihi, acikHesap, satisTarihi, satisKoduAra]);
+
+  const fetchSatislar = async () => {
     try {
       setLoading(true);
       const satisListesi: SatisTeklifFormu[] = [];
@@ -118,6 +127,97 @@ const fetchSatislar = async () => {
   const filtreleriSifirla = () => {
     setSecilenSube(''); setZararOlanlar('all'); setDurum('all');
     setTeslimTarihi(''); setAcikHesap('all'); setSatisTarihi(''); setSatisKoduAra('');
+  };
+
+  // ===== SAYFALAMA FONKSİYONLARI =====
+  const totalPages = Math.ceil(filtreliSatislar.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentSatislar = filtreliSatislar.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // Önceki butonu
+    pages.push(
+      <button
+        key="prev"
+        onClick={() => goToPage(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="pagination-btn pagination-arrow"
+      >
+        ← Önceki
+      </button>
+    );
+
+    // İlk sayfa
+    if (startPage > 1) {
+      pages.push(
+        <button key={1} onClick={() => goToPage(1)} className="pagination-btn">
+          1
+        </button>
+      );
+      if (startPage > 2) {
+        pages.push(<span key="dots1" className="pagination-dots">...</span>);
+      }
+    }
+
+    // Sayfa numaraları
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => goToPage(i)}
+          className={`pagination-btn ${currentPage === i ? 'active' : ''}`}
+        >
+          {i}
+        </button>
+      );
+    }
+
+    // Son sayfa
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        pages.push(<span key="dots2" className="pagination-dots">...</span>);
+      }
+      pages.push(
+        <button
+          key={totalPages}
+          onClick={() => goToPage(totalPages)}
+          className="pagination-btn"
+        >
+          {totalPages}
+        </button>
+      );
+    }
+
+    // Sonraki butonu
+    pages.push(
+      <button
+        key="next"
+        onClick={() => goToPage(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="pagination-btn pagination-arrow"
+      >
+        Sonraki →
+      </button>
+    );
+
+    return <div className="pagination-container">{pages}</div>;
   };
 
   // ===== ADMIN: ONAY TOGGLE =====
@@ -309,7 +409,14 @@ const fetchSatislar = async () => {
 
           {/* SONUÇ BİLGİSİ */}
           <div className="sonuc-bilgi">
-            <p>Toplam <strong>{filtreliSatislar.length}</strong> satış bulundu</p>
+            <p>
+              Toplam <strong>{filtreliSatislar.length}</strong> satış bulundu
+              {totalPages > 1 && (
+                <span style={{ marginLeft: '16px', opacity: 0.8 }}>
+                  (Sayfa {currentPage} / {totalPages})
+                </span>
+              )}
+            </p>
           </div>
 
           {/* TABLO */}
@@ -323,94 +430,105 @@ const fetchSatislar = async () => {
               </button>
             </div>
           ) : (
-            <div className="sales-table-container">
-              <table className="sales-table">
-                <thead>
-                  <tr>
-                    <th>SATIŞ KODU</th>
-                    <th>ŞUBE</th>
-                    <th>MÜŞTERİ</th>
-                    <th>TOPLAM TUTAR</th>
-                    <th>KAR/ZARAR</th>
-                    <th>TARİH</th>
-                    <th>TESLİMAT</th>
-                    <th>DURUM</th>
-                    <th>ÖDEME</th>
-                    <th>İŞLEMLER</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtreliSatislar.map(satis => {
-                    const kar = satis.zarar ?? 0;
-                    const isOnaylandi = satis.onayDurumu === true;
-                    const isOdendi = satis.odemeDurumu === OdemeDurumu.ODENDI;
-                    const onayYukleniyor = guncellemeyorum === satis.id;
-                    const odemeYukleniyor = guncellemeyorum === satis.id + '_odeme';
+            <>
+              <div className="sales-table-container">
+                <table className="sales-table">
+                  <thead>
+                    <tr>
+                      <th>SATIŞ KODU</th>
+                      <th>ŞUBE</th>
+                      <th>MÜŞTERİ</th>
+                      <th>TOPLAM TUTAR</th>
+                      <th>KAR/ZARAR</th>
+                      <th>TARİH</th>
+                      <th>TESLİMAT</th>
+                      <th>DURUM</th>
+                      <th>ÖDEME</th>
+                      <th>İŞLEMLER</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentSatislar.map(satis => {
+                      const kar = satis.zarar ?? 0;
+                      const isOnaylandi = satis.onayDurumu === true;
+                      const isOdendi = satis.odemeDurumu === OdemeDurumu.ODENDI;
+                      const onayYukleniyor = guncellemeyorum === satis.id;
+                      const odemeYukleniyor = guncellemeyorum === satis.id + '_odeme';
 
-                    return (
-                      <tr key={satis.id}>
-                        <td><strong>{satis.satisKodu}</strong></td>
-                        <td>{getSubeByKod(satis.subeKodu)?.ad}</td>
-                        <td>{satis.musteriBilgileri?.isim || '-'}</td>
-                        <td><strong>{formatPrice(satis.toplamTutar)}</strong></td>
-                        <td>
-                          <span className={`kar-zarar-badge ${kar >= 0 ? 'kar' : 'zarar'}`}>
-                            {kar >= 0 ? '+' : ''}{formatPrice(kar)}
-                          </span>
-                        </td>
-                        <td>{formatDate(satis.tarih)}</td>
-                        <td>{formatDate(satis.teslimatTarihi)}</td>
-
-                        {/* DURUM - Admin tıklayabilir */}
-                        <td>
-                          {isAdmin ? (
-                            <button
-                              className={`status-badge clickable ${isOnaylandi ? 'approved' : 'pending'}`}
-                              onClick={() => onayDurumuToggle(satis)}
-                              disabled={onayYukleniyor}
-                              title="Tıklayarak değiştir"
-                            >
-                              {onayYukleniyor ? '...' : isOnaylandi ? 'ONAYLI' : 'BEKLEMEDE'}
-                            </button>
-                          ) : (
-                            <span className={`status-badge ${isOnaylandi ? 'approved' : 'pending'}`}>
-                              {isOnaylandi ? 'ONAYLI' : 'BEKLEMEDE'}
+                      return (
+                        <tr key={satis.id}>
+                          <td><strong>{satis.satisKodu}</strong></td>
+                          <td>{getSubeByKod(satis.subeKodu)?.ad}</td>
+                          <td>{satis.musteriBilgileri?.isim || '-'}</td>
+                          <td><strong>{formatPrice(satis.toplamTutar)}</strong></td>
+                          <td>
+                            <span className={`kar-zarar-badge ${kar >= 0 ? 'kar' : 'zarar'}`}>
+                              {kar >= 0 ? '+' : ''}{formatPrice(kar)}
                             </span>
-                          )}
-                        </td>
+                          </td>
+                          <td>{formatDate(satis.tarih)}</td>
+                          <td>{formatDate(satis.teslimatTarihi)}</td>
 
-                        {/* ÖDEME - Admin tıklayabilir */}
-                        <td>
-                          {isAdmin ? (
-                            <button
-                              className={`status-badge clickable ${isOdendi ? 'odendi' : 'acik-hesap'}`}
-                              onClick={() => odemeDurumuToggle(satis)}
-                              disabled={odemeYukleniyor}
-                              title="Tıklayarak değiştir"
-                            >
-                              {odemeYukleniyor ? '...' : isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
-                            </button>
-                          ) : (
-                            <span className={`status-badge ${isOdendi ? 'odendi' : 'acik-hesap'}`}>
-                              {isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
-                            </span>
-                          )}
-                        </td>
+                          <td>
+                            {isAdmin ? (
+                              <button
+                                className={`status-badge clickable ${isOnaylandi ? 'approved' : 'pending'}`}
+                                onClick={() => onayDurumuToggle(satis)}
+                                disabled={onayYukleniyor}
+                                title="Tıklayarak değiştir"
+                              >
+                                {onayYukleniyor ? '...' : isOnaylandi ? 'ONAYLI' : 'BEKLEMEDE'}
+                              </button>
+                            ) : (
+                              <span className={`status-badge ${isOnaylandi ? 'approved' : 'pending'}`}>
+                                {isOnaylandi ? 'ONAYLI' : 'BEKLEMEDE'}
+                              </span>
+                            )}
+                          </td>
 
-                        <td>
-                          <button
-                            onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
-                            className="btn-view"
-                          >
-                            GÖRÜNTÜLE
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          <td>
+                            {isAdmin ? (
+                              <button
+                                className={`status-badge clickable ${isOdendi ? 'odendi' : 'acik-hesap'}`}
+                                onClick={() => odemeDurumuToggle(satis)}
+                                disabled={odemeYukleniyor}
+                                title="Tıklayarak değiştir"
+                              >
+                                {odemeYukleniyor ? '...' : isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
+                              </button>
+                            ) : (
+                              <span className={`status-badge ${isOdendi ? 'odendi' : 'acik-hesap'}`}>
+                                {isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
+                              </span>
+                            )}
+                          </td>
+
+                          <td>
+                            <div className="action-buttons">
+                              <button
+                                onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
+                                className="btn-view"
+                              >
+                                GÖRÜNTÜLE
+                              </button>
+                              <button
+                                onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)}
+                                className="btn-edit"
+                              >
+                                DÜZENLE
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* SAYFALAMA */}
+              {renderPagination()}
+            </>
           )}
         </div>
       </div>

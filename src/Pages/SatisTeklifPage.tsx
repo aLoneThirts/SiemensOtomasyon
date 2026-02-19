@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { collection, addDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import {
   SatisTeklifFormu,
   MusteriBilgileri,
@@ -69,6 +70,7 @@ const SatisTeklifPage: React.FC = () => {
   const [seciliSatirIndex, setSeciliSatirIndex] = useState<number | null>(null);
   const [aramaMetni, setAramaMetni] = useState('');
   const [satisKodu, setSatisKodu] = useState('');
+  
 
   // ========== YARDIMCI FONKSİYONLAR ==========
 
@@ -156,6 +158,40 @@ const SatisTeklifPage: React.FC = () => {
     setFaturaNoHata(false);
     setFatura(value.trim() !== ''); // Otomatik tik
   };
+
+// ========== SatisKodu ========== 
+const satisKoduOlustur = async (): Promise<string> => {
+  const sube = getSubeByKod(currentUser!.subeKodu);
+  if (!sube) return '';
+
+  try {
+    // Counter document'i al
+    const counterRef = doc(db, `subeler/${sube.dbPath}/counters`, 'satisCounter');
+    const counterDoc = await getDoc(counterRef);
+
+    let newNumber = 1;
+
+    if (counterDoc.exists()) {
+      const data = counterDoc.data();
+      newNumber = (data.currentNumber || 0) + 1;
+    }
+
+    // Counter'ı güncelle
+    await setDoc(counterRef, {
+      currentNumber: newNumber,
+      lastUpdated: new Date()
+    });
+
+    // 3 haneli format: 001, 002, 003...
+    const satisKodu = newNumber.toString().padStart(3, '0');
+    
+    return satisKodu;
+  } catch (error) {
+    console.error('Satış kodu oluşturulamadı:', error);
+    // Hata durumunda timestamp kullan
+    return Date.now().toString().slice(-3);
+  }
+};
 
   // ========== SERVİS NOTU ==========
 
@@ -246,8 +282,17 @@ const SatisTeklifPage: React.FC = () => {
   // ========== YEŞİL ETİKET ==========
 
   const yesilEtiketEkle = () => {
-    setYesilEtiketler(prev => [...prev, { id: Date.now().toString(), urunKodu: '', tutar: 0 }]);
-  };
+  setYesilEtiketler(prev => [
+    ...prev,
+    { 
+      id: Date.now().toString(), 
+      urunKodu: '',
+      ad: '',
+      alisFiyati: 0,
+      tutar: 0
+    }
+  ]);
+};
 
   const yesilEtiketSil = (index: number) => {
     setYesilEtiketler(prev => prev.filter((_, i) => i !== index));
@@ -484,16 +529,10 @@ const SatisTeklifPage: React.FC = () => {
               <input type="text" value={musteriTemsilcisi} onChange={e => setMusteriTemsilcisi(e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Müşteri Temsilcisi Tel</label>
-              <input type="text" value={musteriTemsilcisiTel} onChange={e => setMusteriTemsilcisiTel(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label>Tarih</label>
-              <input type="date" value={tarih} onChange={e => setTarih(e.target.value)} required />
-            </div>
-            <div className="form-group">
               <label>Teslimat Tarihi *</label>
               <input type="date" value={teslimatTarihi} onChange={e => setTeslimatTarihi(e.target.value)} required />
+            </div>
+            <div className="form-group">
             </div>
           </div>
         </div>
@@ -739,6 +778,49 @@ const SatisTeklifPage: React.FC = () => {
               <input type="number" min="0" step="0.01" value={havaleTutar} onChange={e => setHavaleTutar(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)} />
             </div>
           </div>
+          
+          {/* NOT ALANI */}
+          <div className="form-section">
+            <h2>Not Alanı</h2>
+            <div className="form-grid">
+              <div className="form-group">
+                <label>MARS No</label>
+                <input
+                  type="text"
+                  value={marsNo}
+                  onChange={(e) => setMarsNo(e.target.value)}
+                  placeholder="MARS numarası girin"
+                />
+              </div>
+              <div className="form-group">
+                <label>Fatura No</label>
+                <input
+                  type="text"
+                  value={faturaNo}
+                  onChange={(e) => setFaturaNo(e.target.value)}
+                  placeholder="Fatura numarası girin"
+                />
+              </div>
+              <div className="form-group">
+                <label>Teslimat Tarihi</label>
+                <input
+                  type="date"
+                  value={teslimatTarihi}
+                  onChange={(e) => setTeslimatTarihi(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Servis Notu</label>
+                <textarea
+                  value={servisNotu}
+                  onChange={(e) => setServisNotu(e.target.value)}
+                  placeholder="Servis notu girin"
+                  rows={3}
+                />
+              </div>
+            </div>
+          </div>
+
 
           {/* Kart Ödemeleri */}
           <div className="kart-odemeler-section">
