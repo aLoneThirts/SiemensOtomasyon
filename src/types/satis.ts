@@ -26,6 +26,7 @@ export interface KartOdeme {
   taksitSayisi: number; // 1 = Tek, 2-9 = taksit
   tutar: number;
   pesinat?: number;
+  kesintiOrani?: number; // % cinsinden kesinti oranı (örn: 1.5 → %1.5)
 }
 
 export interface Kampanya {
@@ -53,6 +54,20 @@ export enum OdemeYontemi {
 export enum OdemeDurumu {
   ODENDI = 'ÖDENDİ',
   ACIK_HESAP = 'AÇIK HESAP'
+}
+
+// 📌 Ödeme Sistemi Özeti
+// Kasaya Yansır → Sadece Peşin
+// Hesaba Geçer → Peşin + Havale + Kart NET (kesinti sonrası)
+// Açık Hesap   → Satış Tutarı - Hesaba Geçen
+export interface OdemeOzeti {
+  kasayaYansiran: number;       // Sadece peşin tutarı
+  kartBrutToplam: number;       // Kart ödemelerinin brüt toplamı
+  kartKesintiToplam: number;    // Toplam kart kesintisi
+  kartNetToplam: number;        // Kart NET toplamı (kesinti sonrası)
+  hesabaGecenToplam: number;    // Peşin + Havale + Kart NET
+  acikHesap: number;            // Satış Tutarı - Hesaba Geçen
+  odemeDurumuDetay: 'AÇIK_HESAP' | 'ÖDENDİ';
 }
 
 export interface SatisTeklifFormu {
@@ -85,6 +100,7 @@ export interface SatisTeklifFormu {
   kartOdemeler?: KartOdeme[];
   hesabaGecen?: string;
   odemeDurumu: OdemeDurumu; // ÖDENDİ veya AÇIK HESAP
+  odemeOzeti?: OdemeOzeti;  // 📌 Yeni ödeme sistemi özeti
   
   fatura: boolean;
   ileriTeslim: boolean;
@@ -155,7 +171,6 @@ export const TAKSIT_SECENEKLERI = [
   { label: '8', value: 8 },
   { label: '9', value: 9 }
 ];
-
 
 export interface SatisCounter {
   id: string;

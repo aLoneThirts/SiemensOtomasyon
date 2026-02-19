@@ -1,45 +1,58 @@
+export enum KasaHareketTipi {
+  NAKIT_SATIS = 'NAKİT SATIŞ',       // ✅ Kasaya GİRER (+)
+  KART        = 'KART',               // ❌ Kasaya yansımaz
+  HAVALE      = 'HAVALE',             // ❌ Kasaya yansımaz
+  GIDER       = 'GİDER',             // ✅ Kasadan ÇIKAR (-)
+  CIKIS       = 'ÇIKIŞ YAPILAN PARA',// ✅ Kasadan ÇIKAR (-)
+  DIGER       = 'DİĞER',             // ✅ Kasadan ÇIKAR (-)
+}
+
+export function kasayaYansiyor(tip: KasaHareketTipi): boolean {
+  return tip !== KasaHareketTipi.KART && tip !== KasaHareketTipi.HAVALE;
+}
+
+export function kasaYonu(tip: KasaHareketTipi): 'giris' | 'cikis' | 'yansimaz' {
+  if (tip === KasaHareketTipi.NAKIT_SATIS) return 'giris';
+  if (tip === KasaHareketTipi.KART || tip === KasaHareketTipi.HAVALE) return 'yansimaz';
+  return 'cikis';
+}
+
 export interface KasaHareket {
   id?: string;
-  tarih: Date;
-  saat: string;
   aciklama: string;
-  tutar: number; // Pozitif = gelir, negatif = gider
+  tutar: number;
   tip: KasaHareketTipi;
+  belgeNo?: string;
+  not?: string;
+  tarih: Date;
+  saat?: string;
   kullanici: string;
   kullaniciId: string;
   subeKodu: string;
-  belgeNo?: string;
-  not?: string;
 }
 
 export interface KasaGun {
   id?: string;
-  gun: string; // YYYY-MM-DD
+  gun: string;
   subeKodu: string;
-  acilisTarihi: Date;
-  kapanisTarihi?: Date;
+  acilisTarihi?: Date;
   acilisBakiyesi: number;
-  gunSonuBakiyesi?: number;
-  hareketler: KasaHareket[];
+  hareketler?: KasaHareket[];
   durum: 'ACIK' | 'KAPALI';
+  kapanisTarihi?: Date;
+
+  // Orijinal alanlar (korundu)
   toplamGelir: number;
   toplamGider: number;
   marketHarcamalari: number;
   digerGiderler: number;
-}
 
-export enum KasaHareketTipi {
-  GELIR = 'GELİR',
-  GIDER = 'GİDER',
-  MARKET = 'MARKET ALIŞVERİŞİ',
-  DIGER = 'DİĞER GİDER'
-}
+  // Yeni alanlar
+  nakitSatis: number;         // NAKİT SATIŞ toplamı → kasaya girer
+  kartSatis: number;          // KART toplamı → kasaya yansımaz
+  havaleSatis: number;        // HAVALE toplamı → kasaya yansımaz
+  cikisYapilanPara: number;   // ÇIKIŞ YAPILAN PARA → kasadan çıkar
 
-export interface KasaOzet {
-  gun: string;
-  acilis: number;
-  gelir: number;
-  gider: number;
-  market: number;
-  gunSonu: number;
+  // Gün sonu = Açılış + NakitSatış - Gider - Çıkış - Diğer
+  gunSonuBakiyesi: number;
 }

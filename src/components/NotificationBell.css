@@ -1,0 +1,251 @@
+/* ===== WRAPPER ===== */
+.nb-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ===== ZİL BUTONU ===== */
+.nb-zil {
+  position: relative;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+.nb-zil:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.nb-zil--aktif {
+  color: #0f766e;
+  animation: nb-shake 0.6s ease-in-out;
+}
+
+.nb-zil--aktif:hover {
+  background: #f0fdf4;
+}
+
+@keyframes nb-shake {
+  0%, 100% { transform: rotate(0deg); }
+  15%       { transform: rotate(15deg); }
+  30%       { transform: rotate(-12deg); }
+  45%       { transform: rotate(10deg); }
+  60%       { transform: rotate(-8deg); }
+  75%       { transform: rotate(5deg); }
+}
+
+/* ===== BADGE ===== */
+.nb-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  line-height: 1;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+/* ===== PANEL ===== */
+.nb-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 380px;
+  max-height: 520px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  z-index: 9999;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: nb-slide-in 0.2s ease-out;
+}
+
+@keyframes nb-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ===== PANEL HEADER ===== */
+.nb-panel-header {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.nb-panel-baslik {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.nb-panel-alt {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* ===== LİSTE ===== */
+.nb-liste {
+  overflow-y: auto;
+  flex: 1;
+  padding-bottom: 8px;
+}
+
+.nb-liste::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nb-liste::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* ===== GÜN BAŞLIĞI ===== */
+.nb-gun-baslik {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 18px 4px;
+}
+
+/* ===== BİLDİRİM ITEM ===== */
+.nb-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+  border-left: 3px solid transparent;
+}
+
+.nb-item:hover {
+  background: #f8fafc;
+}
+
+.nb-item--yeni {
+  background: #f0fdf4;
+  border-left-color: #16a34a;
+}
+
+.nb-item--yeni:hover {
+  background: #dcfce7;
+}
+
+.nb-item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.nb-item-icerik {
+  flex: 1;
+  min-width: 0;
+}
+
+.nb-item-baslik {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.nb-item-mesaj {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.nb-item-zaman {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.nb-item-nokta {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #16a34a;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.nb-item--tiklanabilir {
+  cursor: pointer;
+}
+
+.nb-item--tiklanabilir:hover .nb-item-baslik {
+  color: #0f766e;
+  text-decoration: underline;
+}
+
+/* Tıklanabilir olmayan item'lar için default cursor */
+.nb-item:not(.nb-item--tiklanabilir) {
+  cursor: default;
+}
+.nb-bos {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 20px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.nb-bos-icon {
+  font-size: 36px;
+  opacity: 0.5;
+}
+
+/* ===== MOBİL ===== */
+@media (max-width: 480px) {
+  .nb-panel {
+    width: 320px;
+    right: -60px;
+  }
+}

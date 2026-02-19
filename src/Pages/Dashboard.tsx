@@ -6,6 +6,7 @@ import { db } from '../firebase/config';
 import { SatisTeklifFormu, OdemeDurumu } from '../types/satis';
 import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
 import { UserRole } from '../types/user';
+import NotificationBell from '../components/NotificationBell';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -44,7 +45,6 @@ const Dashboard: React.FC = () => {
     filtreyiUygula();
   }, [satislar, secilenSube, zararOlanlar, durum, teslimTarihi, acikHesap, satisTarihi, satisKoduAra]);
 
-  // Filtre değiştiğinde sayfayı 1'e döndür
   useEffect(() => {
     setCurrentPage(1);
   }, [secilenSube, zararOlanlar, durum, teslimTarihi, acikHesap, satisTarihi, satisKoduAra]);
@@ -78,7 +78,6 @@ const Dashboard: React.FC = () => {
         }
       }
 
-      // En yeni tarihten başlayarak sırala
       satisListesi.sort((a: any, b: any) => {
         const tarihA = a.olusturmaTarihi?.toDate ? a.olusturmaTarihi.toDate() : new Date(a.olusturmaTarihi || 0);
         const tarihB = b.olusturmaTarihi?.toDate ? b.olusturmaTarihi.toDate() : new Date(b.olusturmaTarihi || 0);
@@ -103,24 +102,16 @@ const Dashboard: React.FC = () => {
 
   const filtreyiUygula = () => {
     let sonuc = [...satislar];
-
     if (secilenSube) sonuc = sonuc.filter(s => s.subeKodu === secilenSube);
-
     if (zararOlanlar === 'zarar') sonuc = sonuc.filter(s => (s.zarar ?? 0) < 0);
     else if (zararOlanlar === 'kar') sonuc = sonuc.filter(s => (s.zarar ?? 0) >= 0);
-
     if (durum === 'approved') sonuc = sonuc.filter(s => s.onayDurumu === true);
     else if (durum === 'pending') sonuc = sonuc.filter(s => s.onayDurumu === false);
-
     if (teslimTarihi) sonuc = sonuc.filter(s => dateToString(s.teslimatTarihi) === teslimTarihi);
-
     if (acikHesap === 'acik') sonuc = sonuc.filter(s => s.odemeDurumu === OdemeDurumu.ACIK_HESAP);
     else if (acikHesap === 'kapali') sonuc = sonuc.filter(s => s.odemeDurumu === OdemeDurumu.ODENDI);
-
     if (satisTarihi) sonuc = sonuc.filter(s => dateToString(s.tarih) === satisTarihi);
-
     if (satisKoduAra) sonuc = sonuc.filter(s => s.satisKodu?.toLowerCase().includes(satisKoduAra.toLowerCase()));
-
     setFiltreliSatislar(sonuc);
   };
 
@@ -129,11 +120,10 @@ const Dashboard: React.FC = () => {
     setTeslimTarihi(''); setAcikHesap('all'); setSatisTarihi(''); setSatisKoduAra('');
   };
 
-  // ===== SAYFALAMA FONKSİYONLARI =====
+  // ===== SAYFALAMA =====
   const totalPages = Math.ceil(filtreliSatislar.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentSatislar = filtreliSatislar.slice(startIndex, endIndex);
+  const currentSatislar = filtreliSatislar.slice(startIndex, startIndex + itemsPerPage);
 
   const goToPage = (page: number) => {
     setCurrentPage(page);
@@ -142,81 +132,25 @@ const Dashboard: React.FC = () => {
 
   const renderPagination = () => {
     if (totalPages <= 1) return null;
-
     const pages = [];
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    if (endPage - startPage + 1 < maxVisiblePages) startPage = Math.max(1, endPage - maxVisiblePages + 1);
 
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    // Önceki butonu
-    pages.push(
-      <button
-        key="prev"
-        onClick={() => goToPage(currentPage - 1)}
-        disabled={currentPage === 1}
-        className="pagination-btn pagination-arrow"
-      >
-        ← Önceki
-      </button>
-    );
-
-    // İlk sayfa
+    pages.push(<button key="prev" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="pagination-btn pagination-arrow">← Önceki</button>);
     if (startPage > 1) {
-      pages.push(
-        <button key={1} onClick={() => goToPage(1)} className="pagination-btn">
-          1
-        </button>
-      );
-      if (startPage > 2) {
-        pages.push(<span key="dots1" className="pagination-dots">...</span>);
-      }
+      pages.push(<button key={1} onClick={() => goToPage(1)} className="pagination-btn">1</button>);
+      if (startPage > 2) pages.push(<span key="dots1" className="pagination-dots">...</span>);
     }
-
-    // Sayfa numaraları
     for (let i = startPage; i <= endPage; i++) {
-      pages.push(
-        <button
-          key={i}
-          onClick={() => goToPage(i)}
-          className={`pagination-btn ${currentPage === i ? 'active' : ''}`}
-        >
-          {i}
-        </button>
-      );
+      pages.push(<button key={i} onClick={() => goToPage(i)} className={`pagination-btn ${currentPage === i ? 'active' : ''}`}>{i}</button>);
     }
-
-    // Son sayfa
     if (endPage < totalPages) {
-      if (endPage < totalPages - 1) {
-        pages.push(<span key="dots2" className="pagination-dots">...</span>);
-      }
-      pages.push(
-        <button
-          key={totalPages}
-          onClick={() => goToPage(totalPages)}
-          className="pagination-btn"
-        >
-          {totalPages}
-        </button>
-      );
+      if (endPage < totalPages - 1) pages.push(<span key="dots2" className="pagination-dots">...</span>);
+      pages.push(<button key={totalPages} onClick={() => goToPage(totalPages)} className="pagination-btn">{totalPages}</button>);
     }
-
-    // Sonraki butonu
-    pages.push(
-      <button
-        key="next"
-        onClick={() => goToPage(currentPage + 1)}
-        disabled={currentPage === totalPages}
-        className="pagination-btn pagination-arrow"
-      >
-        Sonraki →
-      </button>
-    );
-
+    pages.push(<button key="next" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="pagination-btn pagination-arrow">Sonraki →</button>);
     return <div className="pagination-container">{pages}</div>;
   };
 
@@ -228,10 +162,7 @@ const Dashboard: React.FC = () => {
     setGuncellemeyorum(satis.id);
     try {
       const yeniDurum = !satis.onayDurumu;
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
-        onayDurumu: yeniDurum,
-        guncellemeTarihi: new Date()
-      });
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { onayDurumu: yeniDurum, guncellemeTarihi: new Date() });
       setSatislar(prev => prev.map(s => s.id === satis.id ? { ...s, onayDurumu: yeniDurum } : s));
     } catch { alert('❌ Güncelleme başarısız!'); }
     finally { setGuncellemeyorum(null); }
@@ -245,10 +176,7 @@ const Dashboard: React.FC = () => {
     setGuncellemeyorum(satis.id + '_odeme');
     try {
       const yeniDurum = satis.odemeDurumu === OdemeDurumu.ODENDI ? OdemeDurumu.ACIK_HESAP : OdemeDurumu.ODENDI;
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
-        odemeDurumu: yeniDurum,
-        guncellemeTarihi: new Date()
-      });
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { odemeDurumu: yeniDurum, guncellemeTarihi: new Date() });
       setSatislar(prev => prev.map(s => s.id === satis.id ? { ...s, odemeDurumu: yeniDurum } : s));
     } catch { alert('❌ Güncelleme başarısız!'); }
     finally { setGuncellemeyorum(null); }
@@ -259,12 +187,9 @@ const Dashboard: React.FC = () => {
     catch (error) { console.error('Çıkış yapılamadı:', error); }
   };
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('tr-TR', {
-      style: 'currency', currency: 'TRY',
-      minimumFractionDigits: 0, maximumFractionDigits: 0
-    }).format(price);
-  };
+  const formatPrice = (price: number) => new Intl.NumberFormat('tr-TR', {
+    style: 'currency', currency: 'TRY', minimumFractionDigits: 0, maximumFractionDigits: 0
+  }).format(price);
 
   const formatDate = (date: any) => {
     if (!date) return '';
@@ -330,8 +255,13 @@ const Dashboard: React.FC = () => {
 
       {/* SAĞ ANA İÇERİK */}
       <div className="main-content">
+
+        {/* ===== HEADER — Satış Listesi + 🔔 ZİL ===== */}
         <header className="main-header">
           <h2 className="page-title">Satış Listesi</h2>
+          <div className="header-actions">
+            <NotificationBell />
+          </div>
         </header>
 
         <div className="content-wrapper">
@@ -468,7 +398,6 @@ const Dashboard: React.FC = () => {
                           </td>
                           <td>{formatDate(satis.tarih)}</td>
                           <td>{formatDate(satis.teslimatTarihi)}</td>
-
                           <td>
                             {isAdmin ? (
                               <button
@@ -485,7 +414,6 @@ const Dashboard: React.FC = () => {
                               </span>
                             )}
                           </td>
-
                           <td>
                             {isAdmin ? (
                               <button
@@ -502,21 +430,10 @@ const Dashboard: React.FC = () => {
                               </span>
                             )}
                           </td>
-
                           <td>
                             <div className="action-buttons">
-                              <button
-                                onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
-                                className="btn-view"
-                              >
-                                GÖRÜNTÜLE
-                              </button>
-                              <button
-                                onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)}
-                                className="btn-edit"
-                              >
-                                DÜZENLE
-                              </button>
+                              <button onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)} className="btn-view">GÖRÜNTÜLE</button>
+                              <button onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)} className="btn-edit">DÜZENLE</button>
                             </div>
                           </td>
                         </tr>
@@ -525,8 +442,6 @@ const Dashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-
-              {/* SAYFALAMA */}
               {renderPagination()}
             </>
           )}

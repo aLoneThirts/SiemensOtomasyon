@@ -443,14 +443,6 @@ const SatisDuzenlePage: React.FC = () => {
                   onChange={(e) => handleKartChange(index, 'tutar', e.target.value)}
                 />
               </div>
-              <div className="form-group">
-                <label>Peşinat</label>
-                <input
-                  type="number"
-                  value={kart.pesinat || 0}
-                  onChange={(e) => handleKartChange(index, 'pesinat', e.target.value)}
-                />
-              </div>
               <button type="button" onClick={() => kartSil(index)} className="btn-remove">
                 Sil
               </button>

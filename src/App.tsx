@@ -78,6 +78,8 @@ function App() {
 
     <Route path="/satis-duzenle/:subeKodu/:id" element={<SatisDuzenlePage />} />
 
+    <Route path="/admin" element={<AdminPanel />} />
+
           <Route path="/" element={<Navigate to="/login" />} />
         </Routes>
       </AuthProvider>
