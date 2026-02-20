@@ -83,6 +83,9 @@ export interface SatisTeklifFormu {
   teslimatTarihi: Date;
   
   // Notlar
+  // Mevcut alanlara ekle
+  yeniMarsNo?: string;
+  yeniTeslimatTarihi?: any;
   marsNo?: string; // 2026 ile başlayan 10 haneli
   magaza?: string;
   faturaNo: string; // ZORUNLU!
@@ -113,6 +116,9 @@ export interface SatisTeklifFormu {
   olusturanKullanici: string;
   olusturmaTarihi: Date;
   guncellemeTarihi: Date;
+
+  marsGirisleri?: MarsGirisi[];   // ← bunu ekle
+
 }
 
 export interface BekleyenUrun {
@@ -183,3 +189,9 @@ export enum SatisStatusu {
   ONAYLANDI = 'ONAYLANDI',
   KILIT = 'KILIT'
 }
+export interface MarsGirisi {
+  marsNo: string;
+  teslimatTarihi: string;
+  etiket: string;
+}
+

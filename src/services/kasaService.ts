@@ -1,11 +1,40 @@
-import { collection, doc, getDocs, addDoc, updateDoc, query, where, orderBy, getDoc, limit } from 'firebase/firestore';
+import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, getDoc, limit } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { KasaGun, KasaHareket, KasaHareketTipi, kasayaYansiyor } from '../types/kasa';
+import { KasaGun, KasaHareket, KasaHareketTipi } from '../types/kasa';
 
-// Bugünün tarihini YYYY-MM-DD formatında al
+// Mükerrer oluşturma engellemek için kilit
+let kasaGunOlusturuluyor = false;
+
+// Bugünün tarihini YYYY-MM-DD formatında al (lokal saat - UTC değil!)
 export const getBugununTarihi = (): string => {
   const date = new Date();
-  return date.toISOString().split('T')[0];
+  const yil = date.getFullYear();
+  const ay  = String(date.getMonth() + 1).padStart(2, '0');
+  const gun = String(date.getDate()).padStart(2, '0');
+  return yil + '-' + ay + '-' + gun;
+};
+
+// Belirli bir gün için TEK kayıt bırak, mükerrerlerini sil
+const tekKayitBirak = async (subeKodu: string, gunStr: string): Promise<KasaGun | null> => {
+  const kasaRef = collection(db, `subeler/${subeKodu}/kasa`);
+  const q = query(kasaRef, where('gun', '==', gunStr));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+
+  if (snap.docs.length > 1) {
+    // En fazla hareketi olan kaydı koru, diğerlerini sil
+    const sorted = snap.docs
+      .map(d => ({ id: d.id, data: d.data() as KasaGun }))
+      .sort((a, b) => ((b.data.hareketler?.length ?? 0) - (a.data.hareketler?.length ?? 0)));
+
+    for (let i = 1; i < sorted.length; i++) {
+      await deleteDoc(doc(db, `subeler/${subeKodu}/kasa/${sorted[i].id}`));
+      console.log(`🗑️ Mükerrer silindi: ${gunStr} - ${sorted[i].id}`);
+    }
+    return { id: sorted[0].id, ...sorted[0].data };
+  }
+
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as KasaGun;
 };
 
 // Bugünün kasa gününü getir veya yoksa oluştur
@@ -14,60 +43,98 @@ export const getBugununKasaGunu = async (subeKodu: string, kullanici: string): P
     const bugun = getBugununTarihi();
     const kasaRef = collection(db, `subeler/${subeKodu}/kasa`);
 
-    // Bugüne ait kasa günü var mı?
-    const q = query(kasaRef, where('gun', '==', bugun));
-    const snapshot = await getDocs(q);
-
-    if (!snapshot.empty) {
-      const docSnap = snapshot.docs[0];
-      return { id: docSnap.id, ...docSnap.data() } as KasaGun;
-    } else {
-      // Dünün kasa gününü bul
-      const dun = new Date();
-      dun.setDate(dun.getDate() - 1);
-      const dunStr = dun.toISOString().split('T')[0];
-
-      const dunQ = query(kasaRef, where('gun', '==', dunStr));
-      const dunSnapshot = await getDocs(dunQ);
-
-      let acilisBakiyesi = 0;
-      if (!dunSnapshot.empty) {
-        const dunDoc = dunSnapshot.docs[0];
-        const dunData = dunDoc.data() as KasaGun;
-        // Dünün gün sonu → bugün açılış
-        acilisBakiyesi = dunData.gunSonuBakiyesi || 0;
-
-        await updateDoc(doc(db, `subeler/${subeKodu}/kasa/${dunDoc.id}`), {
-          durum: 'KAPALI',
-          kapanisTarihi: new Date()
-        });
-      }
-
-      // Yeni gün oluştur
-      const yeniGun: Omit<KasaGun, 'id'> = {
-        gun: bugun,
-        subeKodu,
-        acilisTarihi: new Date(),
-        acilisBakiyesi,
-        hareketler: [],
-        durum: 'ACIK',
-        // Orijinal alanlar
-        toplamGelir: 0,
-        toplamGider: 0,
-        marketHarcamalari: 0,
-        digerGiderler: 0,
-        // Yeni alanlar
-        nakitSatis: 0,
-        kartSatis: 0,
-        havaleSatis: 0,
-        cikisYapilanPara: 0,
-        gunSonuBakiyesi: acilisBakiyesi,
-      };
-
-      const docRef = await addDoc(kasaRef, yeniGun);
-      return { id: docRef.id, ...yeniGun };
+    // 1) Bugüne ait kasa günü var mı? Mükerrer varsa temizle
+    const bugunKayit = await tekKayitBirak(subeKodu, bugun);
+    if (bugunKayit) {
+      return bugunKayit;
     }
+
+    // 2) Kilit - StrictMode çift çağrımını engelle
+    if (kasaGunOlusturuluyor) {
+      console.log('⏳ Bekleniyor...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const tekrar = await tekKayitBirak(subeKodu, bugun);
+      if (tekrar) return tekrar;
+    }
+
+    kasaGunOlusturuluyor = true;
+
+    // 3) Son kapatılan günün bakiyesini al (en son tarihli KAPALI kayıt)
+    const kapaliQ = query(
+      kasaRef,
+      where('durum', '==', 'KAPALI'),
+      orderBy('gun', 'desc'),
+      limit(10)
+    );
+    const kapaliSnap = await getDocs(kapaliQ);
+
+    let acilisBakiyesi = 0;
+
+    if (!kapaliSnap.empty) {
+      // Bugünden önceki en son kapalı günü bul
+      const oncekiGunler = kapaliSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as KasaGun))
+        .filter(g => g.gun < bugun)
+        .sort((a, b) => b.gun.localeCompare(a.gun)); // en yeni önce
+
+      if (oncekiGunler.length > 0) {
+        // Aynı gün için mükerrer varsa en yüksek bakiyeli değil,
+        // en fazla hareketi olan kaydın gün sonunu al
+        const sonGunStr = oncekiGunler[0].gun;
+        const sonGunKayit = await tekKayitBirak(subeKodu, sonGunStr);
+        acilisBakiyesi = sonGunKayit?.gunSonuBakiyesi ?? 0;
+        console.log(`💰 Devir: ${sonGunStr} gün sonu ${acilisBakiyesi} TL → bugün açılış`);
+      }
+    } else {
+      // KAPALI gün yok, açık geçmiş günlere bak
+      const acikQ = query(kasaRef, where('durum', '==', 'ACIK'));
+      const acikSnap = await getDocs(acikQ);
+      const acikGunler = acikSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as KasaGun))
+        .filter(g => g.gun < bugun)
+        .sort((a, b) => b.gun.localeCompare(a.gun));
+
+      if (acikGunler.length > 0) {
+        const sonGunStr = acikGunler[0].gun;
+        const sonGunKayit = await tekKayitBirak(subeKodu, sonGunStr);
+        acilisBakiyesi = sonGunKayit?.gunSonuBakiyesi ?? 0;
+
+        // Açık kalan geçmiş günleri kapat
+        for (const g of acikGunler) {
+          await updateDoc(doc(db, `subeler/${subeKodu}/kasa/${g.id}`), {
+            durum: 'KAPALI',
+            kapanisTarihi: new Date(),
+          });
+        }
+      }
+    }
+
+    // 4) Bugün için yeni gün oluştur
+    const yeniGun: Omit<KasaGun, 'id'> = {
+      gun: bugun,
+      subeKodu,
+      acilisTarihi: new Date(),
+      acilisBakiyesi,
+      hareketler: [],
+      durum: 'ACIK',
+      toplamGelir: 0,
+      toplamGider: 0,
+      marketHarcamalari: 0,
+      digerGiderler: 0,
+      nakitSatis: 0,
+      kartSatis: 0,
+      havaleSatis: 0,
+      cikisYapilanPara: 0,
+      gunSonuBakiyesi: acilisBakiyesi,
+    };
+
+    const docRef = await addDoc(kasaRef, yeniGun);
+    console.log(`✅ Yeni kasa günü: ${bugun}, Açılış: ${acilisBakiyesi} TL`);
+    kasaGunOlusturuluyor = false;
+    return { id: docRef.id, ...yeniGun };
+
   } catch (error) {
+    kasaGunOlusturuluyor = false;
     console.error('Kasa günü alınamadı:', error);
     return null;
   }
@@ -92,7 +159,6 @@ export const kasaHareketEkle = async (
 
     const kasaGunData = kasaGunDoc.data() as KasaGun;
 
-    // Saat ekle
     const now = new Date();
     const saat = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
@@ -107,55 +173,42 @@ export const kasaHareketEkle = async (
 
     const yeniHareketler = [...(kasaGunData.hareketler || []), yeniHareket];
 
-    // Mevcut toplamlar
-    let toplamGelir        = kasaGunData.toplamGelir || 0;
-    let toplamGider        = kasaGunData.toplamGider || 0;
-    let marketHarcamalari  = kasaGunData.marketHarcamalari || 0;
-    let digerGiderler      = kasaGunData.digerGiderler || 0;
-    let nakitSatis         = kasaGunData.nakitSatis || 0;
-    let kartSatis          = kasaGunData.kartSatis || 0;
-    let havaleSatis        = kasaGunData.havaleSatis || 0;
-    let cikisYapilanPara   = kasaGunData.cikisYapilanPara || 0;
+    let toplamGelir       = kasaGunData.toplamGelir || 0;
+    let toplamGider       = kasaGunData.toplamGider || 0;
+    let marketHarcamalari = kasaGunData.marketHarcamalari || 0;
+    let digerGiderler     = kasaGunData.digerGiderler || 0;
+    let nakitSatis        = kasaGunData.nakitSatis || 0;
+    let kartSatis         = kasaGunData.kartSatis || 0;
+    let havaleSatis       = kasaGunData.havaleSatis || 0;
+    let cikisYapilanPara  = kasaGunData.cikisYapilanPara || 0;
 
     const tutar = Math.abs(hareket.tutar);
 
     switch (hareket.tip) {
       case KasaHareketTipi.NAKIT_SATIS:
-        // Kasaya GİRER
         nakitSatis  += tutar;
         toplamGelir += tutar;
         break;
-
       case KasaHareketTipi.KART:
-        // Kasaya YANSIMAZ - sadece kayıt
         kartSatis += tutar;
         break;
-
       case KasaHareketTipi.HAVALE:
-        // Kasaya YANSIMAZ - sadece kayıt
         havaleSatis += tutar;
         break;
-
       case KasaHareketTipi.GIDER:
         toplamGider += tutar;
         break;
-
       case KasaHareketTipi.CIKIS:
-        // ÇIKIŞ YAPILAN PARA - kasadan çıkar
         cikisYapilanPara += tutar;
         toplamGider      += tutar;
         break;
-
       case KasaHareketTipi.DIGER:
-        toplamGider  += tutar;
-        digerGiderler+= tutar;
+        toplamGider   += tutar;
+        digerGiderler += tutar;
         break;
     }
 
-    // Gün sonu = Açılış + NakitSatış - Gider - Çıkış - Diğer
-    // (toplamGider zaten Gider+Çıkış+Diğer içeriyor)
-    const gunSonuBakiyesi =
-      (kasaGunData.acilisBakiyesi || 0) + nakitSatis - toplamGider;
+    const gunSonuBakiyesi = (kasaGunData.acilisBakiyesi || 0) + nakitSatis - toplamGider;
 
     await updateDoc(kasaGunRef, {
       hareketler: yeniHareketler,
@@ -177,7 +230,7 @@ export const kasaHareketEkle = async (
   }
 };
 
-// Geçmiş kasa günlerini getir - orijinal ile aynı
+// Geçmiş kasa günlerini getir
 export const getKasaGecmisi = async (subeKodu: string, limitGun: number = 30): Promise<KasaGun[]> => {
   try {
     const kasaRef = collection(db, `subeler/${subeKodu}/kasa`);

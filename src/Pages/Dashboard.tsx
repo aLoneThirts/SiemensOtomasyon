@@ -151,13 +151,14 @@ const Dashboard: React.FC = () => {
       return new Date(d);
     };
 
-    const bugunSatislar = satislar.filter(s => {
-      const t = toDate(s.teslimatTarihi); t.setHours(0, 0, 0, 0);
+   const bugunSatislar = satislar.filter(s => {
+      const tarih = s.yeniTeslimatTarihi || s.teslimatTarihi; // yeni varsa onu kullan
+      const t = toDate(tarih); t.setHours(0, 0, 0, 0);
       return t.getTime() === bugun.getTime() && s.teslimEdildiMi !== true;
     });
-
     const yarinSatislar = satislar.filter(s => {
-      const t = toDate(s.teslimatTarihi); t.setHours(0, 0, 0, 0);
+      const tarih = s.yeniTeslimatTarihi || s.teslimatTarihi; // yeni varsa onu kullan
+      const t = toDate(tarih); t.setHours(0, 0, 0, 0);
       return t.getTime() === yarin.getTime() && s.teslimEdildiMi !== true;
     });
 
@@ -523,7 +524,12 @@ const Dashboard: React.FC = () => {
                         </span>
                       </td>
                       <td>{formatDate(satis.tarih)}</td>
-                      <td>{formatDate(satis.teslimatTarihi)}</td>
+                     <td>
+                      {satis.yeniTeslimatTarihi
+                        ? formatDate(satis.yeniTeslimatTarihi)
+                        : formatDate(satis.teslimatTarihi)
+                      }
+                    </td>
                       <td>
                         {isAdmin ? (
                           <button
@@ -555,14 +561,14 @@ const Dashboard: React.FC = () => {
                         )}
                       </td>
                       <td>
-                        <div className="action-buttons">
-                          <button onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)} className="btn-view">
-                            <i className="fas fa-eye"></i>
-                          </button>
-                          <button onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)} className="btn-edit">
-                            <i className="fas fa-pen"></i>
-                          </button>
-                        </div>
+                      <div className="action-buttons">
+                        <button onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)} className="btn-view">
+                          <i className="fas fa-eye"></i> Detay
+                        </button>
+                        <button onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)} className="btn-edit">
+                          <i className="fas fa-pen"></i> Düzenle
+                        </button>
+                      </div>
                       </td>
                     </tr>
                   );

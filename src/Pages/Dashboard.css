@@ -368,7 +368,12 @@
    ACTION BUTTONS
    ============================================= */
 
-.action-buttons { display: flex; gap: 5px; justify-content: center; align-items: center; }
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 
 .btn-view, .btn-edit {
   width: 32px; height: 32px; border: none; border-radius: 8px;

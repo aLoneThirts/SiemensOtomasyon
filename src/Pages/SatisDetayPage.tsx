@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, Kampanya, YesilEtiket, KartOdeme } from '../types/satis';
 import { getSubeByKod } from '../types/sube';
@@ -13,6 +13,12 @@ const SatisDetayPage: React.FC = () => {
   const [satis, setSatis] = useState<SatisTeklifFormu | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Düzenleme state'leri
+  const [duzenlemeAcik, setDuzenlemeAcik] = useState(false);
+  const [yeniMarsNo, setYeniMarsNo] = useState('');
+  const [yeniTeslimatTarihi, setYeniTeslimatTarihi] = useState('');
+  const [kaydediliyor, setKaydediliyor] = useState(false);
+
   useEffect(() => {
     fetchSatisDetay();
   }, [id]);
@@ -24,7 +30,10 @@ const SatisDetayPage: React.FC = () => {
       if (!sube) { console.error('Şube bulunamadı:', subeKodu); return; }
       const satisDoc = await getDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!));
       if (satisDoc.exists()) {
-        setSatis({ id: satisDoc.id, ...satisDoc.data() } as SatisTeklifFormu);
+        const data = { id: satisDoc.id, ...satisDoc.data() } as SatisTeklifFormu;
+        setSatis(data);
+        setYeniMarsNo(data.yeniMarsNo || '');
+        setYeniTeslimatTarihi(data.yeniTeslimatTarihi ? formatDateForInput(data.yeniTeslimatTarihi) : '');
       }
     } catch (error) {
       console.error('Satış detayı yüklenemedi:', error);
@@ -46,6 +55,14 @@ const SatisDetayPage: React.FC = () => {
     } catch { return '-'; }
   };
 
+  const formatDateForInput = (date: any) => {
+    if (!date) return '';
+    try {
+      const d = date.toDate ? date.toDate() : new Date(date);
+      return d.toISOString().split('T')[0];
+    } catch { return ''; }
+  };
+
   const toplamMaliyetHesapla = () => {
     if (!satis?.urunler) return 0;
     const alisToplam = satis.urunler.reduce((sum, urun) => sum + (urun.adet * urun.alisFiyati), 0);
@@ -55,6 +72,34 @@ const SatisDetayPage: React.FC = () => {
 
   const yesilEtiketToplamHesapla = () =>
     satis?.yesilEtiketler?.reduce((sum, etiket) => sum + etiket.tutar, 0) || 0;
+
+  const kaydet = async () => {
+    if (!satis) return;
+    try {
+      setKaydediliyor(true);
+      const sube = getSubeByKod(subeKodu as any);
+      if (!sube) return;
+
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!), {
+        yeniMarsNo: yeniMarsNo || null,
+        yeniTeslimatTarihi: yeniTeslimatTarihi ? new Date(yeniTeslimatTarihi) : null,
+      });
+
+      setSatis(prev => prev ? {
+        ...prev,
+        yeniMarsNo: yeniMarsNo || undefined,
+        yeniTeslimatTarihi: yeniTeslimatTarihi ? new Date(yeniTeslimatTarihi) : undefined,
+      } : prev);
+
+      setDuzenlemeAcik(false);
+      alert('Kaydedildi!');
+    } catch (error) {
+      console.error('Kaydetme hatası:', error);
+      alert('Kaydetme sırasında hata oluştu!');
+    } finally {
+      setKaydediliyor(false);
+    }
+  };
 
   const printBtn = (
     <button onClick={() => window.print()} className="btn-print no-print">
@@ -119,15 +164,71 @@ const SatisDetayPage: React.FC = () => {
               <div className="satir-item">ADRES: {satis.musteriBilgileri?.adres}</div>
             </div>
             <div className="sag-kolon">
-              <div className="satir-item">MARS NO: {satis.marsNo || '-'}</div>
+
+              {/* MARS NO: ESKİ - YENİ */}
+              <div className="satir-item">
+                MARS NO: {satis.marsNo || '-'}
+                {satis.yeniMarsNo && (
+                  <span className="yeni-deger-inline"> - YENİ: {satis.yeniMarsNo}</span>
+                )}
+              </div>
+
               <div className="satir-item">MAĞAZA: {satis.magaza || '-'}</div>
               <div className="satir-item">FATURA NO: {satis.faturaNo || '-'}</div>
               <div className="satir-item">SERVİS: {satis.servisNotu || '-'}</div>
               <div className="satir-item">TESLİM EDİLDİ Mİ?: {satis.teslimEdildiMi ? 'EVET' : 'HAYIR'}</div>
-              <div className="satir-item">TESLİMAT TARİHİ: {formatDate(satis.teslimatTarihi)}</div>
+
+              {/* TESLİMAT TARİHİ: ESKİ - YENİ */}
+              <div className="satir-item">
+                TESLİMAT TARİHİ: {formatDate(satis.teslimatTarihi)}
+                {satis.yeniTeslimatTarihi && (
+                  <span className="yeni-deger-inline"> - YENİ: {formatDate(satis.yeniTeslimatTarihi)}</span>
+                )}
+              </div>
+
             </div>
           </div>
         </div>
+
+        {/* DÜZENLEME BUTONU */}
+        <div className="no-print" style={{ marginBottom: '12px' }}>
+          <button
+            className="btn-duzenle"
+            onClick={() => setDuzenlemeAcik(!duzenlemeAcik)}
+          >
+            <i className="fas fa-edit"></i>{' '}
+            {duzenlemeAcik ? 'Düzenlemeyi Kapat' : 'Mars No / Teslimat Tarihi Düzenle'}
+          </button>
+        </div>
+
+        {/* DÜZENLEME PANELİ */}
+        {duzenlemeAcik && (
+          <div className="no-print duzenle-panel">
+            <h4>Yeni Bilgileri Gir</h4>
+            <div className="duzenle-form">
+              <div className="form-grup">
+                <label>Yeni Mars No</label>
+                <input
+                  type="text"
+                  value={yeniMarsNo}
+                  onChange={e => setYeniMarsNo(e.target.value)}
+                  placeholder="Yeni mars no girin..."
+                />
+              </div>
+              <div className="form-grup">
+                <label>Yeni Teslimat Tarihi</label>
+                <input
+                  type="date"
+                  value={yeniTeslimatTarihi}
+                  onChange={e => setYeniTeslimatTarihi(e.target.value)}
+                />
+              </div>
+              <button className="btn-kaydet" onClick={kaydet} disabled={kaydediliyor}>
+                {kaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 2. ÜRÜNLER + KAMPANYALAR */}
         <div className="ana-bolum">

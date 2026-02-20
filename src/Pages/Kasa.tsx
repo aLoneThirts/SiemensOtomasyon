@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { KasaGun, KasaHareketTipi, kasayaYansiyor, kasaYonu } from '../types/kasa';
+import { KasaGun, KasaHareket, KasaHareketTipi, kasayaYansiyor, kasaYonu } from '../types/kasa';
 import { getBugununKasaGunu, kasaHareketEkle, getKasaGecmisi } from '../services/kasaService';
-import Layout from '../components/Layout';
 import './Kasa.css';
 
 type FiltreTip = 'tumzamanlar' | '7gun' | '30gun' | 'buay';
@@ -12,19 +11,20 @@ const Kasa: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
-  const [kasaGun, setKasaGun] = useState<KasaGun | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [gecmis, setGecmis] = useState<KasaGun[]>([]);
-  const [gecmisGorunuyor, setGecmisGorunuyor] = useState(false);
-  const [filtre, setFiltre] = useState<FiltreTip>('tumzamanlar');
+  const [kasaGun, setKasaGun]                     = useState<KasaGun | null>(null);
+  const [loading, setLoading]                     = useState(true);
+  const [gecmis, setGecmis]                       = useState<KasaGun[]>([]);
+  const [gecmisGorunuyor, setGecmisGorunuyor]     = useState(false);
+  const [filtre, setFiltre]                       = useState<FiltreTip>('tumzamanlar');
 
+  // Form state
   const [yeniHareketAciklama, setYeniHareketAciklama] = useState('');
-  const [yeniHareketTutar, setYeniHareketTutar] = useState<number>(0);
-  const [yeniHareketTip, setYeniHareketTip] = useState<KasaHareketTipi>(KasaHareketTipi.NAKIT_SATIS);
-  const [yeniHareketBelgeNo, setYeniHareketBelgeNo] = useState('');
-  const [yeniHareketNot, setYeniHareketNot] = useState('');
-  const [formHata, setFormHata] = useState('');
-  const [eklemeModu, setEklemeModu] = useState(false);
+  const [yeniHareketTutar, setYeniHareketTutar]       = useState<number>(0);
+  const [yeniHareketTip, setYeniHareketTip]           = useState<KasaHareketTipi>(KasaHareketTipi.NAKIT_SATIS);
+  const [yeniHareketBelgeNo, setYeniHareketBelgeNo]   = useState('');
+  const [yeniHareketNot, setYeniHareketNot]           = useState('');
+  const [formHata, setFormHata]                       = useState('');
+  const [eklemeModu, setEklemeModu]                   = useState(false);
 
   useEffect(() => {
     if (!currentUser) { navigate('/login'); return; }
@@ -48,12 +48,12 @@ const Kasa: React.FC = () => {
 
   const filtreliGecmis = (): KasaGun[] => {
     if (filtre === 'tumzamanlar') return gecmis;
-    const bugun = new Date(); bugun.setHours(0, 0, 0, 0);
+    const bugun = new Date(); bugun.setHours(0,0,0,0);
     return gecmis.filter(g => {
       const [y, m, d] = g.gun.split('-').map(Number);
       const tarih = new Date(y, m - 1, d);
-      if (filtre === '7gun')  { const s = new Date(bugun); s.setDate(s.getDate() - 7); return tarih >= s; }
-      if (filtre === '30gun') { const s = new Date(bugun); s.setDate(s.getDate() - 30); return tarih >= s; }
+      if (filtre === '7gun')  { const s = new Date(bugun); s.setDate(s.getDate()-7); return tarih >= s; }
+      if (filtre === '30gun') { const s = new Date(bugun); s.setDate(s.getDate()-30); return tarih >= s; }
       if (filtre === 'buay')  return tarih.getMonth() === bugun.getMonth() && tarih.getFullYear() === bugun.getFullYear();
       return true;
     });
@@ -68,15 +68,21 @@ const Kasa: React.FC = () => {
 
     try {
       const basarili = await kasaHareketEkle(
-        currentUser.subeKodu, kasaGun.id,
+        currentUser.subeKodu,
+        kasaGun.id,
         {
-          aciklama: yeniHareketAciklama, tutar: yeniHareketTutar,
-          tip: yeniHareketTip, belgeNo: yeniHareketBelgeNo || undefined,
-          not: yeniHareketNot || undefined, tarih: new Date(),
+          aciklama: yeniHareketAciklama,
+          tutar: yeniHareketTutar,
+          tip: yeniHareketTip,
+          belgeNo: yeniHareketBelgeNo || undefined,
+          not: yeniHareketNot || undefined,
+          tarih: new Date(),
           kullanici: `${currentUser.ad} ${currentUser.soyad}`,
-          kullaniciId: currentUser.uid || '', subeKodu: currentUser.subeKodu,
+          kullaniciId: currentUser.uid || '',
+          subeKodu: currentUser.subeKodu,
         },
-        `${currentUser.ad} ${currentUser.soyad}`, currentUser.uid || ''
+        `${currentUser.ad} ${currentUser.soyad}`,
+        currentUser.uid || ''
       );
 
       if (basarili) {
@@ -120,65 +126,73 @@ const Kasa: React.FC = () => {
     [KasaHareketTipi.DIGER]:       'diger',
   }[tip] ?? '');
 
-  const gecmisBtn = (
-    <button onClick={() => setGecmisGorunuyor(!gecmisGorunuyor)} className="kasa-gecmis-toggle-btn">
-      <i className={`fas ${gecmisGorunuyor ? 'fa-calendar-day' : 'fa-history'}`}></i>
-      {gecmisGorunuyor ? 'Günlük Kasa' : 'Geçmiş'}
-    </button>
-  );
-
   if (loading) {
-    return (
-      <Layout pageTitle="Kasa">
-        <div className="loading">Kasa yükleniyor...</div>
-      </Layout>
-    );
+    return <div className="kasa-container"><div className="loading">Kasa yükleniyor...</div></div>;
   }
 
   return (
-    <Layout pageTitle="Kasa Yönetimi" headerExtra={gecmisBtn}>
+    <div className="kasa-container">
+
+      {/* HEADER */}
+      <div className="kasa-header">
+        <div className="kasa-header-left">
+          <button onClick={() => navigate('/dashboard')} className="btn-back">← Geri</button>
+          <h1>Kasa Yönetimi</h1>
+        </div>
+        <div className="kasa-header-right">
+          <button onClick={() => setGecmisGorunuyor(!gecmisGorunuyor)} className="btn-gecmis">
+            {gecmisGorunuyor ? '🔍 Günlük Kasa' : '📅 Geçmiş Kayıtlar'}
+          </button>
+        </div>
+      </div>
 
       {!gecmisGorunuyor ? (
+
         /* GÜNLÜK KASA */
         <div className="kasa-gunluk">
           {!kasaGun ? (
             <div className="empty-hareket">
               <p>⚠️ Kasa yüklenemedi.</p>
-              <button onClick={loadKasa} className="btn-ekle" style={{ marginTop: 16 }}>🔄 Tekrar Dene</button>
+              <button onClick={loadKasa} className="btn-ekle" style={{marginTop:16}}>🔄 Tekrar Dene</button>
             </div>
           ) : (
             <>
+              {/* ÖZET KART */}
               <div className="kasa-bilgi-karti">
                 <div className="kasa-tarih">
                   <span className="tarih-label">Tarih:</span>
                   <span className="tarih-value">{formatGun(kasaGun.gun)}</span>
                 </div>
 
+                {/* HESAP KARTLARI */}
                 <div className="kasa-akis">
-                  <div className="akis-satir">
-                    <span className="akis-icon">🏦</span>
-                    <span className="akis-label">Açılış Bakiyesi</span>
-                    <span className="akis-tutar">{formatPrice(kasaGun.acilisBakiyesi)}</span>
+                  <div className="akis-kart acilis">
+                    <span className="akis-kart-label">Açılış Bakiyesi</span>
+                    <span className="akis-kart-tutar">{formatPrice(kasaGun.acilisBakiyesi)}</span>
                   </div>
-                  <div className="akis-satir">
-                    <span className="akis-icon">💵</span>
-                    <span className="akis-label">+ Nakit Satış</span>
-                    <span className="akis-tutar giris">{formatPrice(kasaGun.nakitSatis || 0)}</span>
+                  <div className="akis-kart nakit">
+                    <span className="akis-kart-label">💵 Nakit Satış</span>
+                    <span className="akis-kart-tutar">{formatPrice(kasaGun.nakitSatis || 0)}</span>
+                    <span className="akis-kart-alt">kasaya girer</span>
                   </div>
-                  <div className="akis-satir">
-                    <span className="akis-icon">💸</span>
-                    <span className="akis-label">− Gider</span>
-                    <span className="akis-tutar cikis">{formatPrice(kasaGun.toplamGider || 0)}</span>
+                  <div className="akis-kart gider">
+                    <span className="akis-kart-label">💸 Toplam Gider</span>
+                    <span className="akis-kart-tutar">{formatPrice(kasaGun.toplamGider || 0)}</span>
+                    <span className="akis-kart-alt">kasadan çıkar</span>
                   </div>
-                  <div className="akis-ayirici" />
-                  <div className="akis-satir gunsonu-satir">
-                    <span className="akis-icon">✅</span>
-                    <span className="akis-label">= Gün Sonu Bakiyesi</span>
-                    <span className="akis-tutar gunsonu">{formatPrice(kasaGun.gunSonuBakiyesi || 0)}</span>
+                  <div className="akis-kart cikis">
+                    <span className="akis-kart-label">📤 Çıkış Yapılan Para</span>
+                    <span className="akis-kart-tutar">{formatPrice(kasaGun.cikisYapilanPara || 0)}</span>
+                    <span className="akis-kart-alt">kasadan çıkar</span>
                   </div>
-                  <div className="akis-not">ertesi gün açılış: <strong>{formatPrice(kasaGun.gunSonuBakiyesi || 0)}</strong></div>
+                  <div className="akis-kart gunsonu">
+                    <span className="akis-kart-label">Gün Sonu Bakiyesi</span>
+                    <span className="akis-kart-tutar">{formatPrice(kasaGun.gunSonuBakiyesi || 0)}</span>
+                    <span className="akis-kart-alt">ertesi gün açılış</span>
+                  </div>
                 </div>
 
+                {/* KASAYA YANSIMAYAN - bilgi amaçlı */}
                 <div className="kasa-yansimaz">
                   <span className="yansimaz-baslik">📊 Kayıt Amaçlı (Kasaya Yansımaz)</span>
                   <div className="yansimaz-grid">
@@ -194,6 +208,7 @@ const Kasa: React.FC = () => {
                 </div>
               </div>
 
+              {/* HAREKETLER */}
               <div className="kasa-hareketler">
                 <div className="hareketler-header">
                   <h2>Gün İçi Hareketler</h2>
@@ -209,7 +224,11 @@ const Kasa: React.FC = () => {
                       <div className="form-row">
                         <div className="form-group">
                           <label>İşlem Tipi *</label>
-                          <select value={yeniHareketTip} onChange={e => setYeniHareketTip(e.target.value as KasaHareketTipi)} className="form-select">
+                          <select
+                            value={yeniHareketTip}
+                            onChange={e => setYeniHareketTip(e.target.value as KasaHareketTipi)}
+                            className="form-select"
+                          >
                             <option value={KasaHareketTipi.NAKIT_SATIS}>💵 Nakit Satış</option>
                             <option value={KasaHareketTipi.GIDER}>💸 Gider</option>
                             <option value={KasaHareketTipi.CIKIS}>📤 Çıkış Yapılan Para</option>
@@ -218,21 +237,27 @@ const Kasa: React.FC = () => {
                         </div>
                         <div className="form-group">
                           <label>Tutar (TL) *</label>
-                          <input type="number" min="0.01" step="0.01"
+                          <input
+                            type="number" min="0.01" step="0.01"
                             value={yeniHareketTutar || ''}
                             onChange={e => setYeniHareketTutar(parseFloat(e.target.value) || 0)}
-                            placeholder="0.00" required />
+                            placeholder="0.00" required
+                          />
                         </div>
                       </div>
+
                       <div className="form-group">
                         <label>Açıklama *</label>
-                        <input type="text" value={yeniHareketAciklama}
+                        <input
+                          type="text" value={yeniHareketAciklama}
                           onChange={e => setYeniHareketAciklama(e.target.value)}
-                          placeholder="Ne için?" required />
+                          placeholder="Ne için?" required
+                        />
                       </div>
+
                       <div className="form-row">
                         <div className="form-group">
-                          <label>Belge No</label>
+                          <label>Belge No (Fiş/Fatura)</label>
                           <input type="text" value={yeniHareketBelgeNo}
                             onChange={e => setYeniHareketBelgeNo(e.target.value)} placeholder="Opsiyonel" />
                         </div>
@@ -242,7 +267,9 @@ const Kasa: React.FC = () => {
                             onChange={e => setYeniHareketNot(e.target.value)} placeholder="Ek not" />
                         </div>
                       </div>
+
                       {formHata && <div className="form-hata">{formHata}</div>}
+
                       <div className="form-actions">
                         <button type="button" onClick={() => setEklemeModu(false)} className="btn-iptal">İptal</button>
                         <button type="submit" className="btn-kaydet">Kaydet</button>
@@ -253,43 +280,46 @@ const Kasa: React.FC = () => {
 
                 {kasaGun.hareketler && kasaGun.hareketler.length > 0 ? (
                   <div className="hareket-listesi">
-                    <div className="hareket-tablo-scroll">
-                      <table className="hareket-tablosu">
-                        <thead>
-                          <tr>
-                            <th>Saat</th><th>Tip</th><th>Açıklama</th>
-                            <th>Belge No</th><th>Tutar</th><th>Kasaya Yansır</th><th>Kullanıcı</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {kasaGun.hareketler.map(hareket => {
-                            const yon = kasaYonu(hareket.tip);
-                            return (
-                              <tr key={hareket.id} className={`hareket-satir ${getTipClass(hareket.tip)}`}>
-                                <td>{hareket.saat}</td>
-                                <td>
-                                  <span className={`tip-badge ${getTipClass(hareket.tip)}`}>
-                                    {getTipIcon(hareket.tip)} {hareket.tip}
-                                  </span>
-                                </td>
-                                <td>{hareket.aciklama}</td>
-                                <td>{hareket.belgeNo || '—'}</td>
-                                <td className={`tutar ${yon}`}>
-                                  {yon === 'giris' ? '+' : yon === 'cikis' ? '−' : ''}
-                                  {formatPrice(Math.abs(hareket.tutar))}
-                                </td>
-                                <td>
-                                  {kasayaYansiyor(hareket.tip)
-                                    ? <span className="badge-evet">✅ Evet</span>
-                                    : <span className="badge-hayir">❌ Hayır</span>}
-                                </td>
-                                <td>{hareket.kullanici}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                    <table className="hareket-tablosu">
+                      <thead>
+                        <tr>
+                          <th>Saat</th>
+                          <th>Tip</th>
+                          <th>Açıklama</th>
+                          <th>Belge No</th>
+                          <th>Tutar</th>
+                          <th>Kasaya Yansır</th>
+                          <th>Kullanıcı</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {kasaGun.hareketler.map(hareket => {
+                          const yon = kasaYonu(hareket.tip);
+                          return (
+                            <tr key={hareket.id} className={`hareket-satir ${getTipClass(hareket.tip)}`}>
+                              <td>{hareket.saat}</td>
+                              <td>
+                                <span className={`tip-badge ${getTipClass(hareket.tip)}`}>
+                                  {getTipIcon(hareket.tip)} {hareket.tip}
+                                </span>
+                              </td>
+                              <td>{hareket.aciklama}</td>
+                              <td>{hareket.belgeNo || '—'}</td>
+                              <td className={`tutar ${yon}`}>
+                                {yon === 'giris' ? '+' : yon === 'cikis' ? '−' : ''}
+                                {formatPrice(Math.abs(hareket.tutar))}
+                              </td>
+                              <td>
+                                {kasayaYansiyor(hareket.tip)
+                                  ? <span className="badge-evet">✅ Evet</span>
+                                  : <span className="badge-hayir">❌ Hayır</span>}
+                              </td>
+                              <td>{hareket.kullanici}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
                   <div className="empty-hareket">
@@ -303,6 +333,7 @@ const Kasa: React.FC = () => {
         </div>
 
       ) : (
+
         /* GEÇMİŞ KAYITLAR */
         <div className="kasa-gecmis">
           <div className="gecmis-header-row">
@@ -310,9 +341,9 @@ const Kasa: React.FC = () => {
             <div className="filtre-group">
               {([
                 { key: 'tumzamanlar', label: 'Tüm Zamanlar' },
-                { key: '30gun', label: 'Son 30 Gün' },
-                { key: '7gun', label: 'Son 7 Gün' },
-                { key: 'buay', label: 'Bu Ay' },
+                { key: '30gun',       label: 'Son 30 Gün' },
+                { key: '7gun',        label: 'Son 7 Gün' },
+                { key: 'buay',        label: 'Bu Ay' },
               ] as { key: FiltreTip; label: string }[]).map(f => (
                 <button key={f.key}
                   className={`btn-filtre ${filtre === f.key ? 'aktif' : ''}`}
@@ -329,15 +360,27 @@ const Kasa: React.FC = () => {
                 <div key={gun.id} className="gecmis-kart">
                   <div className="gecmis-kart-header">
                     <h3>{formatGun(gun.gun)}</h3>
-                    <span className={`gecmis-durum ${gun.durum === 'ACIK' ? 'acik' : 'kapali'}`}>{gun.durum}</span>
+                    <span className={`gecmis-durum ${gun.durum === 'ACIK' ? 'acik' : 'kapali'}`}>
+                      {gun.durum}
+                    </span>
                   </div>
+
                   <div className="gecmis-akis">
-                    <div className="gakis-satir"><span>Açılış</span><strong>{formatPrice(gun.acilisBakiyesi)}</strong></div>
-                    <div className="gakis-satir giris"><span>+ Nakit Satış</span><strong>{formatPrice(gun.nakitSatis || 0)}</strong></div>
-                    <div className="gakis-satir cikis"><span>− Gider</span><strong>{formatPrice(gun.toplamGider || 0)}</strong></div>
+                    <div className="gakis-satir">
+                      <span>Açılış</span><strong>{formatPrice(gun.acilisBakiyesi)}</strong>
+                    </div>
+                    <div className="gakis-satir giris">
+                      <span>+ Nakit Satış</span><strong>{formatPrice(gun.nakitSatis || 0)}</strong>
+                    </div>
+                    <div className="gakis-satir cikis">
+                      <span>− Gider</span><strong>{formatPrice(gun.toplamGider || 0)}</strong>
+                    </div>
                     <div className="gakis-ayirici" />
-                    <div className="gakis-satir gunsonu"><span>= Gün Sonu</span><strong>{formatPrice(gun.gunSonuBakiyesi || gun.acilisBakiyesi)}</strong></div>
+                    <div className="gakis-satir gunsonu">
+                      <span>= Gün Sonu</span><strong>{formatPrice(gun.gunSonuBakiyesi || gun.acilisBakiyesi)}</strong>
+                    </div>
                   </div>
+
                   <div className="gecmis-yansimaz">
                     <span>💳 Kart: {formatPrice(gun.kartSatis || 0)}</span>
                     <span>🏦 Havale: {formatPrice(gun.havaleSatis || 0)}</span>
@@ -346,11 +389,13 @@ const Kasa: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="empty-gecmis"><p>Bu filtre için kayıt bulunamadı.</p></div>
+            <div className="empty-gecmis">
+              <p>Bu filtre için kayıt bulunamadı.</p>
+            </div>
           )}
         </div>
       )}
-    </Layout>
+    </div>
   );
 };
 

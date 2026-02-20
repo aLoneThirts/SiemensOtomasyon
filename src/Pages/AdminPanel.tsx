@@ -24,7 +24,25 @@ interface KampanyaAdmin {
   id?: string;
   ad: string; aciklama: string; aktif: boolean; subeKodu: string;
 }
-type Modul = 'excel-fiyat' | 'banka-kesinti' | 'satici-ekle' | 'satici-disable' | 'satici-hedef' | 'magaza-hedef' | 'kampanya';
+// 5 — Yeşil Etiket admin tipi
+interface YesilEtiketAdmin {
+  id?: string;
+  urunKodu: string;
+  urunTuru?: string;
+  maliyet: number;
+  aciklama?: string;
+  subeKodu: string;
+}
+
+type Modul =
+  | 'excel-fiyat'
+  | 'banka-kesinti'
+  | 'satici-ekle'
+  | 'satici-disable'
+  | 'satici-hedef'
+  | 'magaza-hedef'
+  | 'kampanya'
+  | 'yesil-etiket'; // YENİ
 
 const AdminPanel: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -47,36 +65,55 @@ const AdminPanel: React.FC = () => {
 
   /* ── EXCEL FİYAT ── */
   const fiyatFileRef = useRef<HTMLInputElement>(null);
-  const [fiyatSube, setFiyatSube] = useState<string>(SUBELER[0].kod);
+  const [fiyatOnizleme, setFiyatOnizleme] = useState<{ kod: string; tur: string; alis: number; bip: number }[]>([]);
+  const [fiyatOnizlemde, setFiyatOnizlemde] = useState(false);
 
-  const handleFiyatExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFiyatExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
-    setYukleniyor(true);
-    try {
-      const ab = await file.arrayBuffer();
-      const wb = XLSX.read(ab);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const wb = XLSX.read(ev.target!.result, { type: 'binary' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(ws);
-      const sube = getSubeByKod(fiyatSube as SubeKodu);
-      if (!sube) throw new Error('Şube bulunamadı');
-      let guncellenen = 0;
-      for (const row of rows) {
-        const kod = row['Ürün Kodu'] || row['urunKodu'] || row['kod'];
-        const fiyat = parseFloat(row['Fiyat'] || row['fiyat'] || 0);
-        if (!kod || !fiyat) continue;
+      const parsed = rows.map(r => ({
+        kod:  String(r['ÜRÜN KODU'] || r['Ürün Kodu'] || r['urunKodu'] || r['kod'] || '').trim(),
+        tur:  String(r['ÜRÜN TÜRÜ'] || r['Ürün Türü'] || r['tur'] || '').trim(),
+        alis: parseFloat(r['ALIŞ'] || r['Aliş'] || r['alis'] || r['fiyat'] || 0),
+        bip:  parseFloat(r['BİP']  || r['Bip']  || r['bip']  || 0),
+      })).filter(r => r.kod && (r.alis > 0 || r.bip > 0));
+      setFiyatOnizleme(parsed);
+      setFiyatOnizlemde(true);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const fiyatKaydet = async () => {
+    setYukleniyor(true);
+    let toplamGuncellenen = 0;
+    try {
+      for (const sube of SUBELER) {
         const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/urunler`));
-        const urun = snap.docs.find(d => d.data().kod === kod);
-        if (urun) {
-          await updateDoc(doc(db, `subeler/${sube.dbPath}/urunler`, urun.id), { fiyat, guncellemeTarihi: Timestamp.now() });
-          guncellenen++;
+        for (const row of fiyatOnizleme) {
+          const urun = snap.docs.find(d => d.data().kod === row.kod);
+          if (urun) {
+            await updateDoc(doc(db, `subeler/${sube.dbPath}/urunler`, urun.id), {
+              alis: row.alis,
+              bip: row.bip,
+              urunTuru: row.tur,
+              guncellemeTarihi: Timestamp.now()
+            });
+            toplamGuncellenen++;
+          }
         }
       }
-      mesajGoster('ok', `✅ ${guncellenen} ürün fiyatı güncellendi!`);
+      mesajGoster('ok', `✅ ${toplamGuncellenen} ürün tüm şubelerde güncellendi!`);
+      setFiyatOnizleme([]);
+      setFiyatOnizlemde(false);
+      if (fiyatFileRef.current) fiyatFileRef.current.value = '';
     } catch (err: any) {
       mesajGoster('hata', `❌ Hata: ${err.message}`);
     } finally {
       setYukleniyor(false);
-      if (fiyatFileRef.current) fiyatFileRef.current.value = '';
     }
   };
 
@@ -261,6 +298,102 @@ const AdminPanel: React.FC = () => {
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
   };
 
+  /* ── YEŞİL ETİKET ── */
+  const yesilEtiketFileRef = useRef<HTMLInputElement>(null);
+  const [yesilEtiketSube, setYesilEtiketSube] = useState<string>(SUBELER[0].kod);
+  const [yesilEtiketler, setYesilEtiketler] = useState<YesilEtiketAdmin[]>([]);
+  const [yesilEtiketYuklendi, setYesilEtiketYuklendi] = useState(false);
+  const [yesilEtiketOnizleme, setYesilEtiketOnizleme] = useState<YesilEtiketAdmin[]>([]);
+  const [yesilEtiketOnizlemde, setYesilEtiketOnizlemde] = useState(false);
+  // Manuel ekleme formu
+  const [yeniYesilEtiket, setYeniYesilEtiket] = useState<YesilEtiketAdmin>({
+    urunKodu: '', maliyet: 0, aciklama: '', subeKodu: SUBELER[0].kod
+  });
+
+  // Excel'den yeşil etiket yükle
+  const handleYesilEtiketExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const wb = XLSX.read(ev.target!.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(ws);
+      const parsed: YesilEtiketAdmin[] = rows.map(r => ({
+        urunKodu: String(r['ÜRÜN KODU'] || r['Ürün Kodu'] || r['urunKodu'] || r['kod'] || '').trim(),
+        urunTuru: String(r['ÜRÜN TÜRÜ'] || r['Ürün Türü'] || r['tur'] || '').trim(),
+        maliyet: parseFloat(r['YEŞİL ETİKET'] || r['Yeşil Etiket'] || r['Maliyet'] || r['maliyet'] || r['İndirim'] || 0),
+        aciklama: r['Açıklama'] || r['aciklama'] || '',
+        subeKodu: yesilEtiketSube,
+      })).filter(r => r.urunKodu && r.maliyet > 0);
+      setYesilEtiketOnizleme(parsed);
+      setYesilEtiketOnizlemde(true);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const yesilEtiketExcelKaydet = async () => {
+    setYukleniyor(true);
+    try {
+      const sube = getSubeByKod(yesilEtiketSube as SubeKodu);
+      if (!sube) throw new Error('Şube bulunamadı');
+      for (const etiket of yesilEtiketOnizleme) {
+        await addDoc(collection(db, `subeler/${sube.dbPath}/yesilEtiketler`), {
+          ...etiket,
+          olusturmaTarihi: Timestamp.now()
+        });
+      }
+      mesajGoster('ok', `✅ ${yesilEtiketOnizleme.length} yeşil etiket kaydedildi!`);
+      setYesilEtiketOnizleme([]);
+      setYesilEtiketOnizlemde(false);
+      if (yesilEtiketFileRef.current) yesilEtiketFileRef.current.value = '';
+      yesilEtiketListeGetir();
+    } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
+    finally { setYukleniyor(false); }
+  };
+
+  // Mevcut yeşil etiketleri getir
+  const yesilEtiketListeGetir = async () => {
+    setYukleniyor(true);
+    try {
+      const sube = getSubeByKod(yesilEtiketSube as SubeKodu); if (!sube) return;
+      const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/yesilEtiketler`));
+      setYesilEtiketler(snap.docs.map(d => ({ id: d.id, ...d.data() } as YesilEtiketAdmin)));
+      setYesilEtiketYuklendi(true);
+    } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
+    finally { setYukleniyor(false); }
+  };
+
+  // Manuel yeşil etiket ekle
+  const yesilEtiketManuelEkle = async () => {
+    if (!yeniYesilEtiket.urunKodu || !yeniYesilEtiket.maliyet) {
+      mesajGoster('hata', '❌ Ürün kodu ve maliyet zorunlu!'); return;
+    }
+    setYukleniyor(true);
+    try {
+      const sube = getSubeByKod(yeniYesilEtiket.subeKodu as SubeKodu);
+      if (!sube) throw new Error('Şube bulunamadı');
+      await addDoc(collection(db, `subeler/${sube.dbPath}/yesilEtiketler`), {
+        ...yeniYesilEtiket,
+        olusturmaTarihi: Timestamp.now()
+      });
+      mesajGoster('ok', `✅ "${yeniYesilEtiket.urunKodu}" yeşil etiket eklendi!`);
+      setYeniYesilEtiket({ urunKodu: '', maliyet: 0, aciklama: '', subeKodu: SUBELER[0].kod });
+      if (yesilEtiketYuklendi) yesilEtiketListeGetir();
+    } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
+    finally { setYukleniyor(false); }
+  };
+
+  // Yeşil etiket sil
+  const yesilEtiketSilFn = async (id: string) => {
+    if (!window.confirm('Yeşil etiketi silmek istiyor musunuz?')) return;
+    const sube = getSubeByKod(yesilEtiketSube as SubeKodu); if (!sube) return;
+    try {
+      await deleteDoc(doc(db, `subeler/${sube.dbPath}/yesilEtiketler/${id}`));
+      setYesilEtiketler(prev => prev.filter(e => e.id !== id));
+      mesajGoster('ok', '✅ Yeşil etiket silindi');
+    } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
+  };
+
   /* ── MENU ── */
   const menuler: { id: Modul; label: string; icon: string; desc: string }[] = [
     { id: 'excel-fiyat',    label: 'Excel Fiyat',      icon: 'fa-file-excel',  desc: 'Toplu fiyat güncelle' },
@@ -270,12 +403,16 @@ const AdminPanel: React.FC = () => {
     { id: 'satici-hedef',   label: 'Satıcı Hedef',     icon: 'fa-bullseye',    desc: 'Kişisel hedef gir' },
     { id: 'magaza-hedef',   label: 'Mağaza Hedef',     icon: 'fa-store',       desc: 'Şube hedefleri' },
     { id: 'kampanya',       label: 'Kampanya',          icon: 'fa-tags',        desc: 'Kampanya yönet' },
+    { id: 'yesil-etiket',   label: 'Yeşil Etiket',     icon: 'fa-tag',         desc: 'İndirimli eski ürünler' }, // YENİ
   ];
 
   const resetModulStates = () => {
     setSaticiYuklendi(false); setHedefYuklendi(false);
     setMagazaHedefYuklendi(false); setKampanyaYuklendi(false);
     setKesintiYuklendi(false); setSaticiListesi([]); setHedefSaticilar([]);
+    setYesilEtiketYuklendi(false); setYesilEtiketler([]);
+    setYesilEtiketOnizlemde(false); setYesilEtiketOnizleme([]);
+    setFiyatOnizlemde(false); setFiyatOnizleme([]);
   };
 
   const aktifMenu = menuler.find(m => m.id === aktifModul);
@@ -286,7 +423,7 @@ const AdminPanel: React.FC = () => {
       {/* ── SOL SİDEBAR ── */}
       <aside className="ap-sidebar">
         <div className="ap-sidebar-top">
-          <button className="ap-back-btn" onClick={() => navigate('/')}>
+          <button className="ap-back-btn" onClick={() => navigate('/dashboard')}>
             <i className="fas fa-arrow-left" /> Geri
           </button>
           <div className="ap-sidebar-brand">
@@ -350,11 +487,9 @@ const AdminPanel: React.FC = () => {
               <div className="ap-panel">
                 <div className="ap-panel-header"><i className="fas fa-upload" /><h3>Dosya Yükle</h3></div>
                 <div className="ap-panel-body">
-                  <div className="ap-field">
-                    <label>Şube</label>
-                    <select value={fiyatSube} onChange={e => setFiyatSube(e.target.value)}>
-                      {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
-                    </select>
+                  <div className="ap-info-banner">
+                    <i className="fas fa-info-circle" />
+                    <span>Excel yüklendiğinde <strong>tüm şubelerdeki</strong> eşleşen ürünler otomatik güncellenir.</span>
                   </div>
                   <div className="ap-field">
                     <label>Excel Dosyası (.xlsx)</label>
@@ -364,7 +499,48 @@ const AdminPanel: React.FC = () => {
                       <input ref={fiyatFileRef} type="file" accept=".xlsx,.xls" onChange={handleFiyatExcel} disabled={yukleniyor} />
                     </div>
                   </div>
-                  {yukleniyor && <div className="ap-loading"><i className="fas fa-spinner fa-spin" /> Güncelleniyor...</div>}
+
+                  {fiyatOnizlemde && fiyatOnizleme.length > 0 && (
+                    <>
+                      <div className="ap-table-label">
+                        <i className="fas fa-eye" /> Önizleme — {fiyatOnizleme.length} ürün bulundu
+                      </div>
+                      <div className="ap-table-scroll">
+                        <table className="ap-table">
+                          <thead>
+                            <tr>
+                              <th>Ürün Kodu</th>
+                              <th>Ürün Türü</th>
+                              <th>Alış (TL)</th>
+                              <th>BİP (TL)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fiyatOnizleme.map((r, i) => (
+                              <tr key={i}>
+                                <td><strong style={{ fontFamily: 'monospace' }}>{r.kod}</strong></td>
+                                <td>{r.tur || '—'}</td>
+                                <td>₺{r.alis.toLocaleString('tr-TR')}</td>
+                                <td>₺{r.bip.toLocaleString('tr-TR')}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <button className="ap-btn-primary" onClick={fiyatKaydet} disabled={yukleniyor}>
+                        <i className="fas fa-save" />
+                        {yukleniyor
+                          ? 'Güncelleniyor...'
+                          : `${fiyatOnizleme.length} Ürünü Tüm Şubelere İşle`}
+                      </button>
+                    </>
+                  )}
+
+                  {yukleniyor && (
+                    <div className="ap-loading">
+                      <i className="fas fa-spinner fa-spin" /> Tüm şubeler güncelleniyor...
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -372,15 +548,27 @@ const AdminPanel: React.FC = () => {
                 <div className="ap-panel-header"><i className="fas fa-info-circle" /><h3>Beklenen Format</h3></div>
                 <div className="ap-panel-body">
                   <div className="ap-format-preview">
-                    <div className="ap-format-header"><span>Ürün Kodu</span><span>Fiyat</span></div>
-                    <div className="ap-format-row"><span>WS75-0CA15-0AG5</span><span>45000</span></div>
-                    <div className="ap-format-row"><span>6SL3210-1KE21</span><span>12500</span></div>
-                    <div className="ap-format-row"><span>3RW4028-1BB15</span><span>8750</span></div>
+                    <div className="ap-format-header">
+                      <span>ÜRÜN KODU</span>
+                      <span>ÜRÜN TÜRÜ</span>
+                      <span>ALIŞ</span>
+                      <span>BİP</span>
+                    </div>
+                    <div className="ap-format-row">
+                      <span>WM12N180TR</span><span>ÇAMAŞIR MAK.</span><span>31</span><span>10</span>
+                    </div>
+                    <div className="ap-format-row">
+                      <span>WG42A1X2TR</span><span>ÇAMAŞIR MAK.</span><span>31</span><span>10</span>
+                    </div>
+                    <div className="ap-format-row">
+                      <span>KG36NXWDF</span><span>BUZDOLABI</span><span>45</span><span>15</span>
+                    </div>
                   </div>
                   <ul className="ap-tips">
-                    <li><i className="fas fa-check" /> Fiyatlar TL cinsinden girilmeli</li>
-                    <li><i className="fas fa-check" /> Ürün kodu Firebase'deki ile eşleşmeli</li>
-                    <li><i className="fas fa-check" /> Boş satırlar otomatik atlanır</li>
+                    <li><i className="fas fa-check" /> Sütun başlıkları: <strong>ÜRÜN KODU, ÜRÜN TÜRÜ, ALIŞ, BİP</strong></li>
+                    <li><i className="fas fa-check" /> Alış ve BİP değerleri TL cinsinden</li>
+                    <li><i className="fas fa-check" /> Tüm şubelerdeki eşleşen ürünler güncellenir</li>
+                    <li><i className="fas fa-check" /> Eşleşmeyen ürünler atlanır</li>
                   </ul>
                 </div>
               </div>
@@ -677,6 +865,181 @@ const AdminPanel: React.FC = () => {
                               {k.aktif ? 'Durdur' : 'Aktif Et'}
                             </button>
                             <button className="ap-delete-btn" onClick={() => kampanyaSil(k.id!)}>
+                              <i className="fas fa-trash" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                  }
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══ 8) YEŞİL ETİKET ══ */}
+          {aktifModul === 'yesil-etiket' && (
+            <div className="ap-two-col">
+
+              {/* SOL: Excel Yükle + Manuel Ekle */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+                {/* Excel Yükle */}
+                <div className="ap-panel">
+                  <div className="ap-panel-header">
+                    <i className="fas fa-file-excel" /><h3>Excel ile Toplu Yükle</h3>
+                  </div>
+                  <div className="ap-panel-body">
+                    <div className="ap-field">
+                      <label>Şube</label>
+                      <select value={yesilEtiketSube} onChange={e => { setYesilEtiketSube(e.target.value); setYesilEtiketYuklendi(false); setYesilEtiketler([]); }}>
+                        {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
+                      </select>
+                    </div>
+                    <div className="ap-field">
+                      <label>Excel Dosyası (.xlsx)</label>
+                      <div className="ap-file-zone">
+                        <i className="fas fa-tag" style={{ color: '#16a34a' }} />
+                        <span>Yeşil etiket dosyasını seç</span>
+                        <input
+                          ref={yesilEtiketFileRef}
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={handleYesilEtiketExcel}
+                        />
+                      </div>
+                    </div>
+
+                    {yesilEtiketOnizlemde && yesilEtiketOnizleme.length > 0 && (
+                      <>
+                        <div className="ap-table-label">
+                          <i className="fas fa-eye" /> Önizleme — {yesilEtiketOnizleme.length} ürün bulundu
+                        </div>
+                        <div className="ap-table-scroll">
+                          <table className="ap-table">
+                            <thead>
+                              <tr><th>Ürün Kodu</th><th>Maliyet (TL)</th><th>Açıklama</th></tr>
+                            </thead>
+                            <tbody>
+                              {yesilEtiketOnizleme.map((e, i) => (
+                                <tr key={i}>
+                                  <td><strong>{e.urunKodu}</strong></td>
+                                  <td>₺{e.maliyet.toLocaleString('tr-TR')}</td>
+                                  <td>{e.aciklama || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <button className="ap-btn-primary" onClick={yesilEtiketExcelKaydet} disabled={yukleniyor}>
+                          <i className="fas fa-save" /> {yukleniyor ? 'Kaydediliyor...' : `${yesilEtiketOnizleme.length} Yeşil Etiketi Kaydet`}
+                        </button>
+                      </>
+                    )}
+
+                    <div className="ap-panel ap-panel--teal-soft" style={{ marginTop: 12 }}>
+                      <div className="ap-panel-header"><i className="fas fa-info-circle" /><h3>Beklenen Format</h3></div>
+                      <div className="ap-panel-body">
+                        <div className="ap-format-preview">
+                          <div className="ap-format-header"><span>ÜRÜN KODU</span><span>ÜRÜN TÜRÜ</span><span>YEŞİL ETİKET</span></div>
+                          <div className="ap-format-row"><span>WG52A202TR</span><span>ÇAMAŞIR MAK.</span><span>23999</span></div>
+                          <div className="ap-format-row"><span>WM12N180TR</span><span>ÇAMAŞIR MAK.</span><span>18500</span></div>
+                        </div>
+                        <ul className="ap-tips">
+                          <li><i className="fas fa-check" /> Sütunlar: <strong>ÜRÜN KODU, ÜRÜN TÜRÜ, YEŞİL ETİKET</strong></li>
+                          <li><i className="fas fa-check" /> Ürün kodu satış formundakiyle birebir eşleşmeli</li>
+                          <li><i className="fas fa-check" /> YEŞİL ETİKET = satış fiyatı (TL)</li>
+                          <li><i className="fas fa-check" /> Eşleşen ürünlerde indirim otomatik uygulanır</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Manuel Ekle */}
+                <div className="ap-panel">
+                  <div className="ap-panel-header">
+                    <i className="fas fa-plus-circle" /><h3>Manuel Ekle</h3>
+                  </div>
+                  <div className="ap-panel-body">
+                    <div className="ap-two-field">
+                      <div className="ap-field">
+                        <label>Ürün Kodu *</label>
+                        <input
+                          type="text"
+                          placeholder="WS75-0CA15-0AG5"
+                          value={yeniYesilEtiket.urunKodu}
+                          onChange={e => setYeniYesilEtiket(p => ({ ...p, urunKodu: e.target.value }))}
+                        />
+                      </div>
+                      <div className="ap-field">
+                        <label>Maliyet (TL) *</label>
+                        <input
+                          type="number" min="0"
+                          placeholder="1500"
+                          value={yeniYesilEtiket.maliyet || ''}
+                          onChange={e => setYeniYesilEtiket(p => ({ ...p, maliyet: parseFloat(e.target.value) || 0 }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="ap-field">
+                      <label>Açıklama</label>
+                      <input
+                        type="text"
+                        placeholder="Eski model, demo ürün vb."
+                        value={yeniYesilEtiket.aciklama || ''}
+                        onChange={e => setYeniYesilEtiket(p => ({ ...p, aciklama: e.target.value }))}
+                      />
+                    </div>
+                    <div className="ap-field">
+                      <label>Şube</label>
+                      <select
+                        value={yeniYesilEtiket.subeKodu}
+                        onChange={e => setYeniYesilEtiket(p => ({ ...p, subeKodu: e.target.value }))}
+                      >
+                        {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
+                      </select>
+                    </div>
+                    <button className="ap-btn-primary" onClick={yesilEtiketManuelEkle} disabled={yukleniyor}>
+                      <i className="fas fa-plus" /> {yukleniyor ? 'Ekleniyor...' : 'Yeşil Etiket Ekle'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SAĞ: Mevcut Yeşil Etiketler */}
+              <div className="ap-panel">
+                <div className="ap-panel-header">
+                  <i className="fas fa-list" /><h3>Mevcut Yeşil Etiketler</h3>
+                  <div className="ap-panel-actions">
+                    <select value={yesilEtiketSube} onChange={e => { setYesilEtiketSube(e.target.value); setYesilEtiketYuklendi(false); setYesilEtiketler([]); }}>
+                      {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
+                    </select>
+                    <button className="ap-btn-secondary" onClick={yesilEtiketListeGetir} disabled={yukleniyor}>
+                      <i className="fas fa-sync" /> {yukleniyor ? 'Yükleniyor...' : 'Yükle'}
+                    </button>
+                  </div>
+                </div>
+                <div className="ap-panel-body">
+                  {!yesilEtiketYuklendi
+                    ? <div className="ap-empty">
+                        <i className="fas fa-tag" style={{ color: '#16a34a', fontSize: 32, marginBottom: 8 }} />
+                        <p>Şube seçip "Yükle" butonuna basın</p>
+                      </div>
+                    : yesilEtiketler.length === 0
+                    ? <div className="ap-empty"><p>Bu şubede yeşil etiket bulunamadı</p></div>
+                    : <div className="ap-kampanya-list">
+                        {yesilEtiketler.map(e => (
+                          <div key={e.id} className="ap-kampanya-item">
+                            <div style={{ flex: 1 }}>
+                              <div className="ap-kampanya-name" style={{ color: '#16a34a' }}>
+                                🟢 {e.urunKodu}
+                              </div>
+                              {e.aciklama && <div className="ap-kampanya-desc">{e.aciklama}</div>}
+                            </div>
+                            <span className="ap-pill green">
+                              ₺{(e.maliyet || 0).toLocaleString('tr-TR')}
+                            </span>
+                            <button className="ap-delete-btn" onClick={() => yesilEtiketSilFn(e.id!)}>
                               <i className="fas fa-trash" />
                             </button>
                           </div>
