@@ -10,10 +10,10 @@ import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts';
+import Layout from '../components/Layout';
 import './CiroPerformans.css';
 
 const HEDEF = 1_000_000;
-
 const RENKLER = ['#009999', '#00cccc', '#007575', '#33dddd', '#005555', '#66eeee'];
 
 const CiroPerformansPage: React.FC = () => {
@@ -35,7 +35,6 @@ const CiroPerformansPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Satışları çek
       const tumSatislar: SatisTeklifFormu[] = [];
       const subelerToFetch = isAdmin
         ? SUBELER
@@ -49,7 +48,6 @@ const CiroPerformansPage: React.FC = () => {
       }
       setSatislar(tumSatislar);
 
-      // Satıcıları çek (CALISAN rolündeki kullanıcılar)
       const usersSnapshot = await getDocs(collection(db, 'users'));
       const saticiListesi: User[] = [];
       usersSnapshot.forEach(d => {
@@ -66,41 +64,34 @@ const CiroPerformansPage: React.FC = () => {
     }
   };
 
-  // ===== TARİH FİLTRESİ =====
   const toDate = (d: any): Date => d?.toDate ? d.toDate() : new Date(d);
 
   const filtreliSatislar = satislar.filter(s => {
     const tarih = toDate(s.tarih);
     const simdi = new Date();
-    if (zaman === 'gunluk') {
-      return tarih.toDateString() === simdi.toDateString();
-    } else if (zaman === 'haftalik') {
+    if (zaman === 'gunluk') return tarih.toDateString() === simdi.toDateString();
+    if (zaman === 'haftalik') {
       const haftaOnce = new Date(simdi);
       haftaOnce.setDate(simdi.getDate() - 7);
       return tarih >= haftaOnce;
-    } else {
-      return tarih.getMonth() === simdi.getMonth() && tarih.getFullYear() === simdi.getFullYear();
     }
+    return tarih.getMonth() === simdi.getMonth() && tarih.getFullYear() === simdi.getFullYear();
   });
 
-  // ===== PASTA GRAFİK VERİSİ - şube bazlı ciro =====
   const pastaVerisi = SUBELER.map(sube => {
     const subeSatislar = filtreliSatislar.filter(s => s.subeKodu === sube.kod);
     const toplam = subeSatislar.reduce((sum, s) => sum + (s.toplamTutar || 0), 0);
     return { name: sube.ad, value: toplam };
   }).filter(s => s.value > 0);
 
-  // ===== BAR GRAFİK VERİSİ - bu ay gün gün =====
   const simdi = new Date();
   const buAyinGunleri = new Date(simdi.getFullYear(), simdi.getMonth() + 1, 0).getDate();
-  
+
   const barVerisi = Array.from({ length: buAyinGunleri }, (_, i) => {
     const gun = i + 1;
     const gunSatislari = satislar.filter(s => {
       const t = toDate(s.tarih);
-      return t.getDate() === gun &&
-        t.getMonth() === simdi.getMonth() &&
-        t.getFullYear() === simdi.getFullYear();
+      return t.getDate() === gun && t.getMonth() === simdi.getMonth() && t.getFullYear() === simdi.getFullYear();
     });
     return {
       gun: `${gun}`,
@@ -109,7 +100,6 @@ const CiroPerformansPage: React.FC = () => {
     };
   });
 
-  // ===== SATICI PERFORMANS =====
   const saticiPerformansi = saticilar.map(satici => {
     const ad = `${satici.ad} ${satici.soyad}`;
     const saticiSatislari = satislar.filter(s => s.olusturanKullanici === ad);
@@ -117,14 +107,11 @@ const CiroPerformansPage: React.FC = () => {
     const toplamKar = saticiSatislari.reduce((sum, s) => sum + (s.zarar ?? 0), 0);
     const yuzde = Math.min((toplamCiro / HEDEF) * 100, 100);
     const satisSayisi = saticiSatislari.length;
-    // Yıldız: 10 üzerinden, hedefe göre
     const yildiz = Math.min(Math.round((toplamCiro / HEDEF) * 10), 10);
     const sube = getSubeByKod(satici.subeKodu);
-
     return { ad, toplamCiro, toplamKar, yuzde, satisSayisi, yildiz, subeAd: sube?.ad || '' };
   }).sort((a, b) => b.toplamCiro - a.toplamCiro);
 
-  // ===== ÖZET KARTLAR =====
   const toplamCiro = filtreliSatislar.reduce((sum, s) => sum + (s.toplamTutar || 0), 0);
   const toplamKar = filtreliSatislar.reduce((sum, s) => sum + (s.zarar ?? 0), 0);
   const satisSayisi = filtreliSatislar.length;
@@ -139,36 +126,33 @@ const CiroPerformansPage: React.FC = () => {
     return `₺${n}`;
   };
 
+  const zamanToggle = (
+    <div className="cp-zaman-toggle">
+      {(['gunluk', 'haftalik', 'aylik'] as const).map(z => (
+        <button
+          key={z}
+          className={`cp-toggle-btn ${zaman === z ? 'active' : ''}`}
+          onClick={() => setZaman(z)}
+        >
+          {z === 'gunluk' ? 'Günlük' : z === 'haftalik' ? 'Haftalık' : 'Aylık'}
+        </button>
+      ))}
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="cp-loading">
-        <div className="cp-loading-spinner"></div>
-        <span>Veriler yükleniyor...</span>
-      </div>
+      <Layout pageTitle="Ciro & Performans">
+        <div className="cp-loading">
+          <div className="cp-loading-spinner"></div>
+          <span>Veriler yükleniyor...</span>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="cp-container">
-
-      {/* HEADER */}
-      <div className="cp-header">
-        <div className="cp-header-left">
-          <button onClick={() => navigate('/dashboard')} className="cp-btn-back">← Geri</button>
-          <h1>Ciro & Performans</h1>
-        </div>
-        <div className="cp-zaman-toggle">
-          {(['gunluk', 'haftalik', 'aylik'] as const).map(z => (
-            <button
-              key={z}
-              className={`cp-toggle-btn ${zaman === z ? 'active' : ''}`}
-              onClick={() => setZaman(z)}
-            >
-              {z === 'gunluk' ? 'Günlük' : z === 'haftalik' ? 'Haftalık' : 'Aylık'}
-            </button>
-          ))}
-        </div>
-      </div>
+    <Layout pageTitle="Ciro & Performans" headerExtra={zamanToggle}>
 
       {/* ÖZET KARTLAR */}
       <div className="cp-ozet-grid">
@@ -204,8 +188,6 @@ const CiroPerformansPage: React.FC = () => {
 
       {/* GRAFİKLER */}
       <div className="cp-grafik-grid">
-
-        {/* PASTA GRAFİK */}
         <div className="cp-kart cp-pasta">
           <div className="cp-kart-baslik">
             <h2>Şube Ciro Dağılımı</h2>
@@ -216,15 +198,7 @@ const CiroPerformansPage: React.FC = () => {
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
-                <Pie
-                  data={pastaVerisi}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={110}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
+                <Pie data={pastaVerisi} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={3} dataKey="value">
                   {pastaVerisi.map((_, index) => (
                     <Cell key={index} fill={RENKLER[index % RENKLER.length]} />
                   ))}
@@ -236,35 +210,18 @@ const CiroPerformansPage: React.FC = () => {
           )}
         </div>
 
-        {/* BAR GRAFİK */}
         <div className="cp-kart cp-bar">
           <div className="cp-kart-baslik">
             <h2>Bu Ay Günlük Satışlar</h2>
-            <span className="cp-alt-baslik">
-              {simdi.toLocaleString('tr-TR', { month: 'long', year: 'numeric' })}
-            </span>
+            <span className="cp-alt-baslik">{simdi.toLocaleString('tr-TR', { month: 'long', year: 'numeric' })}</span>
           </div>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={barVerisi} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e8eaed" vertical={false} />
-              <XAxis
-                dataKey="gun"
-                tick={{ fontSize: 10, fill: '#80868b' }}
-                tickLine={false}
-                axisLine={false}
-                interval={2}
-              />
-              <YAxis
-                tick={{ fontSize: 10, fill: '#80868b' }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={formatPriceShort}
-              />
+              <XAxis dataKey="gun" tick={{ fontSize: 10, fill: '#80868b' }} tickLine={false} axisLine={false} interval={2} />
+              <YAxis tick={{ fontSize: 10, fill: '#80868b' }} tickLine={false} axisLine={false} tickFormatter={formatPriceShort} />
               <Tooltip
-                  formatter={(val: any, name: string | undefined) => [
-                    formatPrice(val),
-                    name === 'ciro' ? 'Ciro' : 'Kâr/Zarar'
-                  ]}
+                formatter={(val: any, name: string | undefined) => [formatPrice(val), name === 'ciro' ? 'Ciro' : 'Kâr/Zarar']}
                 labelFormatter={(l) => `${l}. Gün`}
                 contentStyle={{ borderRadius: 8, border: '1px solid #e8eaed', fontSize: 12 }}
               />
@@ -281,7 +238,6 @@ const CiroPerformansPage: React.FC = () => {
           <h2>Satıcı Performansı</h2>
           <span className="cp-alt-baslik">Hedef: {formatPrice(HEDEF)}</span>
         </div>
-
         {saticiPerformansi.length === 0 ? (
           <div className="cp-bos">Satıcı bulunamadı</div>
         ) : (
@@ -297,7 +253,6 @@ const CiroPerformansPage: React.FC = () => {
                     <span className="cp-satici-sube">{satici.subeAd}</span>
                   </div>
                 </div>
-
                 <div className="cp-satici-orta">
                   <div className="cp-progress-wrapper">
                     <div className="cp-progress-labels">
@@ -306,13 +261,8 @@ const CiroPerformansPage: React.FC = () => {
                       <span>Hedef {formatPriceShort(HEDEF)}</span>
                     </div>
                     <div className="cp-progress-track">
-                      <div
-                        className="cp-progress-fill"
-                        style={{ width: `${satici.yuzde}%` }}
-                      >
-                        {satici.yuzde > 8 && (
-                          <span className="cp-progress-yuzde">%{satici.yuzde.toFixed(0)}</span>
-                        )}
+                      <div className="cp-progress-fill" style={{ width: `${satici.yuzde}%` }}>
+                        {satici.yuzde > 8 && <span className="cp-progress-yuzde">%{satici.yuzde.toFixed(0)}</span>}
                       </div>
                     </div>
                     <div className="cp-satici-stats">
@@ -323,7 +273,6 @@ const CiroPerformansPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-
                 <div className="cp-satici-sag">
                   <div className="cp-yildizlar">
                     {Array.from({ length: 10 }).map((_, i) => (
@@ -337,8 +286,7 @@ const CiroPerformansPage: React.FC = () => {
           </div>
         )}
       </div>
-
-    </div>
+    </Layout>
   );
 };
 

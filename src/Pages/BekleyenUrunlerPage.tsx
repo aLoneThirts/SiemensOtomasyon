@@ -6,6 +6,7 @@ import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, OdemeDurumu } from '../types/satis';
 import { getSubeByKod, SUBELER } from '../types/sube';
+import Layout from '../components/Layout';
 import './BekleyenUrunler.css';
 
 const BekleyenUrunlerPage: React.FC = () => {
@@ -35,14 +36,12 @@ const BekleyenUrunlerPage: React.FC = () => {
         const snapshot = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`));
         snapshot.forEach(d => {
           const data = d.data() as SatisTeklifFormu;
-          // Sadece onaylanmamış satışları al
           if (data.onayDurumu === false) {
             liste.push({ id: d.id, ...data, subeKodu: sube.kod });
           }
         });
       }
 
-      // En yeni en üstte
       liste.sort((a: any, b: any) => {
         const tA = a.olusturmaTarihi?.toDate ? a.olusturmaTarihi.toDate() : new Date(a.olusturmaTarihi || 0);
         const tB = b.olusturmaTarihi?.toDate ? b.olusturmaTarihi.toDate() : new Date(b.olusturmaTarihi || 0);
@@ -68,7 +67,6 @@ const BekleyenUrunlerPage: React.FC = () => {
         onayDurumu: true,
         guncellemeTarihi: new Date()
       });
-      // Listeden çıkar
       setBekleyenSatislar(prev => prev.filter(s => s.id !== satis.id));
     } catch {
       alert('❌ Onaylama başarısız!');
@@ -94,12 +92,10 @@ const BekleyenUrunlerPage: React.FC = () => {
 
   const getSubeAdi = (kod: string) => SUBELER.find(s => s.kod === kod)?.ad || kod;
 
-  // Şube filtresi
   const filtreliSatislar = secilenSube === 'TUMU'
     ? bekleyenSatislar
     : bekleyenSatislar.filter(s => s.subeKodu === secilenSube);
 
-  // Teslim tarihi geçmiş mi?
   const getTeslimDurum = (satis: SatisTeklifFormu) => {
     if (!satis.teslimatTarihi) return 'normal';
     const teslim = toDate(satis.teslimatTarihi);
@@ -110,178 +106,156 @@ const BekleyenUrunlerPage: React.FC = () => {
     return 'normal';
   };
 
+  const yenileBtn = (
+    <button onClick={fetchBekleyenler} className="bu-btn-yenile" title="Yenile">
+      <i className="fas fa-sync-alt"></i>
+    </button>
+  );
+
   return (
-    <div className="bekleyen-urunler-container">
+    <Layout pageTitle={`İleri Teslim (${filtreliSatislar.length})`} headerExtra={yenileBtn}>
 
-      {/* HEADER */}
-      <div className="bekleyen-urunler-header">
-        <button onClick={() => navigate('/dashboard')} className="btn-back">← Geri</button>
-        <h1>İleri Teslim — Bekleyen Satışlar</h1>
-        <div className="bu-header-sag">
-          <span className="bu-sayac">{filtreliSatislar.length} bekleyen</span>
-          <button onClick={fetchBekleyenler} className="bu-btn-yenile">↻</button>
-        </div>
-      </div>
-
-      <div className="bekleyen-urunler-content">
-
-        {/* FİLTRE - sadece admin tüm şubeleri görebilir */}
-        {isAdmin && (
-          <div className="bu-filtre-bar">
+      {/* FİLTRE - sadece admin */}
+      {isAdmin && (
+        <div className="bu-filtre-bar">
+          <button
+            className={`filter-btn ${secilenSube === 'TUMU' ? 'active' : ''}`}
+            onClick={() => setSecilenSube('TUMU')}
+          >
+            Tümü ({bekleyenSatislar.length})
+          </button>
+          {SUBELER.map(s => (
             <button
-              className={`filter-btn ${secilenSube === 'TUMU' ? 'active' : ''}`}
-              onClick={() => setSecilenSube('TUMU')}
+              key={s.kod}
+              className={`filter-btn ${secilenSube === s.kod ? 'active' : ''}`}
+              onClick={() => setSecilenSube(s.kod)}
             >
-              Tümü ({bekleyenSatislar.length})
+              {s.ad} ({bekleyenSatislar.filter(x => x.subeKodu === s.kod).length})
             </button>
-            {SUBELER.map(s => (
-              <button
-                key={s.kod}
-                className={`filter-btn ${secilenSube === s.kod ? 'active' : ''}`}
-                onClick={() => setSecilenSube(s.kod)}
-              >
-                {s.ad} ({bekleyenSatislar.filter(x => x.subeKodu === s.kod).length})
-              </button>
-            ))}
-          </div>
-        )}
+          ))}
+        </div>
+      )}
 
-        {/* İÇERİK */}
-        {loading ? (
-          <div className="loading">Yükleniyor...</div>
-        ) : filtreliSatislar.length === 0 ? (
-          <div className="empty-state">
-            <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-            <p>Bekleyen satış bulunmuyor!</p>
-            <small style={{ color: '#80868b' }}>Tüm satışlar onaylandı.</small>
-          </div>
-        ) : (
-          <div className="urun-cards">
-            {filtreliSatislar.map(satis => {
-              const teslimDurum = getTeslimDurum(satis);
-              const kar = satis.zarar ?? 0;
-              const yukleniyor = onaylaniyor === satis.id;
+      {/* İÇERİK */}
+      {loading ? (
+        <div className="loading">Yükleniyor...</div>
+      ) : filtreliSatislar.length === 0 ? (
+        <div className="empty-state">
+          <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+          <p>Bekleyen satış bulunmuyor!</p>
+          <small style={{ color: '#80868b' }}>Tüm satışlar onaylandı.</small>
+        </div>
+      ) : (
+        <div className="urun-cards">
+          {filtreliSatislar.map(satis => {
+            const teslimDurum = getTeslimDurum(satis);
+            const kar = satis.zarar ?? 0;
+            const yukleniyor = onaylaniyor === satis.id;
 
-              return (
-                <div
-                  key={satis.id}
-                  className={`urun-card bu-satis-kart ${teslimDurum}`}
-                >
-                  {/* KART HEADER */}
-                  <div className="card-header">
-                    <div>
-                      <h3 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 14 }}>
-                        {satis.satisKodu}
-                      </h3>
-                      <p className="urun-kod">{getSubeAdi(satis.subeKodu)}</p>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                      {teslimDurum === 'gecmis' && (
-                        <span className="durum-badge orange">⚠ TESLİM GEÇTİ</span>
-                      )}
-                      {teslimDurum === 'yakin' && (
-                        <span className="durum-badge blue">🔔 YAKLAŞIYOR</span>
-                      )}
-                      {teslimDurum === 'normal' && (
-                        <span className="durum-badge green">BEKLEMEDE</span>
-                      )}
-                      <span className="durum-badge" style={{
-                        background: satis.odemeDurumu === OdemeDurumu.ODENDI ? '#f0fdf4' : '#fffbeb',
-                        color: satis.odemeDurumu === OdemeDurumu.ODENDI ? '#16a34a' : '#d97706',
-                        border: `1px solid ${satis.odemeDurumu === OdemeDurumu.ODENDI ? '#bbf7d0' : '#fde68a'}`
-                      }}>
-                        {satis.odemeDurumu === OdemeDurumu.ODENDI ? 'ÖDENDİ' : 'AÇIK HESAP'}
-                      </span>
-                    </div>
+            return (
+              <div key={satis.id} className={`urun-card bu-satis-kart ${teslimDurum}`}>
+                <div className="card-header">
+                  <div>
+                    <h3 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 14 }}>
+                      {satis.satisKodu}
+                    </h3>
+                    <p className="urun-kod">{getSubeAdi(satis.subeKodu)}</p>
                   </div>
-
-                  {/* KART BODY */}
-                  <div className="card-body">
-                    <div className="info-row">
-                      <span className="label">Müşteri</span>
-                      <span className="value">{satis.musteriBilgileri?.isim || '-'}</span>
-                    </div>
-                    <div className="info-row">
-                      <span className="label">Toplam Tutar</span>
-                      <span className="value" style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700 }}>
-                        {formatPrice(satis.toplamTutar)}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span className="label">Kâr / Zarar</span>
-                      <span className="value" style={{ color: kar >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
-                        {kar >= 0 ? '+' : ''}{formatPrice(kar)}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span className="label">Satış Tarihi</span>
-                      <span className="value">{formatDate(satis.tarih)}</span>
-                    </div>
-                    <div className="info-row">
-                      <span className="label">Teslim Tarihi</span>
-                      <span className="value" style={{
-                        fontWeight: 700,
-                        color: teslimDurum === 'gecmis' ? '#dc2626' : teslimDurum === 'yakin' ? '#d97706' : undefined
-                      }}>
-                        {formatDate(satis.teslimatTarihi)}
-                      </span>
-                    </div>
-                    {satis.servisNotu && (
-                      <div className="info-row notlar">
-                        <span className="label">Not</span>
-                        <span className="value">{satis.servisNotu}</span>
-                      </div>
-                    )}
-
-                    {/* ÜRÜN LİSTESİ */}
-                    {satis.urunler && satis.urunler.length > 0 && (
-                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e8eaed' }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: '#80868b', textTransform: 'uppercase', marginBottom: 6 }}>
-                          Ürünler ({satis.urunler.length})
-                        </div>
-                        {satis.urunler.map((urun, i) => (
-                          <div key={i} style={{
-                            display: 'flex', justifyContent: 'space-between',
-                            fontSize: 12, padding: '4px 0',
-                            borderBottom: i < satis.urunler.length - 1 ? '1px solid #f1f3f4' : 'none',
-                            color: '#3c4043'
-                          }}>
-                            <span style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#009999' }}>
-                              {urun.kod}
-                            </span>
-                            <span style={{ flex: 1, padding: '0 8px' }}>{urun.ad}</span>
-                            <span style={{ fontWeight: 600 }}>{urun.adet} adet</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* KART ACTIONS */}
-                  <div className="card-actions">
-                    <button
-                      className="btn-durum hazir"
-                      onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
-                    >
-                      Detay Görüntüle
-                    </button>
-                    {isAdmin && (
-                      <button
-                        className="btn-durum teslim"
-                        onClick={() => handleOnayla(satis)}
-                        disabled={yukleniyor}
-                      >
-                        {yukleniyor ? '...' : '✓ Onayla'}
-                      </button>
-                    )}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    {teslimDurum === 'gecmis' && <span className="durum-badge orange">⚠ TESLİM GEÇTİ</span>}
+                    {teslimDurum === 'yakin' && <span className="durum-badge blue">🔔 YAKLAŞIYOR</span>}
+                    {teslimDurum === 'normal' && <span className="durum-badge green">BEKLEMEDE</span>}
+                    <span className="durum-badge" style={{
+                      background: satis.odemeDurumu === OdemeDurumu.ODENDI ? '#f0fdf4' : '#fffbeb',
+                      color: satis.odemeDurumu === OdemeDurumu.ODENDI ? '#16a34a' : '#d97706',
+                      border: `1px solid ${satis.odemeDurumu === OdemeDurumu.ODENDI ? '#bbf7d0' : '#fde68a'}`
+                    }}>
+                      {satis.odemeDurumu === OdemeDurumu.ODENDI ? 'ÖDENDİ' : 'AÇIK HESAP'}
+                    </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
+
+                <div className="card-body">
+                  <div className="info-row">
+                    <span className="label">Müşteri</span>
+                    <span className="value">{satis.musteriBilgileri?.isim || '-'}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="label">Toplam Tutar</span>
+                    <span className="value" style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700 }}>
+                      {formatPrice(satis.toplamTutar)}
+                    </span>
+                  </div>
+                  <div className="info-row">
+                    <span className="label">Kâr / Zarar</span>
+                    <span className="value" style={{ color: kar >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                      {kar >= 0 ? '+' : ''}{formatPrice(kar)}
+                    </span>
+                  </div>
+                  <div className="info-row">
+                    <span className="label">Satış Tarihi</span>
+                    <span className="value">{formatDate(satis.tarih)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="label">Teslim Tarihi</span>
+                    <span className="value" style={{
+                      fontWeight: 700,
+                      color: teslimDurum === 'gecmis' ? '#dc2626' : teslimDurum === 'yakin' ? '#d97706' : undefined
+                    }}>
+                      {formatDate(satis.teslimatTarihi)}
+                    </span>
+                  </div>
+                  {satis.servisNotu && (
+                    <div className="info-row notlar">
+                      <span className="label">Not</span>
+                      <span className="value">{satis.servisNotu}</span>
+                    </div>
+                  )}
+
+                  {satis.urunler && satis.urunler.length > 0 && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e8eaed' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: '#80868b', textTransform: 'uppercase', marginBottom: 6 }}>
+                        Ürünler ({satis.urunler.length})
+                      </div>
+                      {satis.urunler.map((urun, i) => (
+                        <div key={i} style={{
+                          display: 'flex', justifyContent: 'space-between',
+                          fontSize: 12, padding: '4px 0',
+                          borderBottom: i < satis.urunler.length - 1 ? '1px solid #f1f3f4' : 'none',
+                          color: '#3c4043'
+                        }}>
+                          <span style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#009999' }}>{urun.kod}</span>
+                          <span style={{ flex: 1, padding: '0 8px' }}>{urun.ad}</span>
+                          <span style={{ fontWeight: 600 }}>{urun.adet} adet</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="card-actions">
+                  <button
+                    className="btn-durum hazir"
+                    onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
+                  >
+                    Detay Görüntüle
+                  </button>
+                  {isAdmin && (
+                    <button
+                      className="btn-durum teslim"
+                      onClick={() => handleOnayla(satis)}
+                      disabled={yukleniyor}
+                    >
+                      {yukleniyor ? '...' : '✓ Onayla'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Layout>
   );
 };
 
