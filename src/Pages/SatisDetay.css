@@ -342,7 +342,7 @@
   gap: 30px;
 }
 
-/* ========== A4 PRINT CSS - KAĞIDI BÜYÜT, İÇERİK SABİT ========== */
+/* ========== A4 PRINT CSS - 1 SAYFAYA SIĞDIR ========== */
 @media print {
   * {
     -webkit-print-color-adjust: exact !important;
@@ -367,53 +367,75 @@
 
   .detay-icerik {
     max-width: 100%;
-    padding: 30px;  /* Aynı padding korundu */
+    padding: 12px 16px;
     box-shadow: none;
     border-radius: 0;
     margin: 0;
     width: 100%;
     background: white;
-    
-    /* İçerik BOZULMADAN A4'e sığdır */
-    /* ÖNEMLİ: İçeriği küçültmüyoruz, A4 kağıdını genişletiyoruz */
   }
 
   .bos-satir {
     display: none !important;
   }
 
-  /* A4 sayfasını BÜYÜT - margin'leri küçült ki içerik sığsın */
   @page {
     size: A4;
-    margin: 0.5cm;  /* Margin küçültüldü ki sayfa büyüsün */
+    margin: 0.4cm;
   }
 
-  /* Tüm stiller AYNEN KALIYOR, hiçbir şey küçülmüyor! */
-  .firma-adi { font-size: 28px; }
-  .sayfa-basligi { font-size: 20px; }
-  .deger { font-size: 18px; }
-  .etiket { font-size: 13px; }
-  .bilgi { font-size: 13px; }
-  .satir-item { font-size: 13px; }
-  .urun-tablo { font-size: 14px; }
-  .urun-tablo th { font-size: 14px; padding: 10px 8px; }
-  .urun-tablo td { font-size: 14px; padding: 8px; }
-  .toplam-alan { font-size: 16px; padding: 12px; }
-  .kutu-baslik { font-size: 15px; }
-  .kutu-satir { font-size: 14px; }
-  .odeme-satir { font-size: 14px; }
-  .onay-metin { font-size: 18px; }
-  .imza-metin { font-size: 16px; }
-  .alt-bilgi { font-size: 12px; }
+  /* Başlık küçült */
+  .firma-adi { font-size: 20px !important; }
+  .sayfa-basligi { font-size: 15px !important; }
+  .baslik-bolumu { margin-bottom: 8px !important; padding-bottom: 8px !important; }
 
-  /* Margin'ler ve padding'ler AYNI KALIYOR */
-  .baslik-bolumu { margin-bottom: 25px; padding-bottom: 15px; }
-  .yesil-cerceve { padding: 20px 25px; margin-bottom: 25px; }
-  .ust-satir { gap: 20px; padding-bottom: 15px; margin-bottom: 15px; }
-  .alt-satir { gap: 20px; }
-  .ana-bolum { gap: 25px; margin-bottom: 25px; }
-  .mavi-cerceve { padding: 25px; margin-bottom: 20px; }
-  .onay-metin { margin-bottom: 20px; padding-bottom: 15px; }
+  /* Yeşil çerçeve sıkıştır */
+  .yesil-cerceve { padding: 8px 12px !important; margin-bottom: 8px !important; border-width: 2px !important; border-radius: 6px !important; }
+  .ust-satir { gap: 10px !important; padding-bottom: 6px !important; margin-bottom: 6px !important; }
+  .alt-satir { gap: 10px !important; }
+  .deger { font-size: 13px !important; }
+  .etiket { font-size: 10px !important; }
+  .bilgi { font-size: 10px !important; margin-bottom: 1px !important; }
+  .satir-item { font-size: 10px !important; margin-bottom: 2px !important; }
+  .baslik-alt { font-size: 11px !important; margin-bottom: 4px !important; }
+  .orta-sutun { padding: 0 8px !important; }
+  .sol-kolon { padding-right: 10px !important; }
+  .sag-kolon { padding-left: 10px !important; }
+
+  /* Ana bölüm */
+  .ana-bolum { gap: 10px !important; margin-bottom: 8px !important; }
+  .kirmizi-cerceve { padding: 8px 10px !important; border-width: 2px !important; border-radius: 6px !important; }
+
+  /* Ürün tablosu */
+  .urun-tablo { font-size: 11px !important; margin-bottom: 6px !important; }
+  .urun-tablo th { font-size: 11px !important; padding: 4px 5px !important; }
+  .urun-tablo td { font-size: 11px !important; padding: 3px 5px !important; }
+
+  /* Toplam alan */
+  .toplam-alan { font-size: 12px !important; padding: 5px 8px !important; }
+
+  /* Yan panel */
+  .yan-panel { gap: 8px !important; }
+  .sari-kutu { padding: 8px 10px !important; border-width: 2px !important; border-radius: 6px !important; }
+  .yesil-kutu { padding: 8px 10px !important; border-width: 2px !important; border-radius: 6px !important; }
+  .kutu-baslik { font-size: 11px !important; margin-bottom: 4px !important; }
+  .kutu-satir { font-size: 11px !important; margin-bottom: 2px !important; }
+  .etiket-tablo th, .etiket-tablo td { font-size: 10px !important; padding: 2px 4px !important; }
+  .etiket-toplam { font-size: 11px !important; padding: 4px !important; }
+
+  /* Ödeme bölümü */
+  .odeme-bolumu { margin-bottom: 8px !important; }
+  .kirmizi-cerceve.odeme-bolumu { padding: 8px 10px !important; }
+  .odeme-satir { font-size: 11px !important; margin-bottom: 2px !important; padding: 1px 0 !important; }
+  .hesaba-alan { font-size: 12px !important; padding: 5px 8px !important; margin-top: 5px !important; }
+
+  /* Mavi çerçeve (notlar + onay) */
+  .mavi-cerceve { padding: 8px 12px !important; margin-bottom: 8px !important; border-width: 2px !important; border-radius: 6px !important; }
+  .onay-metin { font-size: 13px !important; margin-bottom: 8px !important; padding-bottom: 6px !important; }
+  .imza-metin { font-size: 12px !important; }
+
+  /* Alt bilgi */
+  .alt-bilgi { font-size: 9px !important; padding-top: 6px !important; }
 }
 
 /* Küçük ekranlar için responsive */
@@ -455,5 +477,4 @@
     grid-template-columns: 1fr;
     gap: 20px;
   }
-  
 }

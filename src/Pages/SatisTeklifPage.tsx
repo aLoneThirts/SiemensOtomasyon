@@ -484,7 +484,7 @@ const SatisTeklifPage: React.FC = () => {
             <div className="form-field"><label>Müşteri Temsilcisi</label><input value={musteriTemsilcisi} onChange={e => setMusteriTemsilcisi(e.target.value)} /></div>
             <div className="form-field">
               <label>Teslimat Tarihi *</label>
-              <input type="date" value={teslimatTarihi} onChange={e => setTeslimatTarihi(e.target.value)} required />
+              <input type="date" value={teslimatTarihi} onChange={e => setTeslimatTarihi(e.target.value)} required={!ileriTeslim} />
             </div>
             <div className="form-field">
               <label>Satış Tutarı *</label>

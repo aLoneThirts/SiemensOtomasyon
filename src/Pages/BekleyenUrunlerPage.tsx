@@ -97,8 +97,12 @@ const BekleyenUrunlerPage: React.FC = () => {
     : bekleyenSatislar.filter(s => s.subeKodu === secilenSube);
 
   const getTeslimDurum = (satis: SatisTeklifFormu) => {
-    if (!satis.teslimatTarihi) return 'normal';
-    const teslim = toDate(satis.teslimatTarihi);
+    // İleri teslim ise ileriTeslimTarihi'ni kullan, yoksa teslimatTarihi
+    const tarihKaynagi = (satis as any).ileriTeslim && (satis as any).ileriTeslimTarihi
+      ? (satis as any).ileriTeslimTarihi
+      : satis.teslimatTarihi;
+    if (!tarihKaynagi) return 'normal';
+    const teslim = toDate(tarihKaynagi);
     const bugun = new Date();
     const fark = Math.ceil((teslim.getTime() - bugun.getTime()) / (1000 * 60 * 60 * 24));
     if (fark < 0) return 'gecmis';
@@ -152,6 +156,13 @@ const BekleyenUrunlerPage: React.FC = () => {
             const kar = satis.zarar ?? 0;
             const yukleniyor = onaylaniyor === satis.id;
 
+            // İleri teslim ise M.A. tarihini göster, değilse normal teslimat tarihi
+            const ileriTeslimVar = (satis as any).ileriTeslim && (satis as any).ileriTeslimTarihi;
+            const gosterilecekTeslimTarihi = ileriTeslimVar
+              ? (satis as any).ileriTeslimTarihi
+              : satis.teslimatTarihi;
+            const teslimTarihiLabel = ileriTeslimVar ? 'M.A. Teslim Tarihi' : 'Teslim Tarihi';
+
             return (
               <div key={satis.id} className={`urun-card bu-satis-kart ${teslimDurum}`}>
                 <div className="card-header">
@@ -196,16 +207,28 @@ const BekleyenUrunlerPage: React.FC = () => {
                     <span className="label">Satış Tarihi</span>
                     <span className="value">{formatDate(satis.tarih)}</span>
                   </div>
+                  {/* ✅ İleri teslim varsa M.A. Teslim Tarihi, yoksa normal Teslim Tarihi */}
                   <div className="info-row">
-                    <span className="label">Teslim Tarihi</span>
+                    <span className="label">{teslimTarihiLabel}</span>
                     <span className="value" style={{
                       fontWeight: 700,
                       color: teslimDurum === 'gecmis' ? '#dc2626' : teslimDurum === 'yakin' ? '#d97706' : undefined
                     }}>
-                      {formatDate(satis.teslimatTarihi)}
+                      {formatDate(gosterilecekTeslimTarihi)}
+                      {ileriTeslimVar && (
+                        <span style={{ fontSize: 10, marginLeft: 6, background: '#dbeafe', color: '#1d4ed8', padding: '1px 6px', borderRadius: 10, fontWeight: 600 }}>
+                          İLERİ TESLİM
+                        </span>
+                      )}
                     </span>
                   </div>
-                  {satis.servisNotu && (
+                  {(satis as any).notlar && (
+                    <div className="info-row notlar">
+                      <span className="label">Not</span>
+                      <span className="value">{(satis as any).notlar}</span>
+                    </div>
+                  )}
+                  {!((satis as any).notlar) && satis.servisNotu && (
                     <div className="info-row notlar">
                       <span className="label">Not</span>
                       <span className="value">{satis.servisNotu}</span>
