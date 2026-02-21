@@ -53,34 +53,20 @@
   color: var(--gray-800);
 }
 
-/* Sticky Header */
-.satis-form-container > .btn-back {
+/* Sticky Header Bar */
+.satis-form-header {
   position: sticky;
   top: 0;
   z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   width: 100%;
   padding: 0 40px;
   height: 64px;
   background: var(--gray-900);
   border-bottom: 3px solid var(--teal);
-  color: rgba(255,255,255,0.8);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  font-family: var(--font-main);
-  border-left: none;
-  border-right: none;
-  border-top: none;
-  cursor: pointer;
   box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-  transition: color 0.2s;
-  max-width: 100%;
+  display: flex;
+  align-items: center;
 }
-.satis-form-container > .btn-back:hover { color: white; }
 
 /* Form Title */
 .form-title {
@@ -755,7 +741,7 @@
 }
 
 @media (max-width: 900px) {
-  .satis-form-container > .btn-back { padding: 0 20px; }
+  .satis-form-header { padding: 0 20px; }
   .satis-form-container > form { padding: 0 20px; }
   .form-title { padding: 0 20px; }
   .form-section { padding: 20px; }

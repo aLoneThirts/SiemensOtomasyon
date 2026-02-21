@@ -203,7 +203,6 @@ const Dashboard: React.FC = () => {
     return <div className="pagination-container">{pages}</div>;
   };
 
-  // ✅ Sadece onay durumu toggle - admin only
   const onayDurumuToggle = async (satis: SatisTeklifFormu) => {
     if (!isAdmin || !satis.id) return;
     const sube = getSubeByKod(satis.subeKodu);
@@ -217,7 +216,6 @@ const Dashboard: React.FC = () => {
     finally { setGuncellemeyorum(null); }
   };
 
-  // ✅ Ödeme durumunu otomatik hesapla (firebase'deki verilerden)
   const odemeDurumunuHesapla = (satis: SatisTeklifFormu): boolean => {
     const toplamTutar = (satis as any).toplamTutar || 0;
     if (toplamTutar <= 0) return false;
@@ -276,7 +274,7 @@ const Dashboard: React.FC = () => {
                         <button className="alarm-detay-btn" onClick={() => navigate(`/satis-detay/${s.subeKodu}/${s.id}`)}>Görüntüle</button>
                       </div>
                     </div>
-                  ))}
+                  ))}w
                 </div>
               )}
             </div>
@@ -448,7 +446,6 @@ const Dashboard: React.FC = () => {
                 {currentSatislar.map(satis => {
                   const kar = satis.zarar ?? 0;
                   const isOnaylandi = satis.onayDurumu === true;
-                  // ✅ Ödeme durumu otomatik hesaplanıyor, kimse değiştiremez
                   const isOdendi = odemeDurumunuHesapla(satis);
                   const onayYukleniyor = guncellemeyorum === satis.id;
 
@@ -471,7 +468,6 @@ const Dashboard: React.FC = () => {
                         }
                       </td>
                       <td>
-                        {/* Durum: sadece admin tıklayabilir */}
                         {isAdmin ? (
                           <button
                             className={`status-badge clickable ${isOnaylandi ? 'approved' : 'pending'}`}
@@ -487,27 +483,25 @@ const Dashboard: React.FC = () => {
                         )}
                       </td>
                       <td>
-                        {/* ✅ Ödeme: sadece görüntülenir, hiç kimse değiştiremez */}
                         <span className={`status-badge ${isOdendi ? 'odendi' : 'acik-hesap'}`}>
                           {isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
                         </span>
                       </td>
                       <td>
-                        {/* ✅ Sadece ikon butonlar */}
                         <div className="action-buttons">
                           <button
                             onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
-                            className="btn-view btn-icon-only"
+                            className="btn-view"
                             title="Detay Görüntüle"
                           >
-                            <i className="fas fa-eye"></i>
+                            👁️
                           </button>
                           <button
                             onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)}
-                            className="btn-edit btn-icon-only"
+                            className="btn-edit"
                             title="Düzenle"
                           >
-                            <i className="fas fa-pen"></i>
+                            ✏️
                           </button>
                         </div>
                       </td>

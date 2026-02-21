@@ -1,0 +1,278 @@
+/* =============================================
+   KONTROL ET CSS
+   ============================================= */
+
+.kontrol-loading {
+  text-align: center;
+  padding: 60px;
+  font-size: 16px;
+  color: #6b7280;
+  background: white;
+  border-radius: 16px;
+  font-weight: 600;
+}
+
+/* ── BÖLÜM ── */
+.kontrol-bolum {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.kontrol-bolum-baslik {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.kontrol-bolum-baslik:hover { background: #f9fafb; }
+
+.kontrol-baslik-sol {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kontrol-baslik-ikon { font-size: 20px; }
+
+.kontrol-bolum-baslik h2 {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1f2937;
+  margin: 0;
+}
+
+.kontrol-sayac {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.bekleyen-sayac {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.onaylandi-sayac {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.bekleyen-bolum .kontrol-bolum-baslik {
+  border-left: 4px solid #ef4444;
+  background: linear-gradient(135deg, #fff5f5, #fff);
+}
+
+.onaylandi-bolum .kontrol-bolum-baslik {
+  border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, #f0fdf4, #fff);
+}
+
+.kontrol-chevron {
+  font-size: 12px;
+  color: #9ca3af;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.kontrol-chevron.acik { transform: rotate(180deg); }
+
+/* ── BOŞ STATE ── */
+.kontrol-bos {
+  text-align: center;
+  padding: 40px 20px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.kontrol-bos span { font-size: 32px; }
+.kontrol-bos p { margin: 10px 0 0; color: #6b7280; font-size: 14px; font-weight: 500; }
+
+/* ── TABLO ── */
+.kontrol-tablo-wrapper {
+  overflow-x: auto;
+  border-top: 1px solid #f3f4f6;
+}
+
+.kontrol-tablo {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.kontrol-tablo thead {
+  background: linear-gradient(135deg, #1f2937, #374151);
+}
+
+.kontrol-tablo th {
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.kontrol-tablo td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.kontrol-tablo tbody tr:last-child td { border-bottom: none; }
+
+.satir-bekleyen:hover { background: #fff5f5; }
+.satir-onaylandi:hover { background: #f0fdf4; }
+
+.satis-kodu { color: #009999; font-size: 13px; }
+
+/* ── KAR/ZARAR BADGE ── */
+.kz-badge {
+  padding: 4px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.kz-badge.kar { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
+.kz-badge.zarar { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; }
+
+/* ── ONAY BUTON/BADGE ── */
+.onay-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  letter-spacing: 0.4px;
+}
+
+.onay-btn.bekleyen {
+  background: linear-gradient(135deg, #fed7aa, #fdba74);
+  color: #92400e;
+}
+.onay-btn.bekleyen:hover {
+  background: linear-gradient(135deg, #fb923c, #f97316);
+  color: white;
+  transform: scale(1.05);
+}
+
+.onay-btn.onayli {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #065f46;
+}
+.onay-btn.onayli:hover {
+  background: linear-gradient(135deg, #6ee7b7, #34d399);
+  transform: scale(1.05);
+}
+
+.onay-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.onay-badge {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-block;
+}
+
+.onay-badge.bekleyen { background: #fed7aa; color: #92400e; }
+.onay-badge.onayli { background: #d1fae5; color: #065f46; }
+
+/* ── İŞLEM BUTONLARI ── */
+.islem-btns { display: flex; gap: 6px; }
+
+.btn-goster, .btn-duzenle {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-goster {
+  background: linear-gradient(135deg, #009999, #007373);
+  box-shadow: 0 2px 6px rgba(0, 153, 153, 0.25);
+}
+.btn-goster:hover { background: linear-gradient(135deg, #00b3b3, #008c8c); transform: translateY(-2px); }
+
+.btn-duzenle {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  box-shadow: 0 2px 6px rgba(255, 152, 0, 0.25);
+}
+.btn-duzenle:hover { background: linear-gradient(135deg, #f57c00, #e65100); transform: translateY(-2px); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .kontrol-bolum-baslik { padding: 14px 16px; }
+  .kontrol-bolum-baslik h2 { font-size: 13px; }
+  .kontrol-tablo td, .kontrol-tablo th { padding: 10px 10px; }
+}
+
+/* ── SAYFALAMA ── */
+.kontrol-pagination {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 20px;
+  border-top: 1px solid #f3f4f6;
+  flex-wrap: wrap;
+}
+
+.kontrol-pag-btn {
+  padding: 6px 12px;
+  border: 2px solid #e5e7eb;
+  background: white;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  color: #374151;
+}
+
+.kontrol-pag-btn:hover:not(:disabled) {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fff5f5;
+}
+
+.kontrol-pag-btn.aktif {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-color: #ef4444;
+  color: white;
+  box-shadow: 0 3px 8px rgba(239, 68, 68, 0.3);
+}
+
+.kontrol-pag-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.kontrol-pag-bilgi {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-left: 8px;
+  font-weight: 500;
+}

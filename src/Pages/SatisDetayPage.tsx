@@ -167,7 +167,7 @@ const SatisDetayPage: React.FC = () => {
               <div className="etiket">SATIŞ BİLGİLERİ</div>
               <div className="bilgi">MÜŞTERİ TEMSİLCİSİ: {satis.musteriTemsilcisi}</div>
               {satis.musteriTemsilcisiTel && <div className="bilgi">TEL: {satis.musteriTemsilcisiTel}</div>}
-              {/* ✅ 7. Madde: İleri Teslim tarihi görüntüleme */}
+              {/* ✅ İleri Teslim tarihi görüntüleme */}
               {(satis as any).ileriTeslim && (satis as any).ileriTeslimTarihi && (
                 <div className="bilgi" style={{ marginTop: 4, color: '#0369a1', fontWeight: 600 }}>
                   M.A. TESLİM TARİHİ: {formatDate((satis as any).ileriTeslimTarihi)}
@@ -190,17 +190,46 @@ const SatisDetayPage: React.FC = () => {
               <div className="satir-item">ADRES: {satis.musteriBilgileri?.adres}</div>
             </div>
             <div className="sag-kolon">
-              <div className="satir-item">MARS NO: {satis.marsNo || '-'}</div>
+              {/* ✅ MARS NO - tüm formatları destekler */}
+              {(() => {
+                // Tüm mars girişlerini topla (marsGirisleri array, yeniMarsNo, marsNo)
+                const marsGirisleri: any[] = (satis as any).marsGirisleri;
+
+                let tumMarslar: { marsNo: string; tarih: any }[] = [];
+
+                if (marsGirisleri && marsGirisleri.length > 0) {
+                  // Yeni format: marsGirisleri array'i var
+                  tumMarslar = marsGirisleri
+                    .filter((g: any) => g.marsNo)
+                    .map((g: any) => ({ marsNo: g.marsNo, tarih: g.teslimatTarihi }));
+                } else {
+                  // Eski format: marsNo + yeniMarsNo ayrı field'lar
+                  if (satis.marsNo) tumMarslar.push({ marsNo: satis.marsNo, tarih: satis.teslimatTarihi });
+                  if ((satis as any).yeniMarsNo) tumMarslar.push({ marsNo: (satis as any).yeniMarsNo, tarih: (satis as any).yeniTeslimatTarihi });
+                }
+
+                const marsNoStr = tumMarslar.length > 0
+                  ? tumMarslar.map(m => m.marsNo).join(' - ')
+                  : '-';
+
+                const tarihStr = tumMarslar.length > 0
+                  ? tumMarslar.map(m => m.tarih ? formatDate(m.tarih) : '-').join(' - ')
+                  : '-';
+
+                return (
+                  <>
+                    <div className="satir-item">MARS NO: {marsNoStr}</div>
+                    <div className="satir-item">TESLİMAT TARİHİ: {tarihStr}</div>
+                  </>
+                );
+              })()}
               <div className="satir-item">MAĞAZA: {satis.magaza || '-'}</div>
               <div className="satir-item">FATURA NO: {satis.faturaNo || '-'}</div>
               <div className="satir-item">SERVİS: {satis.servisNotu || '-'}</div>
               <div className="satir-item">TESLİM EDİLDİ Mİ?: {satis.teslimEdildiMi ? 'EVET' : 'HAYIR'}</div>
-              <div className="satir-item">TESLİMAT TARİHİ: {formatDate(satis.teslimatTarihi)}</div>
             </div>
           </div>
         </div>
-
-        {/* ✅ 3. Madde: Mars No / Teslimat Tarihi Düzenle butonu ve paneli TAMAMEN KALDIRILDI */}
 
         {/* 2. ÜRÜNLER + KAMPANYALAR */}
         <div className="ana-bolum">
@@ -403,7 +432,7 @@ const SatisDetayPage: React.FC = () => {
           </div>
         </div>
 
-        {/* ✅ 5. Madde: Notlar + Onay yan yana */}
+        {/* Notlar + Onay yan yana */}
         <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
           {/* Notlar kutusu */}
           <div className="mavi-cerceve" style={{ flex: 1, minHeight: 80 }}>
@@ -419,7 +448,7 @@ const SatisDetayPage: React.FC = () => {
             )}
           </div>
 
-          {/* ✅ Onay kutusu %50 küçültülmüş */}
+          {/* Onay kutusu */}
           <div className="mavi-cerceve" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div className="onay-metin" style={{ fontSize: 13 }}>ONAY: {satis.onayDurumu ? 'ONAYLANDI' : 'ONAY BEKLİYOR'}</div>
             <div className="imza-metin" style={{ fontSize: 12 }}>İMZA: __________________</div>
