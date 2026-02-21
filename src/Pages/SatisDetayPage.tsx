@@ -13,7 +13,6 @@ const SatisDetayPage: React.FC = () => {
   const [satis, setSatis] = useState<SatisTeklifFormu | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Düzenleme state'leri
   const [duzenlemeAcik, setDuzenlemeAcik] = useState(false);
   const [yeniMarsNo, setYeniMarsNo] = useState('');
   const [yeniTeslimatTarihi, setYeniTeslimatTarihi] = useState('');
@@ -63,15 +62,91 @@ const SatisDetayPage: React.FC = () => {
     } catch { return ''; }
   };
 
-  const toplamMaliyetHesapla = () => {
+  // ========== HESAPLAMA FONKSİYONLARI ==========
+
+  const kampanyaToplamiHesapla = () => {
+    if (!satis) return 0;
+    if ((satis as any).kampanyaToplami !== undefined) return (satis as any).kampanyaToplami || 0;
+    if (!satis.kampanyalar) return 0;
+    return satis.kampanyalar.reduce((sum: number, k: any) => sum + (k.tutar || 0), 0);
+  };
+
+  const alisToplamHesapla = () => {
     if (!satis?.urunler) return 0;
-    const alisToplam = satis.urunler.reduce((sum, urun) => sum + (urun.adet * urun.alisFiyati), 0);
-    const bipToplam = satis.urunler.reduce((sum, urun) => sum + ((urun.bip || 0) * urun.adet), 0);
-    return alisToplam - bipToplam;
+    return satis.urunler.reduce((sum, u) => sum + (u.adet * u.alisFiyati), 0);
+  };
+
+  const bipToplamHesapla = () => {
+    if (!satis?.urunler) return 0;
+    return satis.urunler.reduce((sum, u) => sum + ((u.bip || 0) * u.adet), 0);
+  };
+
+  // Maliyet = Alış − BİP − Kampanya
+  const toplamMaliyetHesapla = () => {
+    return Math.max(0, alisToplamHesapla() - bipToplamHesapla() - kampanyaToplamiHesapla());
+  };
+
+  // Satış tutarı = kaydedilmiş toplamTutar (kullanıcının girdiği)
+  const satisTutariHesapla = () => {
+    if (!satis) return 0;
+    return (satis as any).toplamTutar || 0;
+  };
+
+  // Peşinat toplam (çoklu veya tekli)
+  const pesinatToplamHesapla = () => {
+    if (!satis) return 0;
+    const pesinatlar: any[] = (satis as any).pesinatlar || [];
+    if (pesinatlar.length > 0) return pesinatlar.reduce((s: number, p: any) => s + (p.tutar || 0), 0);
+    return (satis as any).pesinatToplam || satis.pesinatTutar || 0;
+  };
+
+  // Havale toplam (çoklu veya tekli)
+  const havaleToplamHesapla = () => {
+    if (!satis) return 0;
+    const havaleler: any[] = (satis as any).havaleler || [];
+    if (havaleler.length > 0) return havaleler.reduce((s: number, h: any) => s + (h.tutar || 0), 0);
+    return (satis as any).havaleToplam || satis.havaleTutar || 0;
+  };
+
+  // Kart brüt (ödeme durumu için)
+  const kartBrutToplamHesapla = () => {
+    if (!satis) return 0;
+    if ((satis as any).kartBrutToplam !== undefined) return (satis as any).kartBrutToplam;
+    return (satis.kartOdemeler || []).reduce((s, k) => s + (k.tutar || 0), 0);
+  };
+
+  const kartKesintiToplamHesapla = () => {
+    if (!satis) return 0;
+    if ((satis as any).kartKesintiToplam !== undefined) return (satis as any).kartKesintiToplam;
+    return (satis.kartOdemeler || []).reduce((s, k) => s + (k.tutar * (k.kesintiOrani || 0)) / 100, 0);
+  };
+
+  const kartNetToplamHesapla = () => kartBrutToplamHesapla() - kartKesintiToplamHesapla();
+
+  // TOPLAM ÖDENEN = Peşinat + Havale + Kart BRÜT
+  const toplamOdenenHesapla = () => {
+    if (!satis) return 0;
+    if ((satis as any).toplamOdenen !== undefined) return (satis as any).toplamOdenen;
+    return pesinatToplamHesapla() + havaleToplamHesapla() + kartBrutToplamHesapla();
+  };
+
+  // HESABA GEÇEN = Peşinat + Havale + Kart NET
+  const hesabaGecenToplamHesapla = () => {
+    if (!satis) return 0;
+    if ((satis as any).hesabaGecenToplam !== undefined) return (satis as any).hesabaGecenToplam;
+    return pesinatToplamHesapla() + havaleToplamHesapla() + kartNetToplamHesapla();
+  };
+
+  const karZararHesapla = () => hesabaGecenToplamHesapla() - toplamMaliyetHesapla();
+
+  // Açık = Satış − Toplam Ödenen (brüt)
+  const acikHesapHesapla = () => {
+    const acik = satisTutariHesapla() - toplamOdenenHesapla();
+    return acik > 0 ? acik : 0;
   };
 
   const yesilEtiketToplamHesapla = () =>
-    satis?.yesilEtiketler?.reduce((sum, etiket) => sum + etiket.tutar, 0) || 0;
+    satis?.yesilEtiketler?.reduce((sum, e) => sum + (e.tutar || 0), 0) || 0;
 
   const kaydet = async () => {
     if (!satis) return;
@@ -164,28 +239,22 @@ const SatisDetayPage: React.FC = () => {
               <div className="satir-item">ADRES: {satis.musteriBilgileri?.adres}</div>
             </div>
             <div className="sag-kolon">
-
-              {/* MARS NO: ESKİ - YENİ */}
               <div className="satir-item">
                 MARS NO: {satis.marsNo || '-'}
                 {satis.yeniMarsNo && (
                   <span className="yeni-deger-inline"> - YENİ: {satis.yeniMarsNo}</span>
                 )}
               </div>
-
               <div className="satir-item">MAĞAZA: {satis.magaza || '-'}</div>
               <div className="satir-item">FATURA NO: {satis.faturaNo || '-'}</div>
               <div className="satir-item">SERVİS: {satis.servisNotu || '-'}</div>
               <div className="satir-item">TESLİM EDİLDİ Mİ?: {satis.teslimEdildiMi ? 'EVET' : 'HAYIR'}</div>
-
-              {/* TESLİMAT TARİHİ: ESKİ - YENİ */}
               <div className="satir-item">
                 TESLİMAT TARİHİ: {formatDate(satis.teslimatTarihi)}
                 {satis.yeniTeslimatTarihi && (
                   <span className="yeni-deger-inline"> - YENİ: {formatDate(satis.yeniTeslimatTarihi)}</span>
                 )}
               </div>
-
             </div>
           </div>
         </div>
@@ -236,7 +305,7 @@ const SatisDetayPage: React.FC = () => {
             <table className="urun-tablo">
               <thead>
                 <tr>
-                  <th>ORİN KODU</th><th>ADET</th><th>ALIŞ</th><th>BİP</th>
+                  <th>ÜRN KODU</th><th>ADET</th><th>ALIŞ</th><th>BİP</th>
                 </tr>
               </thead>
               <tbody>
@@ -259,7 +328,49 @@ const SatisDetayPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
-            <div className="toplam-alan">TOPLAM MALİYET: {formatPrice(toplamMaliyetHesapla())}</div>
+
+            {/* Satış tutarı ve maliyet özeti */}
+            <div className="toplam-alan" style={{ borderTop: '2px solid #e5e7eb', marginTop: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                <span>SATIŞ TUTARI:</span>
+                <strong style={{ color: '#15803d', fontSize: 16 }}>{formatPrice(satisTutariHesapla())}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13, color: '#6b7280' }}>
+                <span>Alış − BİP:</span>
+                <span>{formatPrice(alisToplamHesapla())} − {formatPrice(bipToplamHesapla())}</span>
+              </div>
+              {kampanyaToplamiHesapla() > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13, color: '#15803d' }}>
+                  <span>Kampanya:</span>
+                  <span>−{formatPrice(kampanyaToplamiHesapla())}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontWeight: 700, borderTop: '1px solid #e5e7eb', marginTop: 4 }}>
+                <span>TOPLAM MALİYET:</span>
+                <span>{formatPrice(toplamMaliyetHesapla())}</span>
+              </div>
+            </div>
+
+            {/* Kâr/zarar */}
+            <div style={{
+              margin: '8px 0', padding: '8px 12px', borderRadius: 6, fontWeight: 700,
+              background: karZararHesapla() >= 0 ? '#dcfce7' : '#fee2e2',
+              color: karZararHesapla() >= 0 ? '#15803d' : '#dc2626'
+            }}>
+              {karZararHesapla() >= 0
+                ? `📈 KÂR: ${formatPrice(karZararHesapla())}`
+                : `📉 ZARAR: ${formatPrice(Math.abs(karZararHesapla()))}`
+              }
+              <span style={{ fontSize: 11, marginLeft: 8, opacity: 0.8 }}>
+                (Hesaba Geçen: {formatPrice(hesabaGecenToplamHesapla())} — Maliyet: {formatPrice(toplamMaliyetHesapla())})
+              </span>
+            </div>
+
+            {acikHesapHesapla() > 0 && (
+              <div style={{ padding: '6px 12px', background: '#fff7ed', borderRadius: 6, color: '#ea580c', fontWeight: 600 }}>
+                🔓 AÇIK HESAP: {formatPrice(acikHesapHesapla())}
+              </div>
+            )}
           </div>
 
           <div className="yan-panel">
@@ -267,10 +378,22 @@ const SatisDetayPage: React.FC = () => {
               <div className="kutu-baslik">KAMPANYALAR</div>
               {satis.kampanyalar && satis.kampanyalar.length > 0 ? (
                 satis.kampanyalar.map((kampanya: Kampanya, i: number) => (
-                  <div key={i} className="kutu-satir">{kampanya.ad}: {formatPrice(kampanya.tutar)}</div>
+                  <div key={i} className="kutu-satir">
+                    {kampanya.ad}
+                    {(kampanya.tutar || 0) > 0 && (
+                      <span style={{ color: '#15803d', fontWeight: 600, marginLeft: 8 }}>
+                        −{formatPrice(kampanya.tutar || 0)}
+                      </span>
+                    )}
+                  </div>
                 ))
               ) : (
                 <div className="kutu-satir">Kampanya bulunamadı</div>
+              )}
+              {kampanyaToplamiHesapla() > 0 && (
+                <div className="kutu-satir" style={{ fontWeight: 700, color: '#15803d', borderTop: '1px solid #fef08a', marginTop: 4, paddingTop: 4 }}>
+                  Toplam İndirim: −{formatPrice(kampanyaToplamiHesapla())}
+                </div>
               )}
             </div>
 
@@ -291,7 +414,7 @@ const SatisDetayPage: React.FC = () => {
                   <div className="etiket-toplam">TOPLAM: {formatPrice(yesilEtiketToplamHesapla())}</div>
                 </>
               ) : (
-                <div className="kutu-satir">Yeşil etiket bulunamadı</div>
+                <div className="kutu-satir">Yeşil etiket yok</div>
               )}
             </div>
           </div>
@@ -300,17 +423,71 @@ const SatisDetayPage: React.FC = () => {
         {/* 3. ÖDEME BİLGİLERİ */}
         <div className="kirmizi-cerceve odeme-bolumu">
           <div className="kutu-baslik">ÖDEME BİLGİLERİ</div>
-          {satis.pesinatTutar ? <div className="odeme-satir">PEŞİN: {formatPrice(satis.pesinatTutar)}</div> : null}
-          {satis.havaleTutar ? <div className="odeme-satir">HAVALE: {formatPrice(satis.havaleTutar)}</div> : null}
+
+          {/* Peşinatlar */}
+          {(() => {
+            const pesinatlar: any[] = (satis as any).pesinatlar || [];
+            if (pesinatlar.length > 0) {
+              return pesinatlar.map((p: any, i: number) => (
+                <div key={i} className="odeme-satir">
+                  💵 PEŞİNAT: {formatPrice(p.tutar)}{p.aciklama ? ` (${p.aciklama})` : ''}
+                </div>
+              ));
+            } else if (satis.pesinatTutar) {
+              return <div className="odeme-satir">💵 PEŞİNAT: {formatPrice(satis.pesinatTutar)}</div>;
+            }
+            return null;
+          })()}
+
+          {/* Havaleler */}
+          {(() => {
+            const havaleler: any[] = (satis as any).havaleler || [];
+            if (havaleler.length > 0) {
+              return havaleler.map((h: any, i: number) => (
+                <div key={i} className="odeme-satir">
+                  🏦 HAVALE: {formatPrice(h.tutar)} ({h.banka})
+                </div>
+              ));
+            } else if (satis.havaleTutar) {
+              return (
+                <div className="odeme-satir">
+                  🏦 HAVALE: {formatPrice(satis.havaleTutar)}
+                  {(satis as any).havaleBanka ? ` (${(satis as any).havaleBanka})` : ''}
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Kartlar */}
           {satis.kartOdemeler && satis.kartOdemeler.length > 0 && (
-            satis.kartOdemeler.map((kart: KartOdeme, index: number) => (
-              <div key={index} className="odeme-satir">
-                KART: ({kart.banka}) / ({kart.taksitSayisi === 1 ? 'TEK' : `${kart.taksitSayisi} TAKSİT`}) / ({formatPrice(kart.tutar)})
-                {kart.pesinat ? ` / (PEŞİNAT: ${formatPrice(kart.pesinat)})` : ''}
-              </div>
-            ))
+            satis.kartOdemeler.map((kart: KartOdeme, index: number) => {
+              const kesintiOrani = kart.kesintiOrani || 0;
+              const net = kart.tutar - (kart.tutar * kesintiOrani) / 100;
+              return (
+                <div key={index} className="odeme-satir">
+                  💳 KART: {kart.banka} / {kart.taksitSayisi === 1 ? 'Tek' : `${kart.taksitSayisi} Taksit`} /
+                  Brüt: {formatPrice(kart.tutar)} → NET: {formatPrice(net)}
+                  {kesintiOrani > 0 && ` (%${kesintiOrani} kesinti)`}
+                </div>
+              );
+            })
           )}
-          {satis.hesabaGecen && <div className="hesaba-alan">HESABA GEÇEN: {satis.hesabaGecen}</div>}
+
+          <div className="hesaba-alan" style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Toplam Ödenen (Brüt):</span>
+              <strong>{formatPrice(toplamOdenenHesapla())}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Hesaba Geçen (NET):</span>
+              <strong>{formatPrice(hesabaGecenToplamHesapla())}</strong>
+            </div>
+            {acikHesapHesapla() > 0
+              ? <div style={{ color: '#ea580c', fontWeight: 700, marginTop: 4 }}>🔓 AÇIK HESAP: {formatPrice(acikHesapHesapla())}</div>
+              : <div style={{ color: '#15803d', fontWeight: 700, marginTop: 4 }}>✅ TAM ÖDENDİ</div>
+            }
+          </div>
         </div>
 
         {/* 4. ONAY */}

@@ -12,29 +12,14 @@ import {
   OdemeDurumu, BekleyenUrun,
 } from '../types/satis';
 import { getSubeByKod, SubeKodu } from '../types/sube';
-import * as XLSX from 'xlsx';
 import './SatisTeklif.css';
 
-// ── Havale bankaları ─────────────────────────────────────────────────────────
 const HAVALE_BANKALARI = [
-  'Ziraat Bankası',
-  'Halkbank',
-  'Vakıfbank',
-  'İş Bankası',
-  'Garanti BBVA',
-  'Yapı Kredi',
-  'Akbank',
-  'QNB Finansbank',
-  'Denizbank',
-  'TEB',
-  'ING Bank',
-  'HSBC',
-  'Şekerbank',
-  'Fibabanka',
-  'Alternatifbank',
+  'Ziraat Bankası', 'Halkbank', 'Vakıfbank', 'İş Bankası', 'Garanti BBVA',
+  'Yapı Kredi', 'Akbank', 'QNB Finansbank', 'Denizbank', 'TEB',
+  'ING Bank', 'HSBC', 'Şekerbank', 'Fibabanka', 'Alternatifbank',
 ];
 
-// ── Admin panelden çekilecek yeşil etiket tipi ───────────────────────────────
 interface YesilEtiketAdmin {
   id?: string;
   urunKodu: string;
@@ -42,13 +27,13 @@ interface YesilEtiketAdmin {
   maliyet: number;
 }
 
-// ── Admin panelden çekilecek kampanya tipi ───────────────────────────────────
 interface KampanyaAdmin {
   id?: string;
   ad: string;
   aciklama: string;
   aktif: boolean;
   subeKodu: string;
+  tutar?: number;
 }
 
 const SatisTeklifPage: React.FC = () => {
@@ -57,7 +42,6 @@ const SatisTeklifPage: React.FC = () => {
 
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
-  // ========== STATE'LER ==========
   const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>({
     isim: '', adres: '', faturaAdresi: '', isAdresi: '',
     vergiNumarasi: '', vkNo: '', vd: '', cep: ''
@@ -83,25 +67,56 @@ const SatisTeklifPage: React.FC = () => {
   const [ileriTeslim, setIleriTeslim] = useState(false);
   const [servis, setServis] = useState(false);
 
-  // Kampanyalar – admin panelden çekilir, kullanıcı seçer
   const [kampanyaListesi, setKampanyaListesi] = useState<KampanyaAdmin[]>([]);
   const [seciliKampanyaIds, setSeciliKampanyaIds] = useState<string[]>([]);
 
-  // Yeşil etiketler – admin panelden çekilir, ürün koduna göre otomatik eşleşir
   const [yesilEtiketAdminList, setYesilEtiketAdminList] = useState<YesilEtiketAdmin[]>([]);
 
-  const [pesinatTutar, setPesinatTutar] = useState(0);
-  const [havaleTutar, setHavaleTutar] = useState(0);
-  const [havaleBanka, setHavaleBanka] = useState(HAVALE_BANKALARI[0]);
+  // ========== ÖDEME STATE - ÇOKLU DESTEK ==========
+  // Çoklu peşinat
+  const [pesinatlar, setPesinatlar] = useState<{ id: string; tutar: number; aciklama: string }[]>([]);
+  // Çoklu havale
+  const [havaleler, setHavaleler] = useState<{ id: string; tutar: number; banka: string }[]>([]);
+  // Kartlar (banka + taksit → kesinti otomatik)
   const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>([]);
-  const [odemeYontemi, setOdemeYontemi] = useState<OdemeYontemi>(OdemeYontemi.PESINAT);
+  // Kart kesinti cache: { "BankaAdı": { tek: x, t2: y, ... } }
+  const [kesintiCache, setKesintiCache] = useState<Record<string, Record<string, number>>>({});
+
+  const kesintiCacheYukle = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'bankaKesintiler'));
+      const cache: Record<string, Record<string, number>> = {};
+      snap.docs.forEach(d => {
+        const data = d.data();
+        cache[d.id] = {
+          tek: data.tek || 0,
+          t2: data.t2 || 0, t3: data.t3 || 0, t4: data.t4 || 0,
+          t5: data.t5 || 0, t6: data.t6 || 0, t7: data.t7 || 0,
+          t8: data.t8 || 0, t9: data.t9 || 0,
+        };
+      });
+      setKesintiCache(cache);
+    } catch (err) { console.error('Kesinti cache yüklenemedi:', err); }
+  };
+
+  const getKesintiOrani = (banka: string, taksit: number): number => {
+    const bankaData = kesintiCache[banka];
+    if (!bankaData) return 0;
+    const key = taksit === 1 ? 'tek' : `t${taksit}`;
+    return bankaData[key] || 0;
+  };
+
+  const odemeYontemi = OdemeYontemi.PESINAT; // artık kullanılmıyor ama tip uyumu için
   const [hesabaGecen, setHesabaGecen] = useState('');
   const [onayDurumu, setOnayDurumu] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [satisKodu, setSatisKodu] = useState('');
 
-  // ========== YARDIMCI FONKSİYONLAR ==========
+  // FIX 3: Satış tutarı artık editable - manuel override için
+  const [manuelSatisTutari, setManuelSatisTutari] = useState<number | null>(null);
+  const [satisTutariDuzenle, setSatisTutariDuzenle] = useState(false);
+
   const getSonSatisKodu = async (subeDbPath: string): Promise<string | null> => {
     try {
       const satisRef = collection(db, `subeler/${subeDbPath}/satislar`);
@@ -128,19 +143,75 @@ const SatisTeklifPage: React.FC = () => {
     }).format(price);
   };
 
-  // ========== HESAPLAMA FONKSİYONLARI ==========
+  /* ── HESAPLAMA FONKSİYONLARI ── */
   const alisToplamHesapla = (): number =>
     urunler.reduce((t, u) => t + u.adet * u.alisFiyati, 0);
 
   const bipToplamHesapla = (): number =>
     urunler.reduce((t, u) => t + (u.bip || 0) * u.adet, 0);
 
-  const toplamTutarHesapla = (): number => alisToplamHesapla();
+  // Satış tutarı = kullanıcının girdiği değer (hiç otomatik hesaplanmaz)
+  const toplamTutarHesapla = (): number => manuelSatisTutari ?? 0;
 
-  const toplamMaliyetHesapla = (): number =>
-    alisToplamHesapla() - bipToplamHesapla();
+  // Kampanya tutarı toplamı
+  const kampanyaToplamiHesapla = (): number => {
+    const seciliKampanyalar = kampanyaListesi.filter(k => seciliKampanyaIds.includes(k.id!));
+    return seciliKampanyalar.reduce((t, k) => t + (k.tutar || 0), 0);
+  };
 
-  // Yeşil etiket toplam indirimi – ürün koduna göre otomatik eşleşir
+  // Maliyet = Alış − BİP − Kampanya
+  const toplamMaliyetHesapla = (): number => {
+    return Math.max(0, alisToplamHesapla() - bipToplamHesapla() - kampanyaToplamiHesapla());
+  };
+
+  // Kart net hesabı (kesinti düşülmüş)
+  const kartNetTutarHesapla = (kart: KartOdeme): number => {
+    const oran = kart.kesintiOrani || 0;
+    return kart.tutar - (kart.tutar * oran) / 100;
+  };
+
+  // Peşinat toplamı
+  const pesinatToplamHesapla = (): number =>
+    pesinatlar.reduce((t, p) => t + (p.tutar || 0), 0);
+
+  // Havale toplamı
+  const havaleToplamHesapla = (): number =>
+    havaleler.reduce((t, h) => t + (h.tutar || 0), 0);
+
+  // Kart BRÜT toplamı (ödeme durumu için)
+  const kartBrutToplamHesapla = (): number =>
+    kartOdemeler.reduce((t, k) => t + (k.tutar || 0), 0);
+
+  const kartKesintiToplamHesapla = (): number =>
+    kartOdemeler.reduce((t, k) => t + (k.tutar * (k.kesintiOrani || 0)) / 100, 0);
+
+  const kartNetToplamHesapla = (): number =>
+    kartOdemeler.reduce((t, k) => t + kartNetTutarHesapla(k), 0);
+
+  // TOPLAM ÖDENEN = Peşinat + Havale + Kart BRÜT (kullanıcı bakış açısından)
+  const toplamOdenenHesapla = (): number =>
+    pesinatToplamHesapla() + havaleToplamHesapla() + kartBrutToplamHesapla();
+
+  // HESABA GEÇEN = Peşinat + Havale + Kart NET (gerçek gelir)
+  const hesabaGecenToplamHesapla = (): number =>
+    pesinatToplamHesapla() + havaleToplamHesapla() + kartNetToplamHesapla();
+
+  // Ödeme durumu: Toplam Ödenen (BRÜT) = Satış Tutarı → ÖDENDİ
+  const getOdemeDurumu = (): OdemeDurumu => {
+    const odenen = toplamOdenenHesapla();
+    return odenen >= toplamTutarHesapla() && toplamTutarHesapla() > 0
+      ? OdemeDurumu.ODENDI
+      : OdemeDurumu.ACIK_HESAP;
+  };
+
+  const acikHesapHesapla = (): number => {
+    const acik = toplamTutarHesapla() - toplamOdenenHesapla();
+    return acik > 0 ? acik : 0;
+  };
+
+  const karZararHesapla = (): number =>
+    hesabaGecenToplamHesapla() - toplamMaliyetHesapla();
+
   const yesilEtiketToplamIndirimHesapla = (): number => {
     let toplam = 0;
     for (const urun of urunler) {
@@ -152,7 +223,6 @@ const SatisTeklifPage: React.FC = () => {
     return toplam;
   };
 
-  // Eşleşen yeşil etiketleri listele (gösterim için)
   const eslesenYesilEtiketler = (): { urunKodu: string; urunAdi: string; maliyet: number; adet: number }[] => {
     const result: { urunKodu: string; urunAdi: string; maliyet: number; adet: number }[] = [];
     for (const urun of urunler) {
@@ -166,40 +236,7 @@ const SatisTeklifPage: React.FC = () => {
     return result;
   };
 
-  const kartNetTutarHesapla = (kart: KartOdeme): number => {
-    const kesinti = kart.kesintiOrani || 0;
-    return kart.tutar - (kart.tutar * kesinti) / 100;
-  };
-
-  const kasayaYansiranHesapla = (): number => pesinatTutar || 0;
-
-  const hesabaGecenToplamHesapla = (): number => {
-    const kartNetToplam = kartOdemeler.reduce((sum, k) => sum + kartNetTutarHesapla(k), 0);
-    return (pesinatTutar || 0) + (havaleTutar || 0) + kartNetToplam;
-  };
-
-  const kartBrutToplamHesapla = (): number =>
-    kartOdemeler.reduce((sum, k) => sum + (k.tutar || 0), 0);
-
-  const kartKesintiToplamHesapla = (): number =>
-    kartOdemeler.reduce((sum, k) => {
-      const kesinti = k.kesintiOrani || 0;
-      return sum + (k.tutar * kesinti) / 100;
-    }, 0);
-
-  const acikHesapHesapla = (): number => {
-    const acik = toplamTutarHesapla() - hesabaGecenToplamHesapla();
-    return acik > 0 ? acik : 0;
-  };
-
-  const karZararHesapla = (): number =>
-    hesabaGecenToplamHesapla() - toplamMaliyetHesapla();
-
-  const getOdemeDurumu = (): OdemeDurumu =>
-    acikHesapHesapla() > 0 ? OdemeDurumu.ACIK_HESAP : OdemeDurumu.ODENDI;
-
-  // ========== MARS NO ==========
-  // Mağazadan teslim edildi ise MARS No zorunlu değil
+  /* ── MARS NO ── */
   const isMarsNoGerekli = (): boolean => !teslimEdildiMi;
 
   const isMarsNoGecerli = (): boolean => {
@@ -221,7 +258,6 @@ const SatisTeklifPage: React.FC = () => {
     setMarsNoHata(val.length !== 10);
   };
 
-  // ========== FATURA NO ==========
   const handleFaturaNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setFaturaNo(value);
@@ -229,7 +265,6 @@ const SatisTeklifPage: React.FC = () => {
     setFatura(value.trim() !== '');
   };
 
-  // ========== SatisKodu ==========
   const satisKoduOlustur = async (): Promise<string> => {
     const sube = getSubeByKod(currentUser!.subeKodu);
     if (!sube) return '';
@@ -249,35 +284,34 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  // ========== SERVİS NOTU ==========
   const handleServisNotuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setServisNotu(value);
     setServis(value.trim() !== '');
   };
 
-  // ========== MÜŞTERİ ==========
   const handleMusteriChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setMusteriBilgileri(prev => ({ ...prev, [name]: value }));
   };
 
-  // ========== ÜRÜNLER ==========
-  // Firebase ürün listesi cache (kod → {ad, alis, bip})
-  const [urunCache, setUrunCache] = useState<Record<string, { ad: string; alis: number; bip: number }>>({});
+  /* ── ÜRÜN CACHE ── */
+  const [urunCache, setUrunCache] = useState<Record<string, { ad: string; alis: number; bip: number; urunTuru: string }>>({});
+  // Dropdown arama için: hangi index'in dropdown'u açık ve sonuçlar
+  const [urunAramaDropdown, setUrunAramaDropdown] = useState<{ index: number; sonuclar: string[] } | null>(null);
 
   const urunCacheYukle = async () => {
     try {
-      const sube = getSubeByKod(currentUser!.subeKodu);
-      if (!sube) return;
-      const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/urunler`));
-      const cache: Record<string, { ad: string; alis: number; bip: number }> = {};
+      // Global collection'dan çek - şubeye bağlı değil
+      const snap = await getDocs(collection(db, 'urunler'));
+      const cache: Record<string, { ad: string; alis: number; bip: number; urunTuru: string }> = {};
       snap.docs.forEach(d => {
         const data = d.data();
         if (data.kod) cache[data.kod.trim()] = {
           ad: data.ad || data.urunAdi || '',
           alis: parseFloat(data.alis || data.alisFiyati || 0),
           bip: parseFloat(data.bip || 0),
+          urunTuru: data.urunTuru || '',
         };
       });
       setUrunCache(cache);
@@ -294,21 +328,48 @@ const SatisTeklifPage: React.FC = () => {
         ? (value === '' ? 0 : parseFloat(value) || 0)
         : value
     };
-    // Ürün kodu girilince cache'den otomatik doldur
     if (field === 'kod') {
-      const trimmed = String(value).trim();
+      const trimmed = String(value).trim().toUpperCase();
+      // Tam eşleşme - otomatik doldur
       const eslesme = urunCache[trimmed];
       if (eslesme) {
         yeniUrunler[index] = {
           ...yeniUrunler[index],
           kod: trimmed,
-          ad: eslesme.ad || yeniUrunler[index].ad,
+          ad: eslesme.urunTuru || eslesme.ad || yeniUrunler[index].ad,
           alisFiyati: eslesme.alis,
           bip: eslesme.bip,
         };
+        setUrunAramaDropdown(null);
+      } else if (trimmed.length >= 2) {
+        // Kısmi eşleşme - dropdown listele
+        const eslesenler = Object.keys(urunCache)
+          .filter(k => k.toUpperCase().includes(trimmed))
+          .slice(0, 10);
+        setUrunAramaDropdown(eslesenler.length > 0 ? { index, sonuclar: eslesenler } : null);
+      } else {
+        setUrunAramaDropdown(null);
       }
     }
     setUrunler(yeniUrunler);
+    if (field === 'alisFiyati' || field === 'adet') {
+      setManuelSatisTutari(null);
+    }
+  };
+
+  const urunSecDropdown = (index: number, kod: string) => {
+    const eslesme = urunCache[kod];
+    if (!eslesme) return;
+    const yeniUrunler = [...urunler];
+    yeniUrunler[index] = {
+      ...yeniUrunler[index],
+      kod,
+      ad: eslesme.urunTuru || eslesme.ad || '',
+      alisFiyati: eslesme.alis,
+      bip: eslesme.bip,
+    };
+    setUrunler(yeniUrunler);
+    setUrunAramaDropdown(null);
   };
 
   const urunEkle = () => {
@@ -324,7 +385,7 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  // ========== KART ==========
+  /* ── KART ── */
   const kartEkle = () => {
     setKartOdemeler(prev => [
       ...prev,
@@ -338,18 +399,49 @@ const SatisTeklifPage: React.FC = () => {
 
   const handleKartChange = (index: number, field: keyof KartOdeme, value: any) => {
     const yeniKartlar = [...kartOdemeler];
-    yeniKartlar[index] = {
+    const yeniKart = {
       ...yeniKartlar[index],
-      [field]: field === 'tutar' || field === 'kesintiOrani'
+      [field]: field === 'tutar'
         ? (value === '' ? 0 : parseFloat(value) || 0)
         : field === 'taksitSayisi'
           ? parseInt(value) || 1
           : value
     };
+    // Banka veya taksit değişince kesinti otomatik güncelle
+    if (field === 'banka' || field === 'taksitSayisi') {
+      const banka = field === 'banka' ? value : yeniKartlar[index].banka;
+      const taksit = field === 'taksitSayisi' ? (parseInt(value) || 1) : yeniKartlar[index].taksitSayisi;
+      yeniKart.kesintiOrani = getKesintiOrani(banka, taksit);
+    }
+    yeniKartlar[index] = yeniKart;
     setKartOdemeler(yeniKartlar);
   };
 
-  // ========== KAMPANYA SEÇİMİ ==========
+  /* ── PEŞİNAT (çoklu) ── */
+  const pesinatEkle = () => {
+    setPesinatlar(prev => [...prev, { id: Date.now().toString(), tutar: 0, aciklama: '' }]);
+  };
+  const pesinatSil = (id: string) => setPesinatlar(prev => prev.filter(p => p.id !== id));
+  const handlePesinatChange = (id: string, field: 'tutar' | 'aciklama', value: any) => {
+    setPesinatlar(prev => prev.map(p => p.id === id
+      ? { ...p, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value }
+      : p
+    ));
+  };
+
+  /* ── HAVALE (çoklu) ── */
+  const havaleEkle = () => {
+    setHavaleler(prev => [...prev, { id: Date.now().toString(), tutar: 0, banka: HAVALE_BANKALARI[0] }]);
+  };
+  const havaleSil = (id: string) => setHavaleler(prev => prev.filter(h => h.id !== id));
+  const handleHavaleChange = (id: string, field: 'tutar' | 'banka', value: any) => {
+    setHavaleler(prev => prev.map(h => h.id === id
+      ? { ...h, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value }
+      : h
+    ));
+  };
+
+  /* ── KAMPANYA ── */
   const kampanyaToggle = (id: string) => {
     setSeciliKampanyaIds(prev =>
       prev.includes(id) ? prev.filter(k => k !== id) : [...prev, id]
@@ -358,11 +450,9 @@ const SatisTeklifPage: React.FC = () => {
 
   const seciliKampanyalar = kampanyaListesi.filter(k => seciliKampanyaIds.includes(k.id!));
 
-  // ========== FIREBASE: Kampanya & Yeşil Etiket çek ==========
+  /* ── FIREBASE: Kampanya & Yeşil Etiket çek ── */
   const kampanyalariCek = async () => {
     try {
-      const sube = getSubeByKod(currentUser!.subeKodu);
-      if (!sube) return;
       const snap = await getDocs(collection(db, 'kampanyalar'));
       const liste = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as KampanyaAdmin))
@@ -375,17 +465,15 @@ const SatisTeklifPage: React.FC = () => {
 
   const yesilEtiketleriCek = async () => {
     try {
-      const sube = getSubeByKod(currentUser!.subeKodu);
-      if (!sube) return;
-      const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/yesilEtiketler`));
-      // Firebase'de maliyet alanı = Excel'deki "YEŞİL ETİKET" kolonu
+      // Global collection'dan çek - şubeye bağlı değil
+      const snap = await getDocs(collection(db, 'yesilEtiketler'));
       const liste = snap.docs.map(d => {
         const data = d.data();
         return {
           id: d.id,
           urunKodu: data.urunKodu || '',
           urunTuru: data.urunTuru || '',
-          maliyet: parseFloat(data.maliyet || data['YEŞİL ETİKET'] || data.yesilEtiket || 0),
+          maliyet: parseFloat(data.maliyet || 0),
         } as YesilEtiketAdmin;
       });
       setYesilEtiketAdminList(liste.filter(e => e.urunKodu && e.maliyet > 0));
@@ -394,7 +482,7 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  // ========== LOG ==========
+  /* ── LOG ── */
   const logKaydet = async (kod: string, islem: string, detay: string) => {
     const sube = getSubeByKod(currentUser!.subeKodu);
     if (!sube) return;
@@ -409,7 +497,6 @@ const SatisTeklifPage: React.FC = () => {
     await addDoc(collection(db, `subeler/${sube.dbPath}/loglar`), log);
   };
 
-  // ========== USEEFFECT ==========
   useEffect(() => {
     if (!currentUser) { navigate('/login'); return; }
     const generateSatisKodu = async () => {
@@ -423,9 +510,10 @@ const SatisTeklifPage: React.FC = () => {
     kampanyalariCek();
     yesilEtiketleriCek();
     urunCacheYukle();
+    kesintiCacheYukle();
   }, [currentUser]);
 
-  // ========== SUBMIT ==========
+  /* ── SUBMIT ── */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -435,10 +523,14 @@ const SatisTeklifPage: React.FC = () => {
       return;
     }
 
-    // MARS No: teslim edildi ise zorunlu değil
+    if (!manuelSatisTutari || manuelSatisTutari <= 0) {
+      alert('❌ Satış tutarı girilmelidir!');
+      return;
+    }
+
     if (isMarsNoGerekli() && marsNo && !isMarsNoGecerli()) {
       setMarsNoHata(true);
-      alert('❌ MARS No 2026 ile başlayan 10 haneli olmalıdır! (Örn: 2026123456)');
+      alert('❌ MARS No 2026 ile başlayan 10 haneli olmalıdır!');
       return;
     }
 
@@ -447,23 +539,18 @@ const SatisTeklifPage: React.FC = () => {
       const sube = getSubeByKod(currentUser!.subeKodu);
       if (!sube) { alert('Şube bilgisi bulunamadı!'); return; }
 
-      const kasayaYansiran = kasayaYansiranHesapla();
-      const kartNetToplam = kartOdemeler.reduce((sum, k) => sum + kartNetTutarHesapla(k), 0);
-      const kartBrutToplam = kartBrutToplamHesapla();
-      const kartKesintiToplam = kartKesintiToplamHesapla();
-      const hesabaGecenToplam = hesabaGecenToplamHesapla();
-      const acikHesap = acikHesapHesapla();
-
+      const kampanyaToplami = kampanyaToplamiHesapla();
       const etiketler = eslesenYesilEtiketler();
 
-      const satisTeklifi: Omit<SatisTeklifFormu, 'id'> = {
+      const satisTeklifi: any = {
         satisKodu,
         subeKodu: currentUser!.subeKodu,
         musteriBilgileri,
         musteriTemsilcisi,
         musteriTemsilcisiTel,
         urunler,
-        toplamTutar: toplamTutarHesapla(),
+        toplamTutar: manuelSatisTutari,
+        kampanyaToplami,
         tarih: new Date(tarih),
         teslimatTarihi: new Date(teslimatTarihi),
         marsNo,
@@ -472,7 +559,9 @@ const SatisTeklifPage: React.FC = () => {
         servisNotu,
         teslimEdildiMi,
         cevap,
-        kampanyalar: seciliKampanyalar.map(k => ({ id: k.id!, ad: k.ad, tutar: 0 })),
+        kampanyalar: kampanyaListesi
+          .filter(k => seciliKampanyaIds.includes(k.id!))
+          .map(k => ({ id: k.id!, ad: k.ad, tutar: k.tutar || 0 })),
         yesilEtiketler: etiketler.map(e => ({
           id: Date.now().toString(),
           urunKodu: e.urunKodu,
@@ -480,26 +569,29 @@ const SatisTeklifPage: React.FC = () => {
           alisFiyati: e.maliyet,
           tutar: e.maliyet * e.adet
         })),
-        pesinatTutar,
-        havaleTutar,
+        // Çoklu ödeme
+        pesinatlar,
+        havaleler,
         kartOdemeler,
-        hesabaGecen,
+        // Toplamlar
+        pesinatToplam: pesinatToplamHesapla(),
+        havaleToplam: havaleToplamHesapla(),
+        kartBrutToplam: kartBrutToplamHesapla(),
+        kartKesintiToplam: kartKesintiToplamHesapla(),
+        kartNetToplam: kartNetToplamHesapla(),
+        toplamOdenen: toplamOdenenHesapla(),
+        hesabaGecenToplam: hesabaGecenToplamHesapla(),
+        acikHesap: acikHesapHesapla(),
         odemeDurumu: getOdemeDurumu(),
+        // Legacy uyumluluk
+        pesinatTutar: pesinatToplamHesapla(),
+        havaleTutar: havaleToplamHesapla(),
         fatura,
         ileriTeslim,
         servis,
-        odemeYontemi,
+        odemeYontemi: OdemeYontemi.PESINAT,
         onayDurumu,
         zarar: karZararHesapla(),
-        odemeOzeti: {
-          kasayaYansiran,
-          kartBrutToplam,
-          kartKesintiToplam,
-          kartNetToplam,
-          hesabaGecenToplam,
-          acikHesap,
-          odemeDurumuDetay: acikHesap > 0 ? 'AÇIK_HESAP' : 'ÖDENDİ'
-        },
         olusturanKullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
         olusturmaTarihi: new Date(),
         guncellemeTarihi: new Date()
@@ -509,28 +601,20 @@ const SatisTeklifPage: React.FC = () => {
 
       if (!onayDurumu) {
         for (const urun of urunler) {
-          const bekleyenUrun: Omit<BekleyenUrun, 'id'> = {
-            satisKodu,
-            subeKodu: currentUser!.subeKodu,
-            urunKodu: urun.kod,
-            urunAdi: urun.ad,
-            adet: urun.adet,
+          await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), {
+            satisKodu, subeKodu: currentUser!.subeKodu,
+            urunKodu: urun.kod, urunAdi: urun.ad, adet: urun.adet,
             musteriIsmi: musteriBilgileri.isim,
             siparisTarihi: new Date(),
             beklenenTeslimTarihi: teslimatTarihi ? new Date(teslimatTarihi) : new Date(),
-            durum: 'BEKLEMEDE',
-            notlar: servisNotu || '',
+            durum: 'BEKLEMEDE', notlar: servisNotu || '',
             guncellemeTarihi: new Date()
-          };
-          await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), bekleyenUrun);
+          });
         }
       }
 
-      await logKaydet(
-        satisKodu,
-        'YENİ_SATIS',
-        `Yeni satış teklifi. Müşteri: ${musteriBilgileri.isim}, Tutar: ${toplamTutarHesapla()} TL, Hesaba Geçen: ${hesabaGecenToplam} TL, Açık Hesap: ${acikHesap} TL`
-      );
+      await logKaydet(satisKodu, 'YENİ_SATIS',
+        `Yeni satış. Müşteri: ${musteriBilgileri.isim}, Tutar: ${manuelSatisTutari} TL, Hesaba Geçen: ${hesabaGecenToplamHesapla()} TL`);
 
       alert('✅ Satış teklifi başarıyla oluşturuldu!');
       navigate('/dashboard');
@@ -542,7 +626,6 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  // ========== RENDER ==========
   return (
     <div className="satis-form-container">
       <div className="satis-form-header">
@@ -595,15 +678,23 @@ const SatisTeklifPage: React.FC = () => {
               <label>Teslimat Tarihi *</label>
               <input type="date" value={teslimatTarihi} onChange={e => setTeslimatTarihi(e.target.value)} required />
             </div>
-            {/* 1 — Satış Tutarı (salt okunur, ürünlerden otomatik hesaplanır) */}
+            {/* Satış Tutarı - kullanıcı girer */}
             <div className="form-field">
-              <label>Satış Tutarı</label>
+              <label>Satış Tutarı *</label>
               <input
-                type="text"
-                value={formatPrice(toplamTutarHesapla())}
-                readOnly
-                style={{ background: '#f0fdf4', fontWeight: 700, color: '#15803d' }}
+                type="number"
+                min="0"
+                value={manuelSatisTutari ?? ''}
+                onChange={e => setManuelSatisTutari(e.target.value === '' ? null : parseFloat(e.target.value) || 0)}
+                placeholder="Satış tutarını girin"
+                style={{ fontWeight: 700, color: '#1d4ed8', borderColor: '#93c5fd' }}
+                required
               />
+              {manuelSatisTutari !== null && alisToplamHesapla() > 0 && (
+                <small style={{ color: '#6b7280' }}>
+                  Alış toplamı: {formatPrice(alisToplamHesapla())}
+                </small>
+              )}
             </div>
           </div>
         </section>
@@ -612,7 +703,6 @@ const SatisTeklifPage: React.FC = () => {
         <section className="form-section">
           <h3 className="section-title">Notlar ve Zorunlu Alanlar</h3>
           <div className="form-grid-4">
-            {/* MARS NO */}
             <div className="form-field">
               <label>
                 MARS No (2026 ile başlayan 10 haneli)
@@ -630,9 +720,7 @@ const SatisTeklifPage: React.FC = () => {
                   maxLength={10}
                   style={{ flex: 1, borderColor: marsNoHata ? '#ef4444' : undefined }}
                 />
-                <button type="button" onClick={fixMarsNo} className="btn-fix">
-                  ✏️ Düzelt
-                </button>
+                <button type="button" onClick={fixMarsNo} className="btn-fix">✏️ Düzelt</button>
               </div>
               {marsNo && (
                 <small style={{ color: isMarsNoGecerli() ? '#16a34a' : '#d97706' }}>
@@ -642,16 +730,12 @@ const SatisTeklifPage: React.FC = () => {
                   }
                 </small>
               )}
-              {marsNoHata && <small style={{ color: '#ef4444' }}>❌ Düzelttikten sonra hâlâ eksik hane var!</small>}
+              {marsNoHata && <small style={{ color: '#ef4444' }}>❌ Eksik hane var!</small>}
             </div>
-
-            {/* MAĞAZA */}
             <div className="form-field">
               <label>Mağaza</label>
               <input value={magaza} onChange={e => setMagaza(e.target.value)} placeholder="Mağaza adı" />
             </div>
-
-            {/* FATURA NO */}
             <div className="form-field">
               <label>Fatura No *</label>
               <input
@@ -662,28 +746,18 @@ const SatisTeklifPage: React.FC = () => {
               />
               {faturaNoHata && <small style={{ color: '#ef4444' }}>Fatura numarası zorunludur!</small>}
             </div>
-
-            {/* SERVİS NOTU */}
             <div className="form-field">
               <label>Servis Notu</label>
-              <input value={servisNotu} onChange={handleServisNotuChange} placeholder="Not girilirse Servis Gerekli otomatik işaretlenir" />
+              <input value={servisNotu} onChange={handleServisNotuChange} placeholder="Not girilirse Servis Gerekli işaretlenir" />
             </div>
           </div>
 
-          {/* Checkboxlar */}
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
-            {/* 2 — "Teslim Edildi" = mağazadan teslim → MARS No zorunluluğu kalkar */}
             <label className="checkbox-label">
               <input
                 type="checkbox"
                 checked={teslimEdildiMi}
-                onChange={e => {
-                  setTeslimEdildiMi(e.target.checked);
-                  if (e.target.checked) {
-                    // Mağazadan teslim edildiğinde marsNo hatasını sıfırla
-                    setMarsNoHata(false);
-                  }
-                }}
+                onChange={e => { setTeslimEdildiMi(e.target.checked); if (e.target.checked) setMarsNoHata(false); }}
               />
               Teslim Edildi <span style={{ fontSize: 11, color: '#6b7280' }}>(mağazadan)</span>
             </label>
@@ -703,7 +777,6 @@ const SatisTeklifPage: React.FC = () => {
         </section>
 
         {/* ===== ÜRÜNLER ===== */}
-        {/* 3 — Excel Yükle kaldırıldı */}
         <section className="form-section">
           <div className="section-header">
             <h3 className="section-title">Ürünler</h3>
@@ -725,11 +798,52 @@ const SatisTeklifPage: React.FC = () => {
                 <input
                   value={urun.kod}
                   onChange={e => handleUrunChange(index, 'kod', e.target.value)}
+                  onBlur={() => setTimeout(() => setUrunAramaDropdown(null), 200)}
                   required
                   placeholder="Ürün kodu"
+                  autoComplete="off"
                 />
-                {urunCache[urun.kod?.trim()] && (
-                  <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, background: '#dcfce7', color: '#15803d', padding: '2px 7px', borderRadius: 10, fontWeight: 700, pointerEvents: 'none', whiteSpace: 'nowrap' }}>✓ Eşleşti</span>
+                {urunCache[urun.kod?.trim().toUpperCase()] && (
+                  <span style={{
+                    position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                    fontSize: 10, background: '#dcfce7', color: '#15803d', padding: '2px 7px',
+                    borderRadius: 10, fontWeight: 700, pointerEvents: 'none', whiteSpace: 'nowrap'
+                  }}>✓ Eşleşti</span>
+                )}
+                {/* DROPDOWN: Arama sonuçları */}
+                {urunAramaDropdown?.index === index && urunAramaDropdown.sonuclar.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
+                    background: '#fff', border: '1px solid #d1fae5', borderRadius: 8,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: 220, overflowY: 'auto'
+                  }}>
+                    {urunAramaDropdown.sonuclar.map(kod => {
+                      const info = urunCache[kod];
+                      return (
+                        <div
+                          key={kod}
+                          onMouseDown={() => urunSecDropdown(index, kod)}
+                          style={{
+                            padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f0fdf4',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            fontSize: 13
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#f0fdf4')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '')}
+                        >
+                          <div>
+                            <span style={{ fontWeight: 700, color: '#065f46' }}>{kod}</span>
+                            {info?.urunTuru && (
+                              <span style={{ marginLeft: 8, color: '#6b7280', fontSize: 11 }}>{info.urunTuru}</span>
+                            )}
+                          </div>
+                          <span style={{ color: '#15803d', fontWeight: 600, fontSize: 12 }}>
+                            ₺{info?.alis?.toLocaleString('tr-TR') || 0}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
               <input
@@ -762,35 +876,51 @@ const SatisTeklifPage: React.FC = () => {
           ))}
 
           <div className="genel-toplam">
-            Genel Toplam: {formatPrice(toplamTutarHesapla())}
-          </div>
-          <div className="maliyet-notu">
-            NOT: TOPLAM MALİYET = ALIŞ TOPLAM - BİP TOPLAM = {formatPrice(toplamMaliyetHesapla())}
+            {manuelSatisTutari !== null
+              ? `Satış Tutarı: ${formatPrice(manuelSatisTutari)}`
+              : 'Satış Tutarı: Satış Bilgileri bölümünden girin'}
           </div>
 
-          {/* Yeşil etiket eşleşmeleri otomatik göster */}
+          {/* Maliyet hesaplama - kampanya düşülmüş gösterim */}
+          <div className="maliyet-notu">
+            <div>Alış Toplam: {formatPrice(alisToplamHesapla())} | BİP Toplam: {formatPrice(bipToplamHesapla())}</div>
+            {kampanyaToplamiHesapla() > 0 && (
+              <div style={{ color: '#15803d' }}>
+                Kampanya İndirimi: −{formatPrice(kampanyaToplamiHesapla())}
+              </div>
+            )}
+            <div style={{ fontWeight: 700 }}>
+              TOPLAM MALİYET = {formatPrice(toplamMaliyetHesapla())}
+              {kampanyaToplamiHesapla() > 0 && (
+                <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 8 }}>
+                  ({formatPrice(alisToplamHesapla() - bipToplamHesapla())} − {formatPrice(kampanyaToplamiHesapla())} kampanya)
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Yeşil etiket - özel fiyat gösterimi */}
           {eslesenYesilEtiketler().length > 0 && (
             <div className="yesil-etiket-ozet">
               <div className="yesil-etiket-ozet-title">
-                🟢 Yeşil Etiket İndirimleri (Otomatik Tespit)
+                🟢 Yeşil Etiket Özel Fiyatları (Otomatik Tespit)
               </div>
               {eslesenYesilEtiketler().map((e, i) => (
                 <div key={i} className="yesil-etiket-ozet-row">
-                  <span>{e.urunKodu} — {e.urunAdi}</span>
-                  <span style={{ color: '#16a34a', fontWeight: 600 }}>
-                    −{formatPrice(e.maliyet * e.adet)} ({e.adet} adet × {formatPrice(e.maliyet)})
+                  <span>{e.urunKodu}{e.urunAdi ? ` — ${e.urunAdi}` : ''}</span>
+                  <span style={{ color: '#15803d', fontWeight: 600 }}>
+                    Özel Fiyat: {formatPrice(e.maliyet)} × {e.adet} adet = {formatPrice(e.maliyet * e.adet)}
                   </span>
                 </div>
               ))}
               <div className="yesil-etiket-ozet-toplam">
-                Toplam İndirim: −{formatPrice(yesilEtiketToplamIndirimHesapla())}
+                Toplam Yeşil Etiket Tutarı: {formatPrice(yesilEtiketToplamIndirimHesapla())}
               </div>
             </div>
           )}
         </section>
 
         {/* ===== KAMPANYALAR ===== */}
-        {/* 4 — Admin panelden çekilir, kullanıcı seçer */}
         <section className="form-section">
           <h3 className="section-title">Kampanyalar</h3>
           {kampanyaListesi.length === 0 ? (
@@ -813,6 +943,11 @@ const SatisTeklifPage: React.FC = () => {
                   <div>
                     <div className="kampanya-ad">{k.ad}</div>
                     {k.aciklama && <div className="kampanya-aciklama">{k.aciklama}</div>}
+                    {(k.tutar || 0) > 0 && (
+                      <div style={{ fontSize: 12, color: '#15803d', fontWeight: 600 }}>
+                        İndirim: {formatPrice(k.tutar || 0)}
+                      </div>
+                    )}
                     <div className="kampanya-sube-pill">
                       {k.subeKodu === 'GENEL' ? '🌐 Genel' : `📍 ${k.subeKodu}`}
                     </div>
@@ -824,168 +959,172 @@ const SatisTeklifPage: React.FC = () => {
           {seciliKampanyalar.length > 0 && (
             <div className="secili-kampanya-ozet">
               ✅ Seçili: {seciliKampanyalar.map(k => k.ad).join(', ')}
+              {kampanyaToplamiHesapla() > 0 && (
+                <span style={{ marginLeft: 12, color: '#15803d', fontWeight: 700 }}>
+                  | Toplam İndirim: −{formatPrice(kampanyaToplamiHesapla())}
+                </span>
+              )}
             </div>
           )}
         </section>
 
         {/* ===== ÖDEME BİLGİLERİ ===== */}
-        {/* 6 — Tablo kaldırıldı, fonksiyonlar çalışmaya devam ediyor */}
         <section className="form-section">
           <h3 className="section-title">💳 Ödeme Bilgileri</h3>
 
-          {/* PEŞİNAT */}
+          {/* PEŞİNAT (çoklu) */}
           <div className="odeme-blok">
-            <div className="odeme-blok-title">💵 Peşinat (TL) — Kasaya Yansır</div>
-            <input
-              type="number" min="0"
-              value={pesinatTutar || ''}
-              onChange={e => setPesinatTutar(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
-              className="odeme-input"
-            />
-            {pesinatTutar > 0 && (
-              <div className="odeme-bilgi ok">✅ Kasaya Yansır: {formatPrice(pesinatTutar)}</div>
+            <div className="odeme-blok-header">
+              <div className="odeme-blok-title">💵 Peşinat — Kasaya Yansır</div>
+              <button type="button" onClick={pesinatEkle} className="btn-add-sm">+ Peşinat Ekle</button>
+            </div>
+            {pesinatlar.map(p => (
+              <div key={p.id} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'center' }}>
+                <input
+                  type="number" min="0" placeholder="Tutar (TL)"
+                  value={p.tutar || ''}
+                  onChange={e => handlePesinatChange(p.id, 'tutar', e.target.value)}
+                  className="odeme-input" style={{ flex: 1 }}
+                />
+                <input
+                  type="text" placeholder="Açıklama (opsiyonel)"
+                  value={p.aciklama}
+                  onChange={e => handlePesinatChange(p.id, 'aciklama', e.target.value)}
+                  className="odeme-input" style={{ flex: 2 }}
+                />
+                <button type="button" onClick={() => pesinatSil(p.id)} className="btn-remove">Sil</button>
+              </div>
+            ))}
+            {pesinatlar.length === 0 && <div style={{ color: '#9ca3af', fontSize: 13 }}>Peşinat eklenmedi</div>}
+            {pesinatToplamHesapla() > 0 && (
+              <div className="odeme-bilgi ok">✅ Peşinat Toplamı: {formatPrice(pesinatToplamHesapla())}</div>
             )}
           </div>
 
-          {/* HAVALE */}
-          {/* 7 — Havaleye banka seçimi eklendi */}
+          {/* HAVALE (çoklu) */}
           <div className="odeme-blok">
-            <div className="odeme-blok-title">🏦 Havale (TL) — Kasaya Yansımaz</div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ flex: '0 0 220px' }}>
-                <label style={{ fontSize: 12, color: '#6b7280', marginBottom: 4, display: 'block' }}>Banka</label>
+            <div className="odeme-blok-header">
+              <div className="odeme-blok-title">🏦 Havale — Kasaya Yansımaz</div>
+              <button type="button" onClick={havaleEkle} className="btn-add-sm">+ Havale Ekle</button>
+            </div>
+            {havaleler.map(h => (
+              <div key={h.id} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'center' }}>
                 <select
-                  value={havaleBanka}
-                  onChange={e => setHavaleBanka(e.target.value)}
-                  className="odeme-input"
+                  value={h.banka}
+                  onChange={e => handleHavaleChange(h.id, 'banka', e.target.value)}
+                  className="odeme-input" style={{ flex: 2 }}
                 >
                   {HAVALE_BANKALARI.map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
-              </div>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <label style={{ fontSize: 12, color: '#6b7280', marginBottom: 4, display: 'block' }}>Tutar (TL)</label>
                 <input
-                  type="number" min="0"
-                  value={havaleTutar || ''}
-                  onChange={e => setHavaleTutar(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
-                  className="odeme-input"
+                  type="number" min="0" placeholder="Tutar (TL)"
+                  value={h.tutar || ''}
+                  onChange={e => handleHavaleChange(h.id, 'tutar', e.target.value)}
+                  className="odeme-input" style={{ flex: 1 }}
                 />
+                <button type="button" onClick={() => havaleSil(h.id)} className="btn-remove">Sil</button>
               </div>
-            </div>
-            {havaleTutar > 0 && (
-              <div className="odeme-bilgi ok">
-                ✅ Hesaba Geçer: {formatPrice(havaleTutar)} ({havaleBanka})
-              </div>
+            ))}
+            {havaleler.length === 0 && <div style={{ color: '#9ca3af', fontSize: 13 }}>Havale eklenmedi</div>}
+            {havaleToplamHesapla() > 0 && (
+              <div className="odeme-bilgi ok">✅ Havale Toplamı: {formatPrice(havaleToplamHesapla())}</div>
             )}
           </div>
 
           {/* KART */}
           <div className="odeme-blok">
             <div className="odeme-blok-header">
-              <div className="odeme-blok-title">💳 Kart ile Ödemeler — Kesinti Sonrası Hesaba Geçer</div>
+              <div className="odeme-blok-title">💳 Kart ile Ödemeler</div>
               <button type="button" onClick={kartEkle} className="btn-add-sm">+ Kart Ekle</button>
             </div>
-
             {kartOdemeler.map((kart, index) => {
-              const netTutar = kartNetTutarHesapla(kart);
-              const kesintiTutar = kart.tutar - netTutar;
+              const kesintiOrani = kart.kesintiOrani || 0;
+              const kesintiTutar = (kart.tutar * kesintiOrani) / 100;
+              const netTutar = kart.tutar - kesintiTutar;
               return (
                 <div key={kart.id} className="kart-row">
                   <div className="kart-fields">
                     <div className="form-field">
                       <label>Banka</label>
-                      <select
-                        value={kart.banka}
-                        onChange={e => handleKartChange(index, 'banka', e.target.value)}
-                        className="odeme-input"
-                      >
+                      <select value={kart.banka} onChange={e => handleKartChange(index, 'banka', e.target.value)} className="odeme-input">
                         {BANKALAR.map(b => <option key={b} value={b}>{b}</option>)}
                       </select>
                     </div>
                     <div className="form-field">
                       <label>Taksit</label>
-                      <select
-                        value={kart.taksitSayisi}
-                        onChange={e => handleKartChange(index, 'taksitSayisi', e.target.value)}
-                        className="odeme-input"
-                      >
+                      <select value={kart.taksitSayisi} onChange={e => handleKartChange(index, 'taksitSayisi', e.target.value)} className="odeme-input">
                         {TAKSIT_SECENEKLERI.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
                     </div>
                     <div className="form-field">
                       <label>Brüt Tutar (TL)</label>
-                      <input
-                        type="number" min="0"
-                        value={kart.tutar || ''}
-                        onChange={e => handleKartChange(index, 'tutar', e.target.value)}
-                        className="odeme-input"
-                      />
+                      <input type="number" min="0" value={kart.tutar || ''} onChange={e => handleKartChange(index, 'tutar', e.target.value)} className="odeme-input" />
                     </div>
                     <div className="form-field">
                       <label>Kesinti Oranı (%)</label>
                       <input
-                        type="number" min="0" max="100" step="0.01"
-                        value={kart.kesintiOrani || ''}
-                        onChange={e => handleKartChange(index, 'kesintiOrani', e.target.value)}
+                        type="text"
+                        value={kesintiOrani > 0 ? `%${kesintiOrani}` : 'Oran bulunamadı'}
+                        readOnly
                         className="odeme-input"
+                        style={{ background: kesintiOrani > 0 ? '#f0fdf4' : '#fff7ed', color: kesintiOrani > 0 ? '#15803d' : '#92400e', fontWeight: 600 }}
                       />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => kartSil(index)}
-                      className="btn-remove"
-                      style={{ alignSelf: 'flex-end' }}
-                    >
-                      Sil
-                    </button>
+                    <button type="button" onClick={() => kartSil(index)} className="btn-remove" style={{ alignSelf: 'flex-end' }}>Sil</button>
                   </div>
                   {kart.tutar > 0 && (
                     <div className="kart-net-ozet">
-                      Brüt: {formatPrice(kart.tutar)} &nbsp;|&nbsp;
-                      Kesinti: −{formatPrice(kesintiTutar)} &nbsp;|&nbsp;
-                      <strong>NET (Hesaba Geçer): {formatPrice(netTutar)}</strong>
+                      Brüt: {formatPrice(kart.tutar)} | Kesinti: −{formatPrice(kesintiTutar)} ({kesintiOrani}%) | <strong>NET: {formatPrice(netTutar)}</strong>
                     </div>
                   )}
                 </div>
               );
             })}
+            {kartOdemeler.length === 0 && <div style={{ color: '#9ca3af', fontSize: 13 }}>Kart eklenmedi</div>}
           </div>
 
           {/* ÖDEME ÖZETİ */}
           <div className="odeme-ozet-grid">
             <div className="odeme-ozet-kart">
-              <div className="odeme-ozet-label">💵 Kasaya Yansıyan</div>
-              <div className="odeme-ozet-deger">{formatPrice(kasayaYansiranHesapla())}</div>
-              <div className="odeme-ozet-aciklama">Sadece peşin</div>
+              <div className="odeme-ozet-label">💵 Peşinat</div>
+              <div className="odeme-ozet-deger">{formatPrice(pesinatToplamHesapla())}</div>
+              <div className="odeme-ozet-aciklama">Kasaya yansır</div>
             </div>
             <div className="odeme-ozet-kart">
-              <div className="odeme-ozet-label">🏦 Hesaba Geçen Toplam</div>
-              <div className="odeme-ozet-deger">{formatPrice(hesabaGecenToplamHesapla())}</div>
-              <div className="odeme-ozet-aciklama">Peşin + Havale + Kart NET</div>
+              <div className="odeme-ozet-label">🏦 Havale</div>
+              <div className="odeme-ozet-deger">{formatPrice(havaleToplamHesapla())}</div>
+              <div className="odeme-ozet-aciklama">Hesaba geçer</div>
             </div>
             {kartOdemeler.length > 0 && (
               <div className="odeme-ozet-kart">
-                <div className="odeme-ozet-label">✂️ Toplam Kart Kesintisi</div>
-                <div className="odeme-ozet-deger" style={{ color: '#dc2626' }}>
-                  −{formatPrice(kartKesintiToplamHesapla())}
-                </div>
+                <div className="odeme-ozet-label">💳 Kart Brüt</div>
+                <div className="odeme-ozet-deger">{formatPrice(kartBrutToplamHesapla())}</div>
                 <div className="odeme-ozet-aciklama">
-                  Brüt: {formatPrice(kartBrutToplamHesapla())} → NET: {formatPrice(kartBrutToplamHesapla() - kartKesintiToplamHesapla())}
+                  Kesinti: −{formatPrice(kartKesintiToplamHesapla())} | NET: {formatPrice(kartNetToplamHesapla())}
                 </div>
               </div>
             )}
-            <div
-              className="odeme-ozet-kart"
-              style={{ background: acikHesapHesapla() > 0 ? '#fff7ed' : '#f0fdf4' }}
-            >
+            <div className="odeme-ozet-kart">
+              <div className="odeme-ozet-label">📊 Toplam Ödenen</div>
+              <div className="odeme-ozet-deger">{formatPrice(toplamOdenenHesapla())}</div>
+              <div className="odeme-ozet-aciklama">Peşinat + Havale + Kart Brüt</div>
+            </div>
+            <div className="odeme-ozet-kart">
+              <div className="odeme-ozet-label">💰 Hesaba Geçen</div>
+              <div className="odeme-ozet-deger">{formatPrice(hesabaGecenToplamHesapla())}</div>
+              <div className="odeme-ozet-aciklama">Peşinat + Havale + Kart NET</div>
+            </div>
+            <div className="odeme-ozet-kart" style={{ background: acikHesapHesapla() > 0 ? '#fff7ed' : '#f0fdf4' }}>
               <div className="odeme-ozet-label">🔓 Açık Hesap</div>
-              <div
-                className="odeme-ozet-deger"
-                style={{ color: acikHesapHesapla() > 0 ? '#ea580c' : '#15803d' }}
-              >
+              <div className="odeme-ozet-deger" style={{ color: acikHesapHesapla() > 0 ? '#ea580c' : '#15803d' }}>
                 {acikHesapHesapla() > 0 ? formatPrice(acikHesapHesapla()) : '✅ Ödendi'}
               </div>
-              <div className="odeme-ozet-aciklama">Satış Tutarı - Hesaba Geçen</div>
+              <div className="odeme-ozet-aciklama">
+                {acikHesapHesapla() > 0
+                  ? `Satış: ${formatPrice(toplamTutarHesapla())} − Ödenen: ${formatPrice(toplamOdenenHesapla())}`
+                  : 'Tamamı tahsil edildi'
+                }
+              </div>
             </div>
           </div>
 
@@ -997,26 +1136,22 @@ const SatisTeklifPage: React.FC = () => {
               ? `📈 KÂR: ${formatPrice(karZararHesapla())}`
               : `📉 ZARAR: ${formatPrice(Math.abs(karZararHesapla()))}`
             }
-            &nbsp;(Hesaba Geçen: {formatPrice(hesabaGecenToplamHesapla())} — Maliyet: {formatPrice(toplamMaliyetHesapla())})
+            <span style={{ fontSize: 12, fontWeight: 400, marginLeft: 12 }}>
+              (Hesaba Geçen: {formatPrice(hesabaGecenToplamHesapla())} — Maliyet: {formatPrice(toplamMaliyetHesapla())})
+            </span>
           </div>
         </section>
 
         {/* ===== ONAY ===== */}
-        {/* 8 — Sadece admin görür */}
         {isAdmin && (
           <section className="form-section">
             <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={onayDurumu}
-                onChange={e => setOnayDurumu(e.target.checked)}
-              />
+              <input type="checkbox" checked={onayDurumu} onChange={e => setOnayDurumu(e.target.checked)} />
               Onaylıyorum
             </label>
           </section>
         )}
 
-        {/* ===== BUTONLAR ===== */}
         <div className="form-actions">
           <button type="button" onClick={() => navigate('/dashboard')} className="btn-cancel">İptal</button>
           <button type="submit" className="btn-submit" disabled={loading}>
