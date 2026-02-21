@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, Kampanya, YesilEtiket, KartOdeme } from '../types/satis';
 import { getSubeByKod } from '../types/sube';
@@ -13,14 +13,7 @@ const SatisDetayPage: React.FC = () => {
   const [satis, setSatis] = useState<SatisTeklifFormu | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [duzenlemeAcik, setDuzenlemeAcik] = useState(false);
-  const [yeniMarsNo, setYeniMarsNo] = useState('');
-  const [yeniTeslimatTarihi, setYeniTeslimatTarihi] = useState('');
-  const [kaydediliyor, setKaydediliyor] = useState(false);
-
-  useEffect(() => {
-    fetchSatisDetay();
-  }, [id]);
+  useEffect(() => { fetchSatisDetay(); }, [id]);
 
   const fetchSatisDetay = async () => {
     try {
@@ -31,8 +24,6 @@ const SatisDetayPage: React.FC = () => {
       if (satisDoc.exists()) {
         const data = { id: satisDoc.id, ...satisDoc.data() } as SatisTeklifFormu;
         setSatis(data);
-        setYeniMarsNo(data.yeniMarsNo || '');
-        setYeniTeslimatTarihi(data.yeniTeslimatTarihi ? formatDateForInput(data.yeniTeslimatTarihi) : '');
       }
     } catch (error) {
       console.error('Satış detayı yüklenemedi:', error);
@@ -54,14 +45,6 @@ const SatisDetayPage: React.FC = () => {
     } catch { return '-'; }
   };
 
-  const formatDateForInput = (date: any) => {
-    if (!date) return '';
-    try {
-      const d = date.toDate ? date.toDate() : new Date(date);
-      return d.toISOString().split('T')[0];
-    } catch { return ''; }
-  };
-
   // ========== HESAPLAMA FONKSİYONLARI ==========
 
   const kampanyaToplamiHesapla = () => {
@@ -81,18 +64,20 @@ const SatisDetayPage: React.FC = () => {
     return satis.urunler.reduce((sum, u) => sum + ((u.bip || 0) * u.adet), 0);
   };
 
-  // Maliyet = Alış − BİP − Kampanya
+  const yesilEtiketToplamHesapla = () =>
+    satis?.yesilEtiketler?.reduce((sum, e) => sum + (e.tutar || 0), 0) || 0;
+
+  // Toplam Maliyet = Alış − BİP − Kampanya (yeşil etiketin etkisi yok)
   const toplamMaliyetHesapla = () => {
+    if (!satis) return 0;
     return Math.max(0, alisToplamHesapla() - bipToplamHesapla() - kampanyaToplamiHesapla());
   };
 
-  // Satış tutarı = kaydedilmiş toplamTutar (kullanıcının girdiği)
   const satisTutariHesapla = () => {
     if (!satis) return 0;
     return (satis as any).toplamTutar || 0;
   };
 
-  // Peşinat toplam (çoklu veya tekli)
   const pesinatToplamHesapla = () => {
     if (!satis) return 0;
     const pesinatlar: any[] = (satis as any).pesinatlar || [];
@@ -100,7 +85,6 @@ const SatisDetayPage: React.FC = () => {
     return (satis as any).pesinatToplam || satis.pesinatTutar || 0;
   };
 
-  // Havale toplam (çoklu veya tekli)
   const havaleToplamHesapla = () => {
     if (!satis) return 0;
     const havaleler: any[] = (satis as any).havaleler || [];
@@ -108,7 +92,6 @@ const SatisDetayPage: React.FC = () => {
     return (satis as any).havaleToplam || satis.havaleTutar || 0;
   };
 
-  // Kart brüt (ödeme durumu için)
   const kartBrutToplamHesapla = () => {
     if (!satis) return 0;
     if ((satis as any).kartBrutToplam !== undefined) return (satis as any).kartBrutToplam;
@@ -123,14 +106,12 @@ const SatisDetayPage: React.FC = () => {
 
   const kartNetToplamHesapla = () => kartBrutToplamHesapla() - kartKesintiToplamHesapla();
 
-  // TOPLAM ÖDENEN = Peşinat + Havale + Kart BRÜT
   const toplamOdenenHesapla = () => {
     if (!satis) return 0;
     if ((satis as any).toplamOdenen !== undefined) return (satis as any).toplamOdenen;
     return pesinatToplamHesapla() + havaleToplamHesapla() + kartBrutToplamHesapla();
   };
 
-  // HESABA GEÇEN = Peşinat + Havale + Kart NET
   const hesabaGecenToplamHesapla = () => {
     if (!satis) return 0;
     if ((satis as any).hesabaGecenToplam !== undefined) return (satis as any).hesabaGecenToplam;
@@ -139,41 +120,9 @@ const SatisDetayPage: React.FC = () => {
 
   const karZararHesapla = () => hesabaGecenToplamHesapla() - toplamMaliyetHesapla();
 
-  // Açık = Satış − Toplam Ödenen (brüt)
   const acikHesapHesapla = () => {
     const acik = satisTutariHesapla() - toplamOdenenHesapla();
     return acik > 0 ? acik : 0;
-  };
-
-  const yesilEtiketToplamHesapla = () =>
-    satis?.yesilEtiketler?.reduce((sum, e) => sum + (e.tutar || 0), 0) || 0;
-
-  const kaydet = async () => {
-    if (!satis) return;
-    try {
-      setKaydediliyor(true);
-      const sube = getSubeByKod(subeKodu as any);
-      if (!sube) return;
-
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!), {
-        yeniMarsNo: yeniMarsNo || null,
-        yeniTeslimatTarihi: yeniTeslimatTarihi ? new Date(yeniTeslimatTarihi) : null,
-      });
-
-      setSatis(prev => prev ? {
-        ...prev,
-        yeniMarsNo: yeniMarsNo || undefined,
-        yeniTeslimatTarihi: yeniTeslimatTarihi ? new Date(yeniTeslimatTarihi) : undefined,
-      } : prev);
-
-      setDuzenlemeAcik(false);
-      alert('Kaydedildi!');
-    } catch (error) {
-      console.error('Kaydetme hatası:', error);
-      alert('Kaydetme sırasında hata oluştu!');
-    } finally {
-      setKaydediliyor(false);
-    }
   };
 
   const printBtn = (
@@ -183,11 +132,7 @@ const SatisDetayPage: React.FC = () => {
   );
 
   if (loading) {
-    return (
-      <Layout pageTitle="Satış Detayı">
-        <div className="loading">Yükleniyor...</div>
-      </Layout>
-    );
+    return <Layout pageTitle="Satış Detayı"><div className="loading">Yükleniyor...</div></Layout>;
   }
 
   if (!satis) {
@@ -222,6 +167,12 @@ const SatisDetayPage: React.FC = () => {
               <div className="etiket">SATIŞ BİLGİLERİ</div>
               <div className="bilgi">MÜŞTERİ TEMSİLCİSİ: {satis.musteriTemsilcisi}</div>
               {satis.musteriTemsilcisiTel && <div className="bilgi">TEL: {satis.musteriTemsilcisiTel}</div>}
+              {/* ✅ 7. Madde: İleri Teslim tarihi görüntüleme */}
+              {(satis as any).ileriTeslim && (satis as any).ileriTeslimTarihi && (
+                <div className="bilgi" style={{ marginTop: 4, color: '#0369a1', fontWeight: 600 }}>
+                  M.A. TESLİM TARİHİ: {formatDate((satis as any).ileriTeslimTarihi)}
+                </div>
+              )}
             </div>
             <div className="sutun">
               <div className="etiket">TARİH</div>
@@ -239,65 +190,17 @@ const SatisDetayPage: React.FC = () => {
               <div className="satir-item">ADRES: {satis.musteriBilgileri?.adres}</div>
             </div>
             <div className="sag-kolon">
-              <div className="satir-item">
-                MARS NO: {satis.marsNo || '-'}
-                {satis.yeniMarsNo && (
-                  <span className="yeni-deger-inline"> - YENİ: {satis.yeniMarsNo}</span>
-                )}
-              </div>
+              <div className="satir-item">MARS NO: {satis.marsNo || '-'}</div>
               <div className="satir-item">MAĞAZA: {satis.magaza || '-'}</div>
               <div className="satir-item">FATURA NO: {satis.faturaNo || '-'}</div>
               <div className="satir-item">SERVİS: {satis.servisNotu || '-'}</div>
               <div className="satir-item">TESLİM EDİLDİ Mİ?: {satis.teslimEdildiMi ? 'EVET' : 'HAYIR'}</div>
-              <div className="satir-item">
-                TESLİMAT TARİHİ: {formatDate(satis.teslimatTarihi)}
-                {satis.yeniTeslimatTarihi && (
-                  <span className="yeni-deger-inline"> - YENİ: {formatDate(satis.yeniTeslimatTarihi)}</span>
-                )}
-              </div>
+              <div className="satir-item">TESLİMAT TARİHİ: {formatDate(satis.teslimatTarihi)}</div>
             </div>
           </div>
         </div>
 
-        {/* DÜZENLEME BUTONU */}
-        <div className="no-print" style={{ marginBottom: '12px' }}>
-          <button
-            className="btn-duzenle"
-            onClick={() => setDuzenlemeAcik(!duzenlemeAcik)}
-          >
-            <i className="fas fa-edit"></i>{' '}
-            {duzenlemeAcik ? 'Düzenlemeyi Kapat' : 'Mars No / Teslimat Tarihi Düzenle'}
-          </button>
-        </div>
-
-        {/* DÜZENLEME PANELİ */}
-        {duzenlemeAcik && (
-          <div className="no-print duzenle-panel">
-            <h4>Yeni Bilgileri Gir</h4>
-            <div className="duzenle-form">
-              <div className="form-grup">
-                <label>Yeni Mars No</label>
-                <input
-                  type="text"
-                  value={yeniMarsNo}
-                  onChange={e => setYeniMarsNo(e.target.value)}
-                  placeholder="Yeni mars no girin..."
-                />
-              </div>
-              <div className="form-grup">
-                <label>Yeni Teslimat Tarihi</label>
-                <input
-                  type="date"
-                  value={yeniTeslimatTarihi}
-                  onChange={e => setYeniTeslimatTarihi(e.target.value)}
-                />
-              </div>
-              <button className="btn-kaydet" onClick={kaydet} disabled={kaydediliyor}>
-                {kaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
-              </button>
-            </div>
-          </div>
-        )}
+        {/* ✅ 3. Madde: Mars No / Teslimat Tarihi Düzenle butonu ve paneli TAMAMEN KALDIRILDI */}
 
         {/* 2. ÜRÜNLER + KAMPANYALAR */}
         <div className="ana-bolum">
@@ -345,6 +248,7 @@ const SatisDetayPage: React.FC = () => {
                   <span>−{formatPrice(kampanyaToplamiHesapla())}</span>
                 </div>
               )}
+
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontWeight: 700, borderTop: '1px solid #e5e7eb', marginTop: 4 }}>
                 <span>TOPLAM MALİYET:</span>
                 <span>{formatPrice(toplamMaliyetHesapla())}</span>
@@ -411,7 +315,21 @@ const SatisDetayPage: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
-                  <div className="etiket-toplam">TOPLAM: {formatPrice(yesilEtiketToplamHesapla())}</div>
+                  {(() => {
+                    const yesilKodlar = new Set(satis.yesilEtiketler!.map(e => e.urunKodu?.trim().toLowerCase()));
+                    const normalMaliyet = (satis.urunler || [])
+                      .filter(u => !yesilKodlar.has(u.kod?.trim().toLowerCase()))
+                      .reduce((s, u) => s + u.alisFiyati * u.adet, 0);
+                    const genelToplam = normalMaliyet + yesilEtiketToplamHesapla();
+                    return (
+                      <div className="etiket-toplam">
+                        TOPLAM: {formatPrice(genelToplam)}
+                        <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 400, marginTop: 2 }}>
+                          Normal: {formatPrice(normalMaliyet)} + Yeşil: {formatPrice(yesilEtiketToplamHesapla())}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               ) : (
                 <div className="kutu-satir">Yeşil etiket yok</div>
@@ -424,7 +342,6 @@ const SatisDetayPage: React.FC = () => {
         <div className="kirmizi-cerceve odeme-bolumu">
           <div className="kutu-baslik">ÖDEME BİLGİLERİ</div>
 
-          {/* Peşinatlar */}
           {(() => {
             const pesinatlar: any[] = (satis as any).pesinatlar || [];
             if (pesinatlar.length > 0) {
@@ -439,14 +356,11 @@ const SatisDetayPage: React.FC = () => {
             return null;
           })()}
 
-          {/* Havaleler */}
           {(() => {
             const havaleler: any[] = (satis as any).havaleler || [];
             if (havaleler.length > 0) {
               return havaleler.map((h: any, i: number) => (
-                <div key={i} className="odeme-satir">
-                  🏦 HAVALE: {formatPrice(h.tutar)} ({h.banka})
-                </div>
+                <div key={i} className="odeme-satir">🏦 HAVALE: {formatPrice(h.tutar)} ({h.banka})</div>
               ));
             } else if (satis.havaleTutar) {
               return (
@@ -459,7 +373,6 @@ const SatisDetayPage: React.FC = () => {
             return null;
           })()}
 
-          {/* Kartlar */}
           {satis.kartOdemeler && satis.kartOdemeler.length > 0 && (
             satis.kartOdemeler.map((kart: KartOdeme, index: number) => {
               const kesintiOrani = kart.kesintiOrani || 0;
@@ -490,10 +403,27 @@ const SatisDetayPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 4. ONAY */}
-        <div className="mavi-cerceve">
-          <div className="onay-metin">ONAY: {satis.onayDurumu ? 'ONAYLANDI' : 'ONAY BEKLİYOR'}</div>
-          <div className="imza-metin">İMZA: __________________</div>
+        {/* ✅ 5. Madde: Notlar + Onay yan yana */}
+        <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
+          {/* Notlar kutusu */}
+          <div className="mavi-cerceve" style={{ flex: 1, minHeight: 80 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, letterSpacing: 1, color: '#1e40af', marginBottom: 8, textTransform: 'uppercase' }}>
+              📝 NOTLAR
+            </div>
+            {(satis as any).notlar ? (
+              <div style={{ fontSize: 14, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {(satis as any).notlar}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: '#9ca3af', fontStyle: 'italic' }}>Not girilmemiş</div>
+            )}
+          </div>
+
+          {/* ✅ Onay kutusu %50 küçültülmüş */}
+          <div className="mavi-cerceve" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="onay-metin" style={{ fontSize: 13 }}>ONAY: {satis.onayDurumu ? 'ONAYLANDI' : 'ONAY BEKLİYOR'}</div>
+            <div className="imza-metin" style={{ fontSize: 12 }}>İMZA: __________________</div>
+          </div>
         </div>
 
         <div className="alt-bilgi">

@@ -18,7 +18,6 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [guncellemeyorum, setGuncellemeyorum] = useState<string | null>(null);
 
-  // Filtre state'leri
   const [secilenSube, setSecilenSube] = useState<string>('');
   const [zararOlanlar, setZararOlanlar] = useState<string>('all');
   const [durum, setDurum] = useState<string>('all');
@@ -28,11 +27,9 @@ const Dashboard: React.FC = () => {
   const [aramaMetni, setAramaMetni] = useState<string>('');
   const [mevcutSubeler, setMevcutSubeler] = useState<string[]>([]);
 
-  // Alarm banner state
   const [bugunAcik, setBugunAcik] = useState(true);
   const [yarinAcik, setYarinAcik] = useState(true);
 
-  // Sayfalama
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
 
@@ -43,13 +40,8 @@ const Dashboard: React.FC = () => {
     fetchSatislar();
   }, [currentUser]);
 
-  useEffect(() => {
-    filtreyiUygula();
-  }, [satislar, secilenSube, zararOlanlar, durum, teslimTarihi, acikHesap, satisTarihi, aramaMetni]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [secilenSube, zararOlanlar, durum, teslimTarihi, acikHesap, satisTarihi, aramaMetni]);
+  useEffect(() => { filtreyiUygula(); }, [satislar, secilenSube, zararOlanlar, durum, teslimTarihi, acikHesap, satisTarihi, aramaMetni]);
+  useEffect(() => { setCurrentPage(1); }, [secilenSube, zararOlanlar, durum, teslimTarihi, acikHesap, satisTarihi, aramaMetni]);
 
   const fetchSatislar = async () => {
     try {
@@ -65,9 +57,7 @@ const Dashboard: React.FC = () => {
               satisListesi.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu);
               subeSet.add(sube.kod);
             });
-          } catch (err) {
-            console.error(`${sube.ad} yüklenemedi:`, err);
-          }
+          } catch (err) { console.error(`${sube.ad} yüklenemedi:`, err); }
         }
       } else {
         const sube = getSubeByKod(currentUser!.subeKodu);
@@ -128,7 +118,6 @@ const Dashboard: React.FC = () => {
     setTeslimTarihi(''); setAcikHesap('all'); setSatisTarihi(''); setAramaMetni('');
   };
 
-  // Özet kartlar
   const ozetVeriler = React.useMemo(() => {
     const toplamCiro = satislar.reduce((acc, s) => acc + (s.toplamTutar || 0), 0);
     const acikHesaplar = satislar.filter(s => s.odemeDurumu === OdemeDurumu.ACIK_HESAP).length;
@@ -138,34 +127,28 @@ const Dashboard: React.FC = () => {
     return { toplamCiro, acikHesaplar, bekleyenOnaylar, zararEdenler, toplamKar };
   }, [satislar]);
 
-  // Teslim alarm verileri
   const alarmVeriler = React.useMemo(() => {
     const bugun = new Date(); bugun.setHours(0, 0, 0, 0);
     const yarin = new Date(bugun); yarin.setDate(yarin.getDate() + 1);
-    const ertesi = new Date(yarin); ertesi.setDate(ertesi.getDate() + 1);
-
     const toDate = (d: any): Date => {
       if (!d) return new Date(0);
       if (d instanceof Timestamp) return d.toDate();
       if (d instanceof Date) return d;
       return new Date(d);
     };
-
-   const bugunSatislar = satislar.filter(s => {
-      const tarih = s.yeniTeslimatTarihi || s.teslimatTarihi; // yeni varsa onu kullan
+    const bugunSatislar = satislar.filter(s => {
+      const tarih = s.yeniTeslimatTarihi || s.teslimatTarihi;
       const t = toDate(tarih); t.setHours(0, 0, 0, 0);
       return t.getTime() === bugun.getTime() && s.teslimEdildiMi !== true;
     });
     const yarinSatislar = satislar.filter(s => {
-      const tarih = s.yeniTeslimatTarihi || s.teslimatTarihi; // yeni varsa onu kullan
+      const tarih = s.yeniTeslimatTarihi || s.teslimatTarihi;
       const t = toDate(tarih); t.setHours(0, 0, 0, 0);
       return t.getTime() === yarin.getTime() && s.teslimEdildiMi !== true;
     });
-
     return { bugunSatislar, yarinSatislar };
   }, [satislar]);
 
-  // Excel export
   const excelExport = () => {
     const data = filtreliSatislar.map(s => ({
       'Satış Kodu': s.satisKodu,
@@ -182,15 +165,11 @@ const Dashboard: React.FC = () => {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Satışlar');
-    ws['!cols'] = [
-      { wch: 15 }, { wch: 20 }, { wch: 25 }, { wch: 15 },
-      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 15 }
-    ];
+    ws['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 15 }];
     const bugun = new Date().toLocaleDateString('tr-TR').replace(/\./g, '-');
     XLSX.writeFile(wb, `Satislar_${bugun}.xlsx`);
   };
 
-  // Sayfalama
   const totalPages = Math.ceil(filtreliSatislar.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentSatislar = filtreliSatislar.slice(startIndex, startIndex + itemsPerPage);
@@ -208,33 +187,23 @@ const Dashboard: React.FC = () => {
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) startPage = Math.max(1, endPage - maxVisible + 1);
 
-    pages.push(
-      <button key="prev" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="pagination-btn pagination-arrow">
-        ← Önceki
-      </button>
-    );
+    pages.push(<button key="prev" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="pagination-btn pagination-arrow">← Önceki</button>);
     if (startPage > 1) {
       pages.push(<button key={1} onClick={() => goToPage(1)} className="pagination-btn">1</button>);
       if (startPage > 2) pages.push(<span key="dots1" className="pagination-dots">...</span>);
     }
     for (let i = startPage; i <= endPage; i++) {
-      pages.push(
-        <button key={i} onClick={() => goToPage(i)} className={`pagination-btn ${currentPage === i ? 'active' : ''}`}>{i}</button>
-      );
+      pages.push(<button key={i} onClick={() => goToPage(i)} className={`pagination-btn ${currentPage === i ? 'active' : ''}`}>{i}</button>);
     }
     if (endPage < totalPages) {
       if (endPage < totalPages - 1) pages.push(<span key="dots2" className="pagination-dots">...</span>);
       pages.push(<button key={totalPages} onClick={() => goToPage(totalPages)} className="pagination-btn">{totalPages}</button>);
     }
-    pages.push(
-      <button key="next" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="pagination-btn pagination-arrow">
-        Sonraki →
-      </button>
-    );
+    pages.push(<button key="next" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="pagination-btn pagination-arrow">Sonraki →</button>);
     return <div className="pagination-container">{pages}</div>;
   };
 
-  // Admin toggle'lar
+  // ✅ Sadece onay durumu toggle - admin only
   const onayDurumuToggle = async (satis: SatisTeklifFormu) => {
     if (!isAdmin || !satis.id) return;
     const sube = getSubeByKod(satis.subeKodu);
@@ -248,17 +217,15 @@ const Dashboard: React.FC = () => {
     finally { setGuncellemeyorum(null); }
   };
 
-  const odemeDurumuToggle = async (satis: SatisTeklifFormu) => {
-    if (!isAdmin || !satis.id) return;
-    const sube = getSubeByKod(satis.subeKodu);
-    if (!sube) return;
-    setGuncellemeyorum(satis.id + '_odeme');
-    try {
-      const yeniDurum = satis.odemeDurumu === OdemeDurumu.ODENDI ? OdemeDurumu.ACIK_HESAP : OdemeDurumu.ODENDI;
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { odemeDurumu: yeniDurum, guncellemeTarihi: new Date() });
-      setSatislar(prev => prev.map(s => s.id === satis.id ? { ...s, odemeDurumu: yeniDurum } : s));
-    } catch { alert('❌ Güncelleme başarısız!'); }
-    finally { setGuncellemeyorum(null); }
+  // ✅ Ödeme durumunu otomatik hesapla (firebase'deki verilerden)
+  const odemeDurumunuHesapla = (satis: SatisTeklifFormu): boolean => {
+    const toplamTutar = (satis as any).toplamTutar || 0;
+    if (toplamTutar <= 0) return false;
+    const toplamOdenen = (satis as any).toplamOdenen ||
+      ((satis as any).pesinatTutar || 0) +
+      ((satis as any).havaleTutar || 0) +
+      ((satis.kartOdemeler || []).reduce((s: number, k: any) => s + (k.tutar || 0), 0));
+    return toplamOdenen >= toplamTutar;
   };
 
   const formatPrice = (price: number) => new Intl.NumberFormat('tr-TR', {
@@ -306,9 +273,7 @@ const Dashboard: React.FC = () => {
                       </div>
                       <div className="alarm-satir-sag">
                         <span className="alarm-tutar">{formatPrice(s.toplamTutar)}</span>
-                        <button className="alarm-detay-btn" onClick={() => navigate(`/satis-detay/${s.subeKodu}/${s.id}`)}>
-                          Görüntüle
-                        </button>
+                        <button className="alarm-detay-btn" onClick={() => navigate(`/satis-detay/${s.subeKodu}/${s.id}`)}>Görüntüle</button>
                       </div>
                     </div>
                   ))}
@@ -316,7 +281,6 @@ const Dashboard: React.FC = () => {
               )}
             </div>
           )}
-
           {alarmVeriler.yarinSatislar.length > 0 && (
             <div className="alarm-banner yarin">
               <div className="alarm-baslik" onClick={() => setYarinAcik(p => !p)}>
@@ -338,9 +302,7 @@ const Dashboard: React.FC = () => {
                       </div>
                       <div className="alarm-satir-sag">
                         <span className="alarm-tutar">{formatPrice(s.toplamTutar)}</span>
-                        <button className="alarm-detay-btn" onClick={() => navigate(`/satis-detay/${s.subeKodu}/${s.id}`)}>
-                          Görüntüle
-                        </button>
+                        <button className="alarm-detay-btn" onClick={() => navigate(`/satis-detay/${s.subeKodu}/${s.id}`)}>Görüntüle</button>
                       </div>
                     </div>
                   ))}
@@ -406,7 +368,6 @@ const Dashboard: React.FC = () => {
             })}
           </select>
         </div>
-
         <div className="filtre-item">
           <label>KAR/ZARAR</label>
           <select value={zararOlanlar} onChange={e => setZararOlanlar(e.target.value)} className="filtre-select">
@@ -415,7 +376,6 @@ const Dashboard: React.FC = () => {
             <option value="kar">Sadece Karlı</option>
           </select>
         </div>
-
         <div className="filtre-item">
           <label>DURUM</label>
           <select value={durum} onChange={e => setDurum(e.target.value)} className="filtre-select">
@@ -424,12 +384,10 @@ const Dashboard: React.FC = () => {
             <option value="pending">Beklemede</option>
           </select>
         </div>
-
         <div className="filtre-item">
           <label>TESLİM TARİHİ</label>
           <input type="date" value={teslimTarihi} onChange={e => setTeslimTarihi(e.target.value)} className="filtre-input" />
         </div>
-
         <div className="filtre-item">
           <label>AÇIK HESAP</label>
           <select value={acikHesap} onChange={e => setAcikHesap(e.target.value)} className="filtre-select">
@@ -438,42 +396,26 @@ const Dashboard: React.FC = () => {
             <option value="kapali">Kapalı Hesaplar</option>
           </select>
         </div>
-
         <div className="filtre-item">
           <label>SATIŞ TARİHİ</label>
           <input type="date" value={satisTarihi} onChange={e => setSatisTarihi(e.target.value)} className="filtre-input" />
         </div>
-
         <div className="filtre-item filtre-item--wide">
           <label>SATIŞ KODU / MÜŞTERİ</label>
           <div className="search-container">
-            <input
-              type="text"
-              placeholder="Satış kodu veya müşteri adı..."
-              value={aramaMetni}
-              onChange={e => setAramaMetni(e.target.value)}
-              className="search-input"
-            />
-            <button className="search-btn" onClick={filtreyiUygula}>
-              <i className="fas fa-search"></i>
-            </button>
+            <input type="text" placeholder="Satış kodu veya müşteri adı..." value={aramaMetni} onChange={e => setAramaMetni(e.target.value)} className="search-input" />
+            <button className="search-btn" onClick={filtreyiUygula}><i className="fas fa-search"></i></button>
           </div>
         </div>
-
         <div className="filtre-item filtre-item--actions">
           <label>&nbsp;</label>
-          <button onClick={filtreleriSifirla} className="btn-sifirla">
-            <i className="fas fa-undo"></i> Sıfırla
-          </button>
+          <button onClick={filtreleriSifirla} className="btn-sifirla"><i className="fas fa-undo"></i> Sıfırla</button>
         </div>
       </div>
 
       {/* SONUÇ BİLGİSİ */}
       <div className="sonuc-bilgi">
-        <p>
-          Toplam <strong>{filtreliSatislar.length}</strong> satış
-          {totalPages > 1 && <span> · Sayfa {currentPage}/{totalPages}</span>}
-        </p>
+        <p>Toplam <strong>{filtreliSatislar.length}</strong> satış{totalPages > 1 && <span> · Sayfa {currentPage}/{totalPages}</span>}</p>
       </div>
 
       {/* TABLO */}
@@ -482,9 +424,7 @@ const Dashboard: React.FC = () => {
       ) : filtreliSatislar.length === 0 ? (
         <div className="empty-state">
           <p>Filtreye uygun satış kaydı bulunmuyor.</p>
-          <button onClick={() => navigate('/satis-teklif')} className="btn-primary">
-            YENİ SATIŞ TEKLİFİ OLUŞTUR
-          </button>
+          <button onClick={() => navigate('/satis-teklif')} className="btn-primary">YENİ SATIŞ TEKLİFİ OLUŞTUR</button>
         </div>
       ) : (
         <>
@@ -508,9 +448,9 @@ const Dashboard: React.FC = () => {
                 {currentSatislar.map(satis => {
                   const kar = satis.zarar ?? 0;
                   const isOnaylandi = satis.onayDurumu === true;
-                  const isOdendi = satis.odemeDurumu === OdemeDurumu.ODENDI;
+                  // ✅ Ödeme durumu otomatik hesaplanıyor, kimse değiştiremez
+                  const isOdendi = odemeDurumunuHesapla(satis);
                   const onayYukleniyor = guncellemeyorum === satis.id;
-                  const odemeYukleniyor = guncellemeyorum === satis.id + '_odeme';
 
                   return (
                     <tr key={satis.id}>
@@ -524,13 +464,14 @@ const Dashboard: React.FC = () => {
                         </span>
                       </td>
                       <td>{formatDate(satis.tarih)}</td>
-                     <td>
-                      {satis.yeniTeslimatTarihi
-                        ? formatDate(satis.yeniTeslimatTarihi)
-                        : formatDate(satis.teslimatTarihi)
-                      }
-                    </td>
                       <td>
+                        {satis.yeniTeslimatTarihi
+                          ? formatDate(satis.yeniTeslimatTarihi)
+                          : formatDate(satis.teslimatTarihi)
+                        }
+                      </td>
+                      <td>
+                        {/* Durum: sadece admin tıklayabilir */}
                         {isAdmin ? (
                           <button
                             className={`status-badge clickable ${isOnaylandi ? 'approved' : 'pending'}`}
@@ -546,29 +487,29 @@ const Dashboard: React.FC = () => {
                         )}
                       </td>
                       <td>
-                        {isAdmin ? (
-                          <button
-                            className={`status-badge clickable ${isOdendi ? 'odendi' : 'acik-hesap'}`}
-                            onClick={() => odemeDurumuToggle(satis)}
-                            disabled={odemeYukleniyor}
-                          >
-                            {odemeYukleniyor ? '...' : isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
-                          </button>
-                        ) : (
-                          <span className={`status-badge ${isOdendi ? 'odendi' : 'acik-hesap'}`}>
-                            {isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
-                          </span>
-                        )}
+                        {/* ✅ Ödeme: sadece görüntülenir, hiç kimse değiştiremez */}
+                        <span className={`status-badge ${isOdendi ? 'odendi' : 'acik-hesap'}`}>
+                          {isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}
+                        </span>
                       </td>
                       <td>
-                      <div className="action-buttons">
-                        <button onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)} className="btn-view">
-                          <i className="fas fa-eye"></i> Detay
-                        </button>
-                        <button onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)} className="btn-edit">
-                          <i className="fas fa-pen"></i> Düzenle
-                        </button>
-                      </div>
+                        {/* ✅ Sadece ikon butonlar */}
+                        <div className="action-buttons">
+                          <button
+                            onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
+                            className="btn-view btn-icon-only"
+                            title="Detay Görüntüle"
+                          >
+                            <i className="fas fa-eye"></i>
+                          </button>
+                          <button
+                            onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)}
+                            className="btn-edit btn-icon-only"
+                            title="Düzenle"
+                          >
+                            <i className="fas fa-pen"></i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
