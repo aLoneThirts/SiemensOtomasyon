@@ -14,6 +14,11 @@ export interface User {
   role: UserRole;
   subeKodu: SubeKodu;
   createdAt: Date;
+  // Yeni eklenen alanlar
+  hedef?: number;  // Eski format tekil hedef (opsiyonel)
+  hedefler?: {     // Yeni format aylık hedefler (opsiyonel)
+    [ay: string]: number;  // "YYYY-MM": hedef değeri
+  };
 }
 
 export interface RegisterData {
