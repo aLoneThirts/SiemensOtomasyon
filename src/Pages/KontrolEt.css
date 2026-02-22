@@ -55,15 +55,9 @@
   border-radius: 20px;
 }
 
-.bekleyen-sayac {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.onaylandi-sayac {
-  background: #d1fae5;
-  color: #065f46;
-}
+.bekleyen-sayac  { background: #fee2e2; color: #991b1b; }
+.onaylandi-sayac { background: #d1fae5; color: #065f46; }
+.iptal-sayac     { background: #dc2626; color: white;   }
 
 .bekleyen-bolum .kontrol-bolum-baslik {
   border-left: 4px solid #ef4444;
@@ -81,34 +75,19 @@
   transition: transform 0.2s;
   display: inline-block;
 }
-
 .kontrol-chevron.acik { transform: rotate(180deg); }
 
 /* ── BOŞ STATE ── */
-.kontrol-bos {
-  text-align: center;
-  padding: 40px 20px;
-  border-top: 1px solid #f3f4f6;
-}
-
+.kontrol-bos { text-align: center; padding: 40px 20px; border-top: 1px solid #f3f4f6; }
 .kontrol-bos span { font-size: 32px; }
 .kontrol-bos p { margin: 10px 0 0; color: #6b7280; font-size: 14px; font-weight: 500; }
 
 /* ── TABLO ── */
-.kontrol-tablo-wrapper {
-  overflow-x: auto;
-  border-top: 1px solid #f3f4f6;
-}
+.kontrol-tablo-wrapper { overflow-x: auto; border-top: 1px solid #f3f4f6; }
 
-.kontrol-tablo {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 860px;
-}
+.kontrol-tablo { width: 100%; border-collapse: collapse; min-width: 860px; }
 
-.kontrol-tablo thead {
-  background: linear-gradient(135deg, #1f2937, #374151);
-}
+.kontrol-tablo thead { background: linear-gradient(135deg, #1f2937, #374151); }
 
 .kontrol-tablo th {
   padding: 11px 14px;
@@ -131,82 +110,56 @@
 
 .kontrol-tablo tbody tr:last-child td { border-bottom: none; }
 
-.satir-bekleyen:hover { background: #fff5f5; }
-.satir-onaylandi:hover { background: #f0fdf4; }
+.satir-bekleyen:hover   { background: #fff5f5; }
+.satir-onaylandi:hover  { background: #f0fdf4; }
+.satir-iptal-talep      { background: #fff5f5 !important; }
+.satir-iptal-talep:hover { background: #fee2e2 !important; }
 
 .satis-kodu { color: #009999; font-size: 13px; }
 
 /* ── KAR/ZARAR BADGE ── */
 .kz-badge {
-  padding: 4px 9px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 800;
-  display: inline-block;
-  white-space: nowrap;
+  padding: 4px 9px; border-radius: 20px;
+  font-size: 11px; font-weight: 800;
+  display: inline-block; white-space: nowrap;
 }
-
-.kz-badge.kar { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
+.kz-badge.kar   { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
 .kz-badge.zarar { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; }
 
 /* ── ONAY BUTON/BADGE ── */
 .onay-btn {
-  padding: 5px 12px;
-  border: none;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: inherit;
-  letter-spacing: 0.4px;
+  padding: 5px 12px; border: none; border-radius: 20px;
+  font-size: 11px; font-weight: 800; cursor: pointer;
+  transition: all 0.2s ease; font-family: inherit; letter-spacing: 0.4px;
 }
 
-.onay-btn.bekleyen {
-  background: linear-gradient(135deg, #fed7aa, #fdba74);
-  color: #92400e;
-}
-.onay-btn.bekleyen:hover {
-  background: linear-gradient(135deg, #fb923c, #f97316);
-  color: white;
-  transform: scale(1.05);
-}
-
-.onay-btn.onayli {
-  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-  color: #065f46;
-}
-.onay-btn.onayli:hover {
-  background: linear-gradient(135deg, #6ee7b7, #34d399);
-  transform: scale(1.05);
-}
-
+.onay-btn.bekleyen { background: linear-gradient(135deg, #fed7aa, #fdba74); color: #92400e; }
+.onay-btn.bekleyen:hover { background: linear-gradient(135deg, #fb923c, #f97316); color: white; transform: scale(1.05); }
+.onay-btn.onayli  { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
+.onay-btn.onayli:hover { background: linear-gradient(135deg, #6ee7b7, #34d399); transform: scale(1.05); }
 .onay-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-.onay-badge {
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 800;
-  display: inline-block;
+.onay-btn.iptal-talep {
+  background: #fef2f2; color: #dc2626;
+  border: 1px solid #fca5a5; font-weight: 700; cursor: default;
 }
 
-.onay-badge.bekleyen { background: #fed7aa; color: #92400e; }
-.onay-badge.onayli { background: #d1fae5; color: #065f46; }
+.onay-badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; display: inline-block; }
+.onay-badge.bekleyen  { background: #fed7aa; color: #92400e; }
+.onay-badge.onayli    { background: #d1fae5; color: #065f46; }
+.onay-badge.iptal-talep {
+  background: #fef2f2; color: #dc2626;
+  border: 1px solid #fca5a5; padding: 4px 10px;
+  border-radius: 6px; font-size: 12px; font-weight: 700;
+}
 
 /* ── İŞLEM BUTONLARI ── */
 .islem-btns { display: flex; gap: 6px; }
 
 .btn-goster, .btn-duzenle {
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 32px; height: 32px; border: none; border-radius: 8px;
+  cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
   transition: all 0.2s ease;
 }
 
@@ -222,6 +175,27 @@
 }
 .btn-duzenle:hover { background: linear-gradient(135deg, #f57c00, #e65100); transform: translateY(-2px); }
 
+/* ── SAYFALAMA ── */
+.kontrol-pagination {
+  display: flex; align-items: center; gap: 6px;
+  padding: 14px 20px; border-top: 1px solid #f3f4f6; flex-wrap: wrap;
+}
+
+.kontrol-pag-btn {
+  padding: 6px 12px; border: 2px solid #e5e7eb; background: white;
+  border-radius: 8px; font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s ease; font-family: inherit; color: #374151;
+}
+.kontrol-pag-btn:hover:not(:disabled) { border-color: #ef4444; color: #ef4444; background: #fff5f5; }
+.kontrol-pag-btn.aktif {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-color: #ef4444; color: white;
+  box-shadow: 0 3px 8px rgba(239, 68, 68, 0.3);
+}
+.kontrol-pag-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.kontrol-pag-bilgi { font-size: 12px; color: #9ca3af; margin-left: 8px; font-weight: 500; }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
   .kontrol-bolum-baslik { padding: 14px 16px; }
@@ -229,50 +203,105 @@
   .kontrol-tablo td, .kontrol-tablo th { padding: 10px 10px; }
 }
 
-/* ── SAYFALAMA ── */
-.kontrol-pagination {
+/* =============================================
+   FİLTRELER
+   ============================================= */
+.kontrol-filtre-bar {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 14px 20px;
-  border-top: 1px solid #f3f4f6;
-  flex-wrap: wrap;
-}
-
-.kontrol-pag-btn {
-  padding: 6px 12px;
-  border: 2px solid #e5e7eb;
-  background: white;
+  gap: 16px;
+  padding: 8px 12px;
+  background: #f8fafc;
   border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: inherit;
-  color: #374151;
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
 }
 
-.kontrol-pag-btn:hover:not(:disabled) {
-  border-color: #ef4444;
-  color: #ef4444;
+.kontrol-filtre-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.kontrol-filtre-item label {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.6px; color: #64748b;
+  text-transform: uppercase; white-space: nowrap;
+}
+
+.kontrol-filtre-select,
+.kontrol-filtre-input {
+  padding: 5px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #1e293b;
+  background: white;
+  width: 140px;
+  height: 30px;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+.kontrol-filtre-select:focus,
+.kontrol-filtre-input:focus { border-color: #0ea5e9; }
+
+.kontrol-filtre-sifirla {
+  padding: 5px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 30px;
+  white-space: nowrap;
+}
+.kontrol-filtre-sifirla:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+
+/* =============================================
+   İPTAL TALEP BÖLÜMÜ
+   ============================================= */
+.iptal-talep-bolum {
+  border: 2px solid #fca5a5 !important;
   background: #fff5f5;
 }
-
-.kontrol-pag-btn.aktif {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  border-color: #ef4444;
-  color: white;
-  box-shadow: 0 3px 8px rgba(239, 68, 68, 0.3);
+.iptal-talep-bolum .kontrol-bolum-baslik {
+  background: linear-gradient(135deg, #fee2e2, #fecaca) !important;
+  border-left: 4px solid #dc2626 !important;
 }
 
-.kontrol-pag-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+/* ── İPTAL ONAY DIALOG ── */
+.iptal-dialog {
+  display: flex; flex-direction: column;
+  gap: 6px; align-items: flex-start;
 }
 
-.kontrol-pag-bilgi {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-left: 8px;
-  font-weight: 500;
+.iptal-soru {
+  font-size: 12px; font-weight: 600;
+  color: #dc2626; white-space: nowrap;
 }
+
+.iptal-butonlar { display: flex; gap: 6px; }
+
+.btn-iptal-evet {
+  padding: 4px 12px;
+  background: #dc2626; color: white;
+  border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s;
+}
+.btn-iptal-evet:hover:not(:disabled) { background: #b91c1c; }
+
+.btn-iptal-hayir {
+  padding: 4px 12px;
+  background: #f1f5f9; color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 0.2s;
+}
+.btn-iptal-hayir:hover:not(:disabled) { background: #e2e8f0; }

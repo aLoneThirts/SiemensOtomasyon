@@ -17,6 +17,7 @@ const Dashboard: React.FC = () => {
   const [filtreliSatislar, setFiltreliSatislar] = useState<SatisTeklifFormu[]>([]);
   const [loading, setLoading] = useState(true);
   const [guncellemeyorum, setGuncellemeyorum] = useState<string | null>(null);
+  const [iptalOnayBekleyen, setIptalOnayBekleyen] = useState<string | null>(null);
 
   const [secilenSube, setSecilenSube] = useState<string>('');
   const [zararOlanlar, setZararOlanlar] = useState<string>('all');
@@ -29,7 +30,6 @@ const Dashboard: React.FC = () => {
 
   const [bugunAcik, setBugunAcik] = useState(true);
   const [yarinAcik, setYarinAcik] = useState(true);
-
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
 
@@ -97,8 +97,11 @@ const Dashboard: React.FC = () => {
     if (secilenSube) sonuc = sonuc.filter(s => s.subeKodu === secilenSube);
     if (zararOlanlar === 'zarar') sonuc = sonuc.filter(s => (s.zarar ?? 0) < 0);
     else if (zararOlanlar === 'kar') sonuc = sonuc.filter(s => (s.zarar ?? 0) >= 0);
-    if (durum === 'approved') sonuc = sonuc.filter(s => s.onayDurumu === true);
-    else if (durum === 'pending') sonuc = sonuc.filter(s => s.onayDurumu === false);
+
+    if (durum === 'approved') sonuc = sonuc.filter(s => s.onayDurumu === true && (s as any).satisDurumu !== 'IPTAL');
+    else if (durum === 'pending') sonuc = sonuc.filter(s => s.onayDurumu === false && (s as any).satisDurumu !== 'IPTAL');
+    else if (durum === 'iptal') sonuc = sonuc.filter(s => (s as any).satisDurumu === 'IPTAL');
+
     if (teslimTarihi) sonuc = sonuc.filter(s => dateToString(s.teslimatTarihi) === teslimTarihi);
     if (acikHesap === 'acik') sonuc = sonuc.filter(s => s.odemeDurumu === OdemeDurumu.ACIK_HESAP);
     else if (acikHesap === 'kapali') sonuc = sonuc.filter(s => s.odemeDurumu === OdemeDurumu.ODENDI);
@@ -118,13 +121,37 @@ const Dashboard: React.FC = () => {
     setTeslimTarihi(''); setAcikHesap('all'); setSatisTarihi(''); setAramaMetni('');
   };
 
+  const iptalTalebiGonder = async (satis: SatisTeklifFormu) => {
+    if (!satis.id) return;
+    const sube = getSubeByKod(satis.subeKodu);
+    if (!sube) return;
+    setGuncellemeyorum(satis.id);
+    try {
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        iptalTalebi: true,
+        iptalTalepTarihi: new Date(),
+        guncellemeTarihi: new Date()
+      });
+      setSatislar(prev => prev.map(s =>
+        s.id === satis.id ? { ...s, iptalTalebi: true } as any : s
+      ));
+    } catch {
+      alert('❌ İptal talebi gönderilemedi!');
+    } finally {
+      setGuncellemeyorum(null);
+      setIptalOnayBekleyen(null);
+    }
+  };
+
   const ozetVeriler = React.useMemo(() => {
-    const toplamCiro = satislar.reduce((acc, s) => acc + (s.toplamTutar || 0), 0);
-    const acikHesaplar = satislar.filter(s => s.odemeDurumu === OdemeDurumu.ACIK_HESAP).length;
-    const bekleyenOnaylar = satislar.filter(s => s.onayDurumu === false).length;
-    const zararEdenler = satislar.filter(s => (s.zarar ?? 0) < 0).length;
-    const toplamKar = satislar.reduce((acc, s) => acc + (s.zarar ?? 0), 0);
-    return { toplamCiro, acikHesaplar, bekleyenOnaylar, zararEdenler, toplamKar };
+    const aktif = satislar.filter(s => (s as any).satisDurumu !== 'IPTAL');
+    const toplamCiro = aktif.reduce((acc, s) => acc + (s.toplamTutar || 0), 0);
+    const acikHesaplar = aktif.filter(s => s.odemeDurumu === OdemeDurumu.ACIK_HESAP).length;
+    const bekleyenOnaylar = aktif.filter(s => s.onayDurumu === false).length;
+    const zararEdenler = aktif.filter(s => (s.zarar ?? 0) < 0).length;
+    const toplamKar = aktif.reduce((acc, s) => acc + (s.zarar ?? 0), 0);
+    const iptalSayisi = satislar.filter(s => (s as any).satisDurumu === 'IPTAL').length;
+    return { toplamCiro, acikHesaplar, bekleyenOnaylar, zararEdenler, toplamKar, iptalSayisi };
   }, [satislar]);
 
   const alarmVeriler = React.useMemo(() => {
@@ -137,11 +164,13 @@ const Dashboard: React.FC = () => {
       return new Date(d);
     };
     const bugunSatislar = satislar.filter(s => {
+      if ((s as any).satisDurumu === 'IPTAL') return false;
       const tarih = s.yeniTeslimatTarihi || s.teslimatTarihi;
       const t = toDate(tarih); t.setHours(0, 0, 0, 0);
       return t.getTime() === bugun.getTime() && s.teslimEdildiMi !== true;
     });
     const yarinSatislar = satislar.filter(s => {
+      if ((s as any).satisDurumu === 'IPTAL') return false;
       const tarih = s.yeniTeslimatTarihi || s.teslimatTarihi;
       const t = toDate(tarih); t.setHours(0, 0, 0, 0);
       return t.getTime() === yarin.getTime() && s.teslimEdildiMi !== true;
@@ -158,7 +187,7 @@ const Dashboard: React.FC = () => {
       'Kar/Zarar': s.zarar ?? 0,
       'Satış Tarihi': formatDate(s.tarih),
       'Teslimat Tarihi': formatDate(s.teslimatTarihi),
-      'Durum': s.onayDurumu ? 'Onaylı' : 'Beklemede',
+      'Durum': (s as any).satisDurumu === 'IPTAL' ? 'İptal' : s.onayDurumu ? 'Onaylı' : 'Beklemede',
       'Ödeme': s.odemeDurumu,
       'Fatura No': s.faturaNo || '',
     }));
@@ -210,7 +239,11 @@ const Dashboard: React.FC = () => {
     setGuncellemeyorum(satis.id);
     try {
       const yeniDurum = !satis.onayDurumu;
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { onayDurumu: yeniDurum, guncellemeTarihi: new Date() });
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        onayDurumu: yeniDurum,
+        satisDurumu: yeniDurum ? 'ONAYLI' : 'BEKLEMEDE',
+        guncellemeTarihi: new Date()
+      });
       setSatislar(prev => prev.map(s => s.id === satis.id ? { ...s, onayDurumu: yeniDurum } : s));
     } catch { alert('❌ Güncelleme başarısız!'); }
     finally { setGuncellemeyorum(null); }
@@ -247,7 +280,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <Layout pageTitle="Satış Listesi" headerExtra={excelBtn}>
-      {/* TESLİM ALARM BANNER */}
       {!loading && (
         <>
           {alarmVeriler.bugunSatislar.length > 0 && (
@@ -274,7 +306,7 @@ const Dashboard: React.FC = () => {
                         <button className="alarm-detay-btn" onClick={() => navigate(`/satis-detay/${s.subeKodu}/${s.id}`)}>Görüntüle</button>
                       </div>
                     </div>
-                  ))}w
+                  ))}
                 </div>
               )}
             </div>
@@ -311,7 +343,6 @@ const Dashboard: React.FC = () => {
         </>
       )}
 
-      {/* ÖZET KARTLAR */}
       {!loading && (
         <div className="ozet-kartlar">
           <div className="ozet-kart ozet-ciro">
@@ -351,10 +382,18 @@ const Dashboard: React.FC = () => {
               <span className="ozet-kart-deger">{ozetVeriler.zararEdenler} satış</span>
             </div>
           </div>
+          {ozetVeriler.iptalSayisi > 0 && (
+            <div className="ozet-kart ozet-iptal" onClick={() => setDurum('iptal')} style={{ cursor: 'pointer' }}>
+              <div className="ozet-kart-ikon"><i className="fas fa-ban"></i></div>
+              <div className="ozet-kart-bilgi">
+                <span className="ozet-kart-baslik">İPTAL</span>
+                <span className="ozet-kart-deger">{ozetVeriler.iptalSayisi} satış</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* FİLTRELER */}
       <div className="filtre-container">
         <div className="filtre-item">
           <label>ŞUBE</label>
@@ -380,6 +419,7 @@ const Dashboard: React.FC = () => {
             <option value="all">Tümü</option>
             <option value="approved">Onaylı</option>
             <option value="pending">Beklemede</option>
+            <option value="iptal">🚫 İptal</option>
           </select>
         </div>
         <div className="filtre-item">
@@ -411,12 +451,10 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* SONUÇ BİLGİSİ */}
       <div className="sonuc-bilgi">
         <p>Toplam <strong>{filtreliSatislar.length}</strong> satış{totalPages > 1 && <span> · Sayfa {currentPage}/{totalPages}</span>}</p>
       </div>
 
-      {/* TABLO */}
       {loading ? (
         <div className="loading">Yükleniyor...</div>
       ) : filtreliSatislar.length === 0 ? (
@@ -430,16 +468,8 @@ const Dashboard: React.FC = () => {
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th>SATIŞ KODU</th>
-                  <th>ŞUBE</th>
-                  <th>MÜŞTERİ</th>
-                  <th>TUTAR</th>
-                  <th>KAR/ZARAR</th>
-                  <th>TARİH</th>
-                  <th>TESLİMAT</th>
-                  <th>DURUM</th>
-                  <th>ÖDEME</th>
-                  <th>İŞLEMLER</th>
+                  <th>SATIŞ KODU</th><th>ŞUBE</th><th>MÜŞTERİ</th><th>TUTAR</th>
+                  <th>KAR/ZARAR</th><th>TARİH</th><th>TESLİMAT</th><th>DURUM</th><th>ÖDEME</th><th>İŞLEMLER</th>
                 </tr>
               </thead>
               <tbody>
@@ -448,10 +478,25 @@ const Dashboard: React.FC = () => {
                   const isOnaylandi = satis.onayDurumu === true;
                   const isOdendi = odemeDurumunuHesapla(satis);
                   const onayYukleniyor = guncellemeyorum === satis.id;
+                  const isIptal = (satis as any).satisDurumu === 'IPTAL';
+                  const iptalTalebiVar = (satis as any).iptalTalebi === true;
+                  const duzenleyebilir = isAdmin || !isIptal;
 
                   return (
-                    <tr key={satis.id}>
-                      <td><strong>{satis.satisKodu}</strong></td>
+                    <tr key={satis.id} style={isIptal ? { opacity: 0.6, background: '#fef2f2' } : {}}>
+                      <td>
+                        <strong>{satis.satisKodu}</strong>
+                        {isIptal && (
+                          <span style={{ marginLeft: 6, background: '#dc2626', color: '#fff', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>
+                            İPTAL
+                          </span>
+                        )}
+                        {iptalTalebiVar && !isIptal && (
+                          <span style={{ marginLeft: 6, background: '#f97316', color: '#fff', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>
+                            İPTAL TALEBİ
+                          </span>
+                        )}
+                      </td>
                       <td>{getSubeByKod(satis.subeKodu)?.ad}</td>
                       <td>{satis.musteriBilgileri?.isim || '-'}</td>
                       <td><strong>{formatPrice(satis.toplamTutar)}</strong></td>
@@ -461,14 +506,11 @@ const Dashboard: React.FC = () => {
                         </span>
                       </td>
                       <td>{formatDate(satis.tarih)}</td>
+                      <td>{satis.yeniTeslimatTarihi ? formatDate(satis.yeniTeslimatTarihi) : formatDate(satis.teslimatTarihi)}</td>
                       <td>
-                        {satis.yeniTeslimatTarihi
-                          ? formatDate(satis.yeniTeslimatTarihi)
-                          : formatDate(satis.teslimatTarihi)
-                        }
-                      </td>
-                      <td>
-                        {isAdmin ? (
+                        {isIptal ? (
+                          <span className="status-badge" style={{ background: '#dc2626', color: '#fff' }}>🚫 İPTAL</span>
+                        ) : isAdmin ? (
                           <button
                             className={`status-badge clickable ${isOnaylandi ? 'approved' : 'pending'}`}
                             onClick={() => onayDurumuToggle(satis)}
@@ -489,20 +531,39 @@ const Dashboard: React.FC = () => {
                       </td>
                       <td>
                         <div className="action-buttons">
-                          <button
-                            onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
-                            className="btn-view"
-                            title="Detay Görüntüle"
-                          >
-                            👁️
-                          </button>
-                          <button
-                            onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)}
-                            className="btn-edit"
-                            title="Düzenle"
-                          >
-                            ✏️
-                          </button>
+                          <button onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)} className="btn-view" title="Detay Görüntüle">👁️</button>
+                          {duzenleyebilir && (
+                            <button onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)} className="btn-edit" title="Düzenle">✏️</button>
+                          )}
+                          {!isAdmin && !isIptal && !iptalTalebiVar && (
+                            iptalOnayBekleyen === satis.id ? (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                                <span style={{ color: '#6b7280' }}>İptal?</span>
+                                <button
+                                  style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 11 }}
+                                  onClick={() => iptalTalebiGonder(satis)}
+                                  disabled={onayYukleniyor}
+                                >
+                                  {onayYukleniyor ? '...' : 'Evet'}
+                                </button>
+                                <button
+                                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 11 }}
+                                  onClick={() => setIptalOnayBekleyen(null)}
+                                >
+                                  Hayır
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                className="btn-edit"
+                                title="İptal Talebi Gönder"
+                                onClick={() => setIptalOnayBekleyen(satis.id!)}
+                                style={{ background: '#fee2e2', color: '#dc2626' }}
+                              >
+                                🚫
+                              </button>
+                            )
+                          )}
                         </div>
                       </td>
                     </tr>

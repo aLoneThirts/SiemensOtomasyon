@@ -19,7 +19,12 @@ const KontrolEt: React.FC = () => {
   const [guncellemeyorum, setGuncellemeyorum] = useState<string | null>(null);
   const [sonOnaylananAcik, setSonOnaylananAcik] = useState(true);
   const [bekleyenAcik, setBekleyenAcik] = useState(true);
+  const [iptalAcik, setIptalAcik] = useState(true);
   const [bekleyenSayfa, setBekleyenSayfa] = useState(1);
+
+  // Filtreler
+  const [filtreSube, setFiltreSube] = useState('');
+  const [filtreKod, setFiltreKod] = useState('');
 
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
@@ -62,10 +67,25 @@ const KontrolEt: React.FC = () => {
     }
   };
 
-  const bekleyenTumu = satislar.filter(s => s.onayDurumu === false);
+  const filtrele = (liste: SatisTeklifFormu[]) => {
+    return liste.filter(s => {
+      const subeUygun = !filtreSube || s.subeKodu === filtreSube;
+      const kodUygun = !filtreKod || s.satisKodu?.toLowerCase().includes(filtreKod.toLowerCase());
+      return subeUygun && kodUygun;
+    });
+  };
+
+  const bekleyenTumu = filtrele(
+    satislar.filter(s => s.onayDurumu === false && !(s as any).iptalTalebi && (s as any).satisDurumu !== 'IPTAL')
+  );
   const toplamSayfa = Math.ceil(bekleyenTumu.length / SAYFA_BOYUTU);
   const bekleyenSayfadakiler = bekleyenTumu.slice((bekleyenSayfa - 1) * SAYFA_BOYUTU, bekleyenSayfa * SAYFA_BOYUTU);
-  const sonOnaylananlar = satislar.filter(s => s.onayDurumu === true).slice(0, 10);
+  const sonOnaylananlar = filtrele(
+    satislar.filter(s => s.onayDurumu === true && (s as any).satisDurumu !== 'IPTAL')
+  ).slice(0, 10);
+  const iptalTalepleri = filtrele(
+    satislar.filter(s => (s as any).iptalTalebi === true && (s as any).satisDurumu !== 'IPTAL')
+  );
 
   const onayToggle = async (satis: SatisTeklifFormu) => {
     if (!isAdmin || !satis.id) return;
@@ -76,12 +96,58 @@ const KontrolEt: React.FC = () => {
       const yeniDurum = !satis.onayDurumu;
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
         onayDurumu: yeniDurum,
+        satisDurumu: yeniDurum ? 'ONAYLI' : 'BEKLEMEDE',
         guncellemeTarihi: new Date()
       });
-      setSatislar(prev => prev.map(s => s.id === satis.id ? { ...s, onayDurumu: yeniDurum } : s));
+      setSatislar(prev => prev.map(s =>
+        s.id === satis.id ? { ...s, onayDurumu: yeniDurum, satisDurumu: yeniDurum ? 'ONAYLI' : 'BEKLEMEDE' } as any : s
+      ));
       setBekleyenSayfa(1);
     } catch {
       alert('❌ Güncelleme başarısız!');
+    } finally {
+      setGuncellemeyorum(null);
+    }
+  };
+
+  const iptaliOnayla = async (satis: SatisTeklifFormu) => {
+    if (!isAdmin || !satis.id) return;
+    const sube = getSubeByKod(satis.subeKodu);
+    if (!sube) return;
+    setGuncellemeyorum(satis.id);
+    try {
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        satisDurumu: 'IPTAL',
+        onayDurumu: false,
+        iptalTalebi: false,
+        iptalOnayTarihi: new Date(),
+        guncellemeTarihi: new Date()
+      });
+      setSatislar(prev => prev.map(s =>
+        s.id === satis.id ? { ...s, satisDurumu: 'IPTAL', iptalTalebi: false } as any : s
+      ));
+    } catch {
+      alert('❌ İptal işlemi başarısız!');
+    } finally {
+      setGuncellemeyorum(null);
+    }
+  };
+
+  const iptalReddet = async (satis: SatisTeklifFormu) => {
+    if (!isAdmin || !satis.id) return;
+    const sube = getSubeByKod(satis.subeKodu);
+    if (!sube) return;
+    setGuncellemeyorum(satis.id);
+    try {
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        iptalTalebi: false,
+        guncellemeTarihi: new Date()
+      });
+      setSatislar(prev => prev.map(s =>
+        s.id === satis.id ? { ...s, iptalTalebi: false } as any : s
+      ));
+    } catch {
+      alert('❌ İşlem başarısız!');
     } finally {
       setGuncellemeyorum(null);
     }
@@ -118,13 +184,14 @@ const KontrolEt: React.FC = () => {
     );
   };
 
-  const SatisTablosu = ({ liste, tip }: { liste: SatisTeklifFormu[], tip: 'bekleyen' | 'onaylandi' }) => (
+  const SatisTablosu = ({ liste, tip }: { liste: SatisTeklifFormu[], tip: 'bekleyen' | 'onaylandi' | 'iptal' }) => (
     <div className="kontrol-tablo-wrapper">
       <table className="kontrol-tablo">
         <thead>
           <tr>
             <th>SATIŞ KODU</th><th>ŞUBE</th><th>MÜŞTERİ</th><th>TUTAR</th>
             <th>KAR/ZARAR</th><th>SATIŞ TARİHİ</th><th>TESLİMAT</th><th>DURUM</th><th>İŞLEMLER</th>
+            {tip === 'iptal' && <th>İPTAL ONAYI</th>}
           </tr>
         </thead>
         <tbody>
@@ -132,7 +199,11 @@ const KontrolEt: React.FC = () => {
             const kar = satis.zarar ?? 0;
             const yukleniyor = guncellemeyorum === satis.id;
             return (
-              <tr key={satis.id} className={tip === 'bekleyen' ? 'satir-bekleyen' : 'satir-onaylandi'}>
+              <tr key={satis.id} className={
+                tip === 'bekleyen' ? 'satir-bekleyen' :
+                tip === 'iptal' ? 'satir-iptal' :
+                'satir-onaylandi'
+              }>
                 <td><strong className="satis-kodu">{satis.satisKodu}</strong></td>
                 <td>{getSubeByKod(satis.subeKodu)?.ad || '-'}</td>
                 <td>{satis.musteriBilgileri?.isim || '-'}</td>
@@ -141,10 +212,12 @@ const KontrolEt: React.FC = () => {
                 <td>{formatDate(satis.tarih)}</td>
                 <td>{formatDate((satis as any).yeniTeslimatTarihi || satis.teslimatTarihi)}</td>
                 <td>
-                  {isAdmin ? (
+                  {tip === 'bekleyen' && isAdmin ? (
                     <button className={`onay-btn ${satis.onayDurumu ? 'onayli' : 'bekleyen'}`} onClick={() => onayToggle(satis)} disabled={yukleniyor}>
                       {yukleniyor ? '...' : satis.onayDurumu ? '✅ ONAYLI' : '⏳ BEKLEMEDE'}
                     </button>
+                  ) : tip === 'iptal' ? (
+                    <span className="onay-badge iptal-badge">🚫 İPTAL TALEBİ</span>
                   ) : (
                     <span className={`onay-badge ${satis.onayDurumu ? 'onayli' : 'bekleyen'}`}>
                       {satis.onayDurumu ? '✅ ONAYLI' : '⏳ BEKLEMEDE'}
@@ -157,6 +230,22 @@ const KontrolEt: React.FC = () => {
                     <button className="btn-duzenle" onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)} title="Düzenle">✏️</button>
                   </div>
                 </td>
+                {tip === 'iptal' && (
+                  <td>
+                    {isAdmin ? (
+                      <div className="islem-btns">
+                        <button className="btn-iptal-evet" onClick={() => iptaliOnayla(satis)} disabled={yukleniyor}>
+                          {yukleniyor ? '...' : '✅ Evet'}
+                        </button>
+                        <button className="btn-iptal-hayir" onClick={() => iptalReddet(satis)} disabled={yukleniyor}>
+                          ❌ Hayır
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{ color: '#6b7280', fontSize: 12 }}>Admin onayı bekleniyor</span>
+                    )}
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -171,6 +260,51 @@ const KontrolEt: React.FC = () => {
         <div className="kontrol-loading">Yükleniyor...</div>
       ) : (
         <>
+          {/* FİLTRELER */}
+          <div className="kontrol-filtre-bar">
+            <div className="kontrol-filtre-item">
+              <label>ŞUBE</label>
+              <select value={filtreSube} onChange={e => { setFiltreSube(e.target.value); setBekleyenSayfa(1); }} className="kontrol-filtre-select">
+                <option value="">Tüm Şubeler</option>
+                {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
+              </select>
+            </div>
+            <div className="kontrol-filtre-item">
+              <label>SATIŞ KODU</label>
+              <input
+                type="text"
+                placeholder="Satış kodu ara..."
+                value={filtreKod}
+                onChange={e => { setFiltreKod(e.target.value); setBekleyenSayfa(1); }}
+                className="kontrol-filtre-input"
+              />
+            </div>
+            {(filtreSube || filtreKod) && (
+              <button className="kontrol-filtre-sifirla" onClick={() => { setFiltreSube(''); setFiltreKod(''); setBekleyenSayfa(1); }}>
+                ✕ Temizle
+              </button>
+            )}
+          </div>
+
+          {/* İPTAL TALEPLERİ */}
+          <div className="kontrol-bolum iptal-bolum" style={{ marginBottom: 20 }}>
+            <div className="kontrol-bolum-baslik" onClick={() => setIptalAcik(p => !p)}>
+              <div className="kontrol-baslik-sol">
+                <span className="kontrol-baslik-ikon">🚫</span>
+                <h2>İptal Talepleri</h2>
+                <span className="kontrol-sayac iptal-sayac">{iptalTalepleri.length}</span>
+              </div>
+              <span className={`kontrol-chevron ${iptalAcik ? 'acik' : ''}`}>▼</span>
+            </div>
+            {iptalAcik && (
+              iptalTalepleri.length === 0 ? (
+                <div className="kontrol-bos"><span>✅</span><p>İptal talebi bulunmuyor.</p></div>
+              ) : (
+                <SatisTablosu liste={iptalTalepleri} tip="iptal" />
+              )
+            )}
+          </div>
+
           {/* BEKLEYEN ONAYLAR */}
           <div className="kontrol-bolum bekleyen-bolum">
             <div className="kontrol-bolum-baslik" onClick={() => setBekleyenAcik(p => !p)}>

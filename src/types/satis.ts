@@ -122,38 +122,32 @@ export interface SatisTeklifFormu {
   ileriTeslim:          boolean;
   servis:               boolean;
   odemeYontemi:         OdemeYontemi;
-  onayDurumu:           boolean;
+  onayDurumu:           boolean | 'iptal';
   zarar?:               number;
 
   olusturanKullanici:   string;
   olusturmaTarihi:      Date;
   guncellemeTarihi:     Date;
 
-  marsGirisleri?:       MarsGirisi[];     // eski alan (geriye uyumluluk)
-  musteriTemsilcisiId?: string;    // yeni - Firestore uid
-  musteriTemsilcisiAd?: string;   
+  marsGirisleri?:       MarsGirisi[];
+  musteriTemsilcisiId?: string;
+  musteriTemsilcisiAd?: string;
 
   // =============================================
   // İLERİ TESLİM YÖNETİMİ — YENİ ALANLAR
   // =============================================
-
-  // M.A. (Müşteriyle Anlaşılan) teslim tarihi
-  // Dolu ise → otomatik olarak ileri teslim kabul edilir
-  ileriTeslimTarihi?:   any; // Firestore Timestamp veya Date
-
-  // Hesaplanmış ileri teslim flag'i
-  // true: teslimTarihi >= satisTarihi + 1 ay VEYA ileriTeslimTarihi dolu
+  ileriTeslimTarihi?:   any;
   isIleriTeslim?:       boolean;
-
-  // İleri teslim statüsü
-  // BEKLEMEDE (default), TESLIM_EDILDI, ILERI_TESLIM_IPTAL
   ileriTeslimStatusu?:  IleriTeslimStatusu;
-
-  // İleri teslim iptal/tamamlama notu (opsiyonel)
   ileriTeslimNotu?:     string;
-
-  // Genel satış statüsü (onay yönetimi için)
   satisStatusu?:        'BEKLIYOR' | 'ONAYLANDI' | 'TESLIM_EDILDI' | 'ILERI_TESLIM_IPTAL';
+
+  // =============================================
+  // İPTAL YÖNETİMİ — YENİ ALANLAR
+  // =============================================
+  iptalTalebi?:         boolean;       // kullanıcı iptal isteği gönderdi mi
+  iptalDurumu?:         'iptal' | null; // admin onayladıysa 'iptal'
+  iptalTarihi?:         any;           // iptal onaylandığı tarih
 }
 
 export interface BekleyenUrun {

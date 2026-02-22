@@ -4,6 +4,7 @@ import { doc, getDoc, updateDoc, addDoc, collection, getDocs } from 'firebase/fi
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, Kampanya, Urun, KartOdeme, YesilEtiket, BANKALAR, TAKSIT_SECENEKLERI } from '../types/satis';
 import { getSubeByKod } from '../types/sube';
+import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import './SatisDuzenle.css';
 
@@ -17,6 +18,9 @@ const HAVALE_BANKALARI = ['Ziraat Bankası','Halkbank','Vakıfbank','İş Bankas
 const SatisDuzenlePage: React.FC = () => {
   const { subeKodu, id } = useParams<{ subeKodu: string; id: string }>();
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
+
   const [satis, setSatis] = useState<SatisTeklifFormu | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -30,7 +34,6 @@ const SatisDuzenlePage: React.FC = () => {
   const [faturaNo, setFaturaNo] = useState('');
   const [servisNotu, setServisNotu] = useState('');
   const [marsListesi, setMarsListesi] = useState<MarsGirisi[]>([]);
-  // ✅ Notlar alanı
   const [notlar, setNotlar] = useState('');
 
   const [urunCache, setUrunCache] = useState<Record<string, { ad: string; alis: number; bip: number }>>({});
@@ -38,8 +41,15 @@ const SatisDuzenlePage: React.FC = () => {
   const [seciliKampanyaIds, setSeciliKampanyaIds] = useState<string[]>([]);
   const [yesilEtiketAdminList, setYesilEtiketAdminList] = useState<YesilEtiketAdmin[]>([]);
 
-  const etiketAd = (index: number) => ['Orijinal', '2. Sipariş', '3. Sipariş', '4. Sipariş'][index] || `${index + 1}. Sipariş`;
+  // ─── İPTAL STATE'LERİ ───
+  const [iptalPopup, setIptalPopup] = useState(false);
+  const [iptaldenCikarPopup, setIptaldenCikarPopup] = useState(false);
+  const [iptalIslemYapiliyor, setIptalIslemYapiliyor] = useState(false);
+  const [iptaldenCikarStatusu, setIptaldenCikarStatusu] = useState<'BEKLEMEDE' | 'ONAYLI'>('BEKLEMEDE');
 
+  const isIptal = (satis as any)?.satisDurumu === 'IPTAL';
+
+  const etiketAd = (index: number) => ['Orijinal', '2. Sipariş', '3. Sipariş', '4. Sipariş'][index] || `${index + 1}. Sipariş`;
   const formatPrice = (price: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(price);
 
   const kesintiCacheYukle = async () => {
@@ -107,16 +117,12 @@ const SatisDuzenlePage: React.FC = () => {
         setKartOdemeler(data.kartOdemeler || []);
         setFaturaNo(data.faturaNo || '');
         setServisNotu(data.servisNotu || '');
-        // ✅ Notlar yükleme
         setNotlar((data as any).notlar || '');
-
         if (data.kampanyalar) setSeciliKampanyaIds(data.kampanyalar.map((k: any) => k.id).filter(Boolean));
-
         const toDateStr = (d: any) => {
           if (!d) return '';
           try { const date = typeof d === 'object' && 'toDate' in d ? d.toDate() : new Date(d); return date.toISOString().split('T')[0]; } catch { return ''; }
         };
-
         if (data.marsGirisleri && Array.isArray(data.marsGirisleri) && data.marsGirisleri.length > 0) {
           setMarsListesi(data.marsGirisleri);
         } else {
@@ -209,7 +215,6 @@ const SatisDuzenlePage: React.FC = () => {
   const toplamTutar = () => manuelSatisTutari ?? 0;
   const kampanyaToplamiHesapla = () => seciliKampanyalar.reduce((t, k) => t + (k.tutar || 0), 0);
 
-  // ✅ GÜNCELLENEN: Toplam Maliyet = Normal maliyet + Yeşil Etiket
   const toplamMaliyet = () => {
     const normalMaliyet = Math.max(0, alisToplamı() - bipToplamı() - kampanyaToplamiHesapla());
     const etiketler = eslesenYesilEtiketler();
@@ -232,8 +237,58 @@ const SatisDuzenlePage: React.FC = () => {
   const acikHesap = () => { const a = toplamTutar() - toplamOdenen(); return a > 0 ? a : 0; };
   const karZarar = () => hesabaGecenToplam() - toplamMaliyet();
 
+  /* ── İPTAL İŞLEMLERİ ── */
+  const satisiIptalEt = async () => {
+    if (!satis?.id) return;
+    const sube = getSubeByKod(subeKodu as any);
+    if (!sube) return;
+    setIptalIslemYapiliyor(true);
+    try {
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        satisDurumu: 'IPTAL',
+        onayDurumu: false,
+        iptalTarihi: new Date(),
+        guncellemeTarihi: new Date()
+      });
+      setSatis(prev => prev ? { ...prev, satisDurumu: 'IPTAL' } as any : prev);
+      setIptalPopup(false);
+      alert('✅ Satış iptal edildi.');
+    } catch {
+      alert('❌ İptal işlemi başarısız!');
+    } finally {
+      setIptalIslemYapiliyor(false);
+    }
+  };
+
+  const satisiIptaldenCikar = async () => {
+    if (!satis?.id) return;
+    const sube = getSubeByKod(subeKodu as any);
+    if (!sube) return;
+    setIptalIslemYapiliyor(true);
+    try {
+      const yeniOnay = iptaldenCikarStatusu === 'ONAYLI';
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        satisDurumu: iptaldenCikarStatusu,
+        onayDurumu: yeniOnay,
+        iptalTarihi: null,
+        guncellemeTarihi: new Date()
+      });
+      setSatis(prev => prev ? { ...prev, satisDurumu: iptaldenCikarStatusu, onayDurumu: yeniOnay } as any : prev);
+      setIptaldenCikarPopup(false);
+      alert(`✅ Satış "${iptaldenCikarStatusu === 'ONAYLI' ? 'Onaylı' : 'Beklemede'}" statüsüne alındı.`);
+    } catch {
+      alert('❌ İşlem başarısız!');
+    } finally {
+      setIptalIslemYapiliyor(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isIptal && !isAdmin) {
+      alert('❌ İptal edilmiş satışı düzenleyemezsiniz.');
+      return;
+    }
     try {
       const sube = getSubeByKod(subeKodu as any);
       if (!sube || !satis) return;
@@ -258,7 +313,6 @@ const SatisDuzenlePage: React.FC = () => {
         odemeDurumu: acikHesap() > 0 ? 'ACIK_HESAP' : 'ODENDI',
         pesinatTutar: pesinatToplam(), havaleTutar: havaleToplam(),
         marsNo: orijinal.marsNo, faturaNo, servisNotu,
-        // ✅ Notlar kaydet
         notlar: notlar.trim() || null,
         toplamTutar: toplamTutar(), zarar: karZarar(),
         teslimatTarihi: orijinal.teslimatTarihi ? new Date(orijinal.teslimatTarihi) : null,
@@ -283,13 +337,75 @@ const SatisDuzenlePage: React.FC = () => {
 
   return (
     <Layout pageTitle={`Düzenle: ${satis.satisKodu}`}>
+
+      {/* ══════ İPTAL POPUP ══════ */}
+      {iptalPopup && (
+        <div className="duzenle-popup-overlay">
+          <div className="duzenle-popup">
+            <div className="duzenle-popup-ikon">🚫</div>
+            <h3 className="duzenle-popup-baslik">Satışı İptal Et</h3>
+            <p className="duzenle-popup-mesaj">
+              <strong>{satis.satisKodu}</strong> kodlu satışı iptal etmek istediğinizden emin misiniz?
+              <br /><span className="duzenle-popup-alt-not">Satış silinmeyecek, listede görünmeye devam edecek.</span>
+            </p>
+            <div className="duzenle-popup-butonlar">
+              <button className="duzenle-popup-hayir" onClick={() => setIptalPopup(false)} disabled={iptalIslemYapiliyor}>Hayır</button>
+              <button className="duzenle-popup-evet duzenle-popup-evet--iptal" onClick={satisiIptalEt} disabled={iptalIslemYapiliyor}>
+                {iptalIslemYapiliyor ? 'İptal ediliyor...' : 'Evet, İptal Et'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ İPTALDEN ÇIKAR POPUP ══════ */}
+      {iptaldenCikarPopup && (
+        <div className="duzenle-popup-overlay">
+          <div className="duzenle-popup">
+            <div className="duzenle-popup-ikon">♻️</div>
+            <h3 className="duzenle-popup-baslik">İptalden Çıkar</h3>
+            <p className="duzenle-popup-mesaj">
+              <strong>{satis.satisKodu}</strong> kodlu satışı iptalden çıkarmak istediğinizden emin misiniz?
+            </p>
+            <div className="duzenle-popup-statu-sec">
+              <p className="duzenle-popup-statu-baslik">Yeni Statü Seçin:</p>
+              <div className="duzenle-popup-statu-secenekler">
+                <label className={`duzenle-popup-statu-btn ${iptaldenCikarStatusu === 'BEKLEMEDE' ? 'secili' : ''}`}>
+                  <input type="radio" name="statu" value="BEKLEMEDE" checked={iptaldenCikarStatusu === 'BEKLEMEDE'} onChange={() => setIptaldenCikarStatusu('BEKLEMEDE')} />
+                  ⏳ Beklemede
+                </label>
+                <label className={`duzenle-popup-statu-btn ${iptaldenCikarStatusu === 'ONAYLI' ? 'secili' : ''}`}>
+                  <input type="radio" name="statu" value="ONAYLI" checked={iptaldenCikarStatusu === 'ONAYLI'} onChange={() => setIptaldenCikarStatusu('ONAYLI')} />
+                  ✅ Onaylı
+                </label>
+              </div>
+            </div>
+            <div className="duzenle-popup-butonlar">
+              <button className="duzenle-popup-hayir" onClick={() => setIptaldenCikarPopup(false)} disabled={iptalIslemYapiliyor}>Hayır</button>
+              <button className="duzenle-popup-evet duzenle-popup-evet--cikar" onClick={satisiIptaldenCikar} disabled={iptalIslemYapiliyor}>
+                {iptalIslemYapiliyor ? 'İşleniyor...' : 'Evet, İptalden Çıkar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ İPTAL BANNER ══════ */}
+      {isIptal && (
+        <div className="duzenle-iptal-banner">
+          🚫 Bu satış <strong>İPTAL</strong> statüsündedir.{!isAdmin && ' Düzenleme yapılamaz.'}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="duzenle-form">
 
         {/* ÜRÜNLER */}
         <div className="duzenle-section">
           <div className="duzenle-section-header">
             <h2 className="duzenle-section-title">Ürünler</h2>
-            <button type="button" onClick={urunEkle} className="duzenle-btn-add">+ Ürün Ekle</button>
+            {(!isIptal || isAdmin) && (
+              <button type="button" onClick={urunEkle} className="duzenle-btn-add">+ Ürün Ekle</button>
+            )}
           </div>
           <div className="duzenle-urun-header">
             <span>Ürün Kodu</span><span>Ürün Adı</span><span>Adet</span><span>Alış (TL)</span><span>BİP (TL)</span><span></span>
@@ -297,20 +413,22 @@ const SatisDuzenlePage: React.FC = () => {
           {urunler.map((urun, index) => (
             <div key={urun.id} className="duzenle-urun-row">
               <div className="duzenle-urun-kod-wrap">
-                <input type="text" value={urun.kod} onChange={e => handleUrunChange(index, 'kod', e.target.value)} placeholder="Ürün kodu" className="duzenle-input mono" />
+                <input type="text" value={urun.kod} onChange={e => handleUrunChange(index, 'kod', e.target.value)} placeholder="Ürün kodu" className="duzenle-input mono" disabled={isIptal && !isAdmin} />
                 {urunCache[urun.kod?.trim()] && <span className="urun-found-badge">✓ Eşleşti</span>}
               </div>
-              <input type="text" value={urun.ad} onChange={e => handleUrunChange(index, 'ad', e.target.value)} placeholder="Ürün adı" className="duzenle-input" />
-              <input type="number" value={urun.adet} onChange={e => handleUrunChange(index, 'adet', e.target.value)} className="duzenle-input" min="1" />
-              <input type="number" value={urun.alisFiyati || ''} onChange={e => handleUrunChange(index, 'alisFiyati', e.target.value)} placeholder="0" className="duzenle-input mono" />
-              <input type="number" value={urun.bip || ''} onChange={e => handleUrunChange(index, 'bip', e.target.value)} placeholder="0" className="duzenle-input mono" />
-              {urunler.length > 1 && <button type="button" onClick={() => urunSil(index)} className="duzenle-btn-remove">Sil</button>}
+              <input type="text" value={urun.ad} onChange={e => handleUrunChange(index, 'ad', e.target.value)} placeholder="Ürün adı" className="duzenle-input" disabled={isIptal && !isAdmin} />
+              <input type="number" value={urun.adet} onChange={e => handleUrunChange(index, 'adet', e.target.value)} className="duzenle-input" min="1" disabled={isIptal && !isAdmin} />
+              <input type="number" value={urun.alisFiyati || ''} onChange={e => handleUrunChange(index, 'alisFiyati', e.target.value)} placeholder="0" className="duzenle-input mono" disabled={isIptal && !isAdmin} />
+              <input type="number" value={urun.bip || ''} onChange={e => handleUrunChange(index, 'bip', e.target.value)} placeholder="0" className="duzenle-input mono" disabled={isIptal && !isAdmin} />
+              {urunler.length > 1 && (!isIptal || isAdmin) && (
+                <button type="button" onClick={() => urunSil(index)} className="duzenle-btn-remove">Sil</button>
+              )}
             </div>
           ))}
 
           <div className="duzenle-toplam-bar" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span>Satış Tutarı *</span>
-            <input type="number" min="0" value={manuelSatisTutari ?? ''} onChange={e => setManuelSatisTutari(e.target.value === '' ? null : parseFloat(e.target.value) || 0)} placeholder="Satış tutarını girin" style={{ fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 6, padding: '4px 10px', width: 180 }} />
+            <input type="number" min="0" value={manuelSatisTutari ?? ''} onChange={e => setManuelSatisTutari(e.target.value === '' ? null : parseFloat(e.target.value) || 0)} placeholder="Satış tutarını girin" disabled={isIptal && !isAdmin} style={{ fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 6, padding: '4px 10px', width: 180 }} />
           </div>
 
           <div className="duzenle-maliyet-notu">
@@ -342,8 +460,9 @@ const SatisDuzenlePage: React.FC = () => {
           ) : (
             <div className="duzenle-kampanya-grid">
               {kampanyaAdminListesi.map(k => (
-                <label key={k.id} className={`duzenle-kampanya-item ${seciliKampanyaIds.includes(k.id!) ? 'selected' : ''}`}>
-                  <input type="checkbox" checked={seciliKampanyaIds.includes(k.id!)} onChange={() => kampanyaToggle(k.id!)} />
+                <label key={k.id} className={`duzenle-kampanya-item ${seciliKampanyaIds.includes(k.id!) ? 'selected' : ''}`}
+                  style={isIptal && !isAdmin ? { pointerEvents: 'none', opacity: 0.6 } : {}}>
+                  <input type="checkbox" checked={seciliKampanyaIds.includes(k.id!)} onChange={() => kampanyaToggle(k.id!)} disabled={isIptal && !isAdmin} />
                   <div>
                     <div className="duzenle-kampanya-ad">{k.ad}</div>
                     {k.aciklama && <div className="duzenle-kampanya-aciklama">{k.aciklama}</div>}
@@ -359,47 +478,44 @@ const SatisDuzenlePage: React.FC = () => {
         <div className="duzenle-section">
           <h2 className="duzenle-section-title">Ödeme Bilgileri</h2>
 
-          {/* Peşinat */}
           <div className="duzenle-odeme-blok">
             <div className="duzenle-odeme-blok-header">
               <div className="duzenle-odeme-blok-title">💵 Peşinat</div>
-              <button type="button" onClick={pesinatEkle} className="duzenle-btn-sm">+ Peşinat Ekle</button>
+              {(!isIptal || isAdmin) && <button type="button" onClick={pesinatEkle} className="duzenle-btn-sm">+ Peşinat Ekle</button>}
             </div>
             {pesinatlar.map(p => (
               <div key={p.id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <input type="number" min="0" placeholder="Tutar" value={p.tutar || ''} onChange={e => handlePesinatChange(p.id, 'tutar', e.target.value)} className="duzenle-input mono" style={{ flex: 1 }} />
-                <input type="text" placeholder="Açıklama" value={p.aciklama} onChange={e => handlePesinatChange(p.id, 'aciklama', e.target.value)} className="duzenle-input" style={{ flex: 2 }} />
-                <button type="button" onClick={() => pesinatSil(p.id)} className="duzenle-btn-remove">Sil</button>
+                <input type="number" min="0" placeholder="Tutar" value={p.tutar || ''} onChange={e => handlePesinatChange(p.id, 'tutar', e.target.value)} className="duzenle-input mono" style={{ flex: 1 }} disabled={isIptal && !isAdmin} />
+                <input type="text" placeholder="Açıklama" value={p.aciklama} onChange={e => handlePesinatChange(p.id, 'aciklama', e.target.value)} className="duzenle-input" style={{ flex: 2 }} disabled={isIptal && !isAdmin} />
+                {(!isIptal || isAdmin) && <button type="button" onClick={() => pesinatSil(p.id)} className="duzenle-btn-remove">Sil</button>}
               </div>
             ))}
             {pesinatlar.length === 0 && <div style={{ color: '#9ca3af', fontSize: 13 }}>Peşinat yok</div>}
             {pesinatToplam() > 0 && <div className="duzenle-odeme-bilgi ok">✅ Toplam: {formatPrice(pesinatToplam())}</div>}
           </div>
 
-          {/* Havale */}
           <div className="duzenle-odeme-blok" style={{ marginTop: 12 }}>
             <div className="duzenle-odeme-blok-header">
               <div className="duzenle-odeme-blok-title">🏦 Havale</div>
-              <button type="button" onClick={havaleEkle} className="duzenle-btn-sm">+ Havale Ekle</button>
+              {(!isIptal || isAdmin) && <button type="button" onClick={havaleEkle} className="duzenle-btn-sm">+ Havale Ekle</button>}
             </div>
             {havaleler.map(h => (
               <div key={h.id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <select value={h.banka} onChange={e => handleHavaleChange(h.id, 'banka', e.target.value)} className="duzenle-input" style={{ flex: 2 }}>
+                <select value={h.banka} onChange={e => handleHavaleChange(h.id, 'banka', e.target.value)} className="duzenle-input" style={{ flex: 2 }} disabled={isIptal && !isAdmin}>
                   {HAVALE_BANKALARI.map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
-                <input type="number" min="0" placeholder="Tutar" value={h.tutar || ''} onChange={e => handleHavaleChange(h.id, 'tutar', e.target.value)} className="duzenle-input mono" style={{ flex: 1 }} />
-                <button type="button" onClick={() => havaleSil(h.id)} className="duzenle-btn-remove">Sil</button>
+                <input type="number" min="0" placeholder="Tutar" value={h.tutar || ''} onChange={e => handleHavaleChange(h.id, 'tutar', e.target.value)} className="duzenle-input mono" style={{ flex: 1 }} disabled={isIptal && !isAdmin} />
+                {(!isIptal || isAdmin) && <button type="button" onClick={() => havaleSil(h.id)} className="duzenle-btn-remove">Sil</button>}
               </div>
             ))}
             {havaleler.length === 0 && <div style={{ color: '#9ca3af', fontSize: 13 }}>Havale yok</div>}
             {havaleToplam() > 0 && <div className="duzenle-odeme-bilgi ok">✅ Toplam: {formatPrice(havaleToplam())}</div>}
           </div>
 
-          {/* Kart */}
           <div className="duzenle-odeme-blok" style={{ marginTop: 14 }}>
             <div className="duzenle-odeme-blok-header">
               <div className="duzenle-odeme-blok-title">💳 Kart Ödemeleri</div>
-              <button type="button" onClick={kartEkle} className="duzenle-btn-sm">+ Kart Ekle</button>
+              {(!isIptal || isAdmin) && <button type="button" onClick={kartEkle} className="duzenle-btn-sm">+ Kart Ekle</button>}
             </div>
             {kartOdemeler.map((kart, index) => {
               const kesintiOrani = kart.kesintiOrani || 0;
@@ -407,11 +523,11 @@ const SatisDuzenlePage: React.FC = () => {
               return (
                 <div key={kart.id} className="duzenle-kart-row">
                   <div className="duzenle-kart-fields">
-                    <div><label className="duzenle-label">Banka</label><select value={kart.banka} onChange={e => handleKartChange(index, 'banka', e.target.value)} className="duzenle-input">{BANKALAR.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
-                    <div><label className="duzenle-label">Taksit</label><select value={kart.taksitSayisi} onChange={e => handleKartChange(index, 'taksitSayisi', e.target.value)} className="duzenle-input">{TAKSIT_SECENEKLERI.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
-                    <div><label className="duzenle-label">Brüt Tutar</label><input type="number" min="0" value={kart.tutar || ''} onChange={e => handleKartChange(index, 'tutar', e.target.value)} className="duzenle-input mono" /></div>
+                    <div><label className="duzenle-label">Banka</label><select value={kart.banka} onChange={e => handleKartChange(index, 'banka', e.target.value)} className="duzenle-input" disabled={isIptal && !isAdmin}>{BANKALAR.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                    <div><label className="duzenle-label">Taksit</label><select value={kart.taksitSayisi} onChange={e => handleKartChange(index, 'taksitSayisi', e.target.value)} className="duzenle-input" disabled={isIptal && !isAdmin}>{TAKSIT_SECENEKLERI.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+                    <div><label className="duzenle-label">Brüt Tutar</label><input type="number" min="0" value={kart.tutar || ''} onChange={e => handleKartChange(index, 'tutar', e.target.value)} className="duzenle-input mono" disabled={isIptal && !isAdmin} /></div>
                     <div><label className="duzenle-label">Kesinti</label><input type="text" readOnly value={kesintiOrani > 0 ? `%${kesintiOrani}` : 'Bulunamadı'} className="duzenle-input mono" style={{ background: kesintiOrani > 0 ? '#f0fdf4' : '#fff7ed', color: kesintiOrani > 0 ? '#15803d' : '#92400e', fontWeight: 600 }} /></div>
-                    <button type="button" onClick={() => kartSil(index)} className="duzenle-btn-remove">Sil</button>
+                    {(!isIptal || isAdmin) && <button type="button" onClick={() => kartSil(index)} className="duzenle-btn-remove">Sil</button>}
                   </div>
                   {kart.tutar > 0 && <div className="duzenle-kart-net">Brüt: {formatPrice(kart.tutar)} → <strong>NET: {formatPrice(net)}</strong></div>}
                 </div>
@@ -432,22 +548,16 @@ const SatisDuzenlePage: React.FC = () => {
           <div className="duzenle-notlar-grid">
             <div>
               <label className="duzenle-label">Fatura No</label>
-              <input type="text" value={faturaNo} onChange={e => setFaturaNo(e.target.value)} className="duzenle-input" />
+              <input type="text" value={faturaNo} onChange={e => setFaturaNo(e.target.value)} className="duzenle-input" disabled={isIptal && !isAdmin} />
             </div>
             <div>
               <label className="duzenle-label">Servis Notu</label>
-              <input type="text" value={servisNotu} onChange={e => setServisNotu(e.target.value)} className="duzenle-input" />
+              <input type="text" value={servisNotu} onChange={e => setServisNotu(e.target.value)} className="duzenle-input" disabled={isIptal && !isAdmin} />
             </div>
-            {/* ✅ Notlar */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="duzenle-label">📝 Notlar</label>
-              <textarea
-                value={notlar}
-                onChange={e => setNotlar(e.target.value)}
-                placeholder="Satışa ait notları buraya girin..."
-                rows={3}
-                style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }}
-              />
+              <textarea value={notlar} onChange={e => setNotlar(e.target.value)} placeholder="Satışa ait notları buraya girin..." rows={3} disabled={isIptal && !isAdmin}
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }} />
             </div>
           </div>
         </div>
@@ -459,9 +569,9 @@ const SatisDuzenlePage: React.FC = () => {
               <h2 className="duzenle-section-title" style={{ margin: 0 }}>Mars No / Teslimat Tarihi</h2>
               <span className="duzenle-mars-sayac">{marsListesi.length} / {MAX_MARS}</span>
             </div>
-            {marsEklenebilir
+            {marsEklenebilir && (!isIptal || isAdmin)
               ? <button type="button" onClick={marsEkle} className="duzenle-btn-add">+ Yeni Sipariş No</button>
-              : <span className="duzenle-mars-limit">🔒 Maks. 4 giriş</span>
+              : !marsEklenebilir ? <span className="duzenle-mars-limit">🔒 Maks. 4 giriş</span> : null
             }
           </div>
           <div className="duzenle-mars-timeline">
@@ -474,22 +584,39 @@ const SatisDuzenlePage: React.FC = () => {
                 <div className="duzenle-mars-icerik">
                   <div className="duzenle-mars-baslik">
                     <span className={`duzenle-mars-etiket ${index === 0 ? 'etiket-teal' : 'etiket-blue'}`}>{giris.etiket}</span>
-                    {index > 0 && <button type="button" onClick={() => marsSil(index)} className="duzenle-mars-sil">✕</button>}
+                    {index > 0 && (!isIptal || isAdmin) && <button type="button" onClick={() => marsSil(index)} className="duzenle-mars-sil">✕</button>}
                   </div>
                   <div className="duzenle-mars-inputs">
-                    <div><label className="duzenle-label">Mars No</label><input type="text" value={giris.marsNo} onChange={e => marsGuncelle(index, 'marsNo', e.target.value)} placeholder={index === 0 ? 'Orijinal mars no...' : 'Yeni sipariş no...'} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} /></div>
-                    <div><label className="duzenle-label">Teslimat Tarihi</label><input type="date" value={giris.teslimatTarihi} onChange={e => marsGuncelle(index, 'teslimatTarihi', e.target.value)} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} /></div>
+                    <div><label className="duzenle-label">Mars No</label><input type="text" value={giris.marsNo} onChange={e => marsGuncelle(index, 'marsNo', e.target.value)} placeholder={index === 0 ? 'Orijinal mars no...' : 'Yeni sipariş no...'} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} disabled={isIptal && !isAdmin} /></div>
+                    <div><label className="duzenle-label">Teslimat Tarihi</label><input type="date" value={giris.teslimatTarihi} onChange={e => marsGuncelle(index, 'teslimatTarihi', e.target.value)} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} disabled={isIptal && !isAdmin} /></div>
                   </div>
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* ══════ İPTAL / İPTALDEN ÇIKAR BUTONU ══════ */}
+          <div className="duzenle-iptal-buton-alani">
+            {isIptal ? (
+              isAdmin && (
+                <button type="button" className="duzenle-btn-iptalden-cikar" onClick={() => setIptaldenCikarPopup(true)}>
+                  ♻️ İptalden Çıkar
+                </button>
+              )
+            ) : (
+              <button type="button" className="duzenle-btn-iptal-et" onClick={() => setIptalPopup(true)}>
+                🚫 Bu Satış İptal Olsun
+              </button>
+            )}
           </div>
         </div>
 
         {/* ACTIONS */}
         <div className="duzenle-actions">
           <button type="button" onClick={() => navigate('/dashboard')} className="duzenle-btn-cancel">İptal</button>
-          <button type="submit" className="duzenle-btn-submit">Güncelle</button>
+          {(!isIptal || isAdmin) && (
+            <button type="submit" className="duzenle-btn-submit">Güncelle</button>
+          )}
         </div>
       </form>
     </Layout>
