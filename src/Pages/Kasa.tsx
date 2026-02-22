@@ -12,7 +12,7 @@ import {
 } from '../types/kasa';
 import {
   getBugununKasaGunu, kasaHareketEkle, getKasaGecmisi,
-  getSatislar, getTahsilatlar, testGunGecisi,
+  getSatislar, getTahsilatlar,
   KasaSatisOzet, KasaTahsilatOzet, KasaSatisDetay,
 } from '../services/kasaService';
 import { kasaPdfIndir } from '../utils/Kasapdfutils';
@@ -99,7 +99,7 @@ const Kasa: React.FC = () => {
   const [gecmisFiltre, setGecmisFiltre]   = useState<GecmisFiltre>('tumzamanlar');
   const [gecmisDetay, setGecmisDetay]     = useState<GecmisDetay | null>(null);
   const [detayYukleniyor, setDetayYukleniyor] = useState(false);
-  const [pdfYukleniyor, setPdfYukleniyor] = useState<string | null>(null); // gun str
+  const [pdfYukleniyor, setPdfYukleniyor] = useState<string | null>(null);
 
   // ── Bugünkü tablar ────────────────────────────────────────────
   const [aktifTab, setAktifTab] = useState<AktifTab>('hareketler');
@@ -127,12 +127,6 @@ const Kasa: React.FC = () => {
   const [adminTutar, setAdminTutar]             = useState<number>(0);
   const [adminNot, setAdminNot]                 = useState('');
   const [adminHata, setAdminHata]               = useState('');
-
-  // ── Test paneli ───────────────────────────────────────────────
-  const [testAcik, setTestAcik]                 = useState(false);
-  const [testTarih, setTestTarih]               = useState('');
-  const [testSonuc, setTestSonuc]               = useState('');
-  const [testYukleniyor, setTestYukleniyor]     = useState(false);
 
   // ─────────────────────────────────────────────────────────────
   //  DATA LOAD
@@ -188,7 +182,7 @@ const Kasa: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    if (aktifTab === 'satislar' && !satisOzet)     loadSatislar();
+    if (aktifTab === 'satislar' && !satisOzet)       loadSatislar();
     if (aktifTab === 'tahsilatlar' && !tahsilatOzet) loadTahsilatlar();
   }, [aktifTab, kasaGun]);
 
@@ -221,7 +215,6 @@ const Kasa: React.FC = () => {
     if (!currentUser) return;
     setPdfYukleniyor(gun.gun);
     try {
-      // O günün satış ve tahsilatlarını çek
       const [sat, tah] = await Promise.all([
         getSatislar(currentUser.subeKodu, 'bugun', gun.gun),
         getTahsilatlar(currentUser.subeKodu, gun.gun),
@@ -240,7 +233,6 @@ const Kasa: React.FC = () => {
     }
   };
 
-  // Bugün için PDF
   const handleBugunkuPdf = async () => {
     if (!kasaGun || !currentUser) return;
     setPdfYukleniyor(kasaGun.gun);
@@ -332,28 +324,6 @@ const Kasa: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────
-  //  TEST GEÇİŞ
-  // ─────────────────────────────────────────────────────────────
-
-  const handleTestGecis = async () => {
-    if (!testTarih || !currentUser) return;
-    setTestYukleniyor(true); setTestSonuc('');
-    try {
-      const sonuc = await testGunGecisi(
-        currentUser.subeKodu,
-        `${currentUser.ad} ${currentUser.soyad}`,
-        testTarih,
-      );
-      setTestSonuc(sonuc.mesaj);
-      if (sonuc.basarili && sonuc.kasaGun?.gun === bugunStrLocal()) await loadKasa();
-    } catch (err) {
-      setTestSonuc('❌ Hata: ' + (err as Error).message);
-    } finally {
-      setTestYukleniyor(false);
-    }
-  };
-
-  // ─────────────────────────────────────────────────────────────
   //  GEÇMİŞ FİLTRE
   // ─────────────────────────────────────────────────────────────
 
@@ -396,33 +366,11 @@ const Kasa: React.FC = () => {
           <h1>Kasa Yönetimi</h1>
         </div>
         <div className="kasa-header-right">
-          <button onClick={() => setTestAcik(!testAcik)} className="btn-test">🧪 Gece Testi</button>
           <button onClick={() => setGecmisGorunuyor(!gecmisGorunuyor)} className="btn-gecmis">
             {gecmisGorunuyor ? '📋 Günlük Kasa' : '📅 Geçmiş Kayıtlar'}
           </button>
         </div>
       </div>
-
-      {/* ─────────────────────── TEST PANELİ ─────────────────── */}
-      {testAcik && (
-        <div className="test-panel">
-          <div className="test-panel-header">
-            <span>🧪 Gece Geçiş Testi</span>
-            <small>Seçilen tarihe kasa günü oluşturur, önceki günden bakiye devreder.</small>
-          </div>
-          <div className="test-panel-body">
-            <input type="date" value={testTarih} onChange={e => setTestTarih(e.target.value)} className="test-input" />
-            <button onClick={handleTestGecis} disabled={!testTarih || testYukleniyor} className="btn-test-calistir">
-              {testYukleniyor ? '⏳ Çalışıyor...' : '▶ Günü Oluştur'}
-            </button>
-          </div>
-          {testSonuc && (
-            <div className={`test-sonuc ${testSonuc.startsWith('❌') ? 'hata' : 'basarili'}`}>
-              {testSonuc.split('\n').map((line, i) => <div key={i}>{line}</div>)}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ═══════════════════════════════════════════════════════ */}
       {!gecmisGorunuyor ? (
@@ -445,7 +393,6 @@ const Kasa: React.FC = () => {
                   <span className="tarih-value" style={{ fontSize: 13, color: 'var(--gray-600)' }}>
                     {kasaGun.acilisYapan}
                   </span>
-                  {/* Bugün için PDF butonu */}
                   <button
                     className="btn-pdf"
                     onClick={handleBugunkuPdf}
@@ -523,7 +470,7 @@ const Kasa: React.FC = () => {
               </div>
 
               {/* ══════════════════════════════════════════════
-                  TAB: HAREKETLER — Gider / Çıkış / Diğer
+                  TAB: HAREKETLER
               ══════════════════════════════════════════════ */}
               {aktifTab === 'hareketler' && (
                 <div className="kasa-hareketler">
@@ -633,7 +580,7 @@ const Kasa: React.FC = () => {
               )}
 
               {/* ══════════════════════════════════════════════
-                  TAB: SATIŞLAR — sale_date = bugün
+                  TAB: SATIŞLAR
               ══════════════════════════════════════════════ */}
               {aktifTab === 'satislar' && (
                 <div className="kasa-hareketler">
@@ -717,7 +664,7 @@ const Kasa: React.FC = () => {
               )}
 
               {/* ══════════════════════════════════════════════
-                  TAB: TAHSİLATLAR — payment_date = bugün, sale_date < bugün
+                  TAB: TAHSİLATLAR
               ══════════════════════════════════════════════ */}
               {aktifTab === 'tahsilatlar' && (
                 <div className="kasa-hareketler">
@@ -804,7 +751,7 @@ const Kasa: React.FC = () => {
               )}
 
               {/* ══════════════════════════════════════════════
-                  TAB: ÇIKIŞ — Admin para alımları
+                  TAB: ÇIKIŞ
               ══════════════════════════════════════════════ */}
               {aktifTab === 'cikis' && (
                 <div className="kasa-hareketler">
@@ -855,7 +802,6 @@ const Kasa: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Admin özet kartları */}
                   {Object.keys(kasaGun.adminOzet || {}).length > 0 && (
                     <div className="admin-ozet-grid">
                       {ADMIN_LISTESI.map(admin => {
@@ -933,7 +879,6 @@ const Kasa: React.FC = () => {
                   <div className="gecmis-kart-header">
                     <h3>{formatGun(gun.gun)}</h3>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      {/* PDF Çıktı Al */}
                       <button
                         className="btn-pdf-mini"
                         onClick={() => handlePdfIndir(gun)}
@@ -942,7 +887,6 @@ const Kasa: React.FC = () => {
                       >
                         {pdfYukleniyor === gun.gun ? '⏳' : '🖨️ Çıktı Al'}
                       </button>
-                      {/* Detay */}
                       <button className="btn-gecmis-satis" onClick={() => acGecmisDetay(gun)}>
                         🔍 Detay
                       </button>
@@ -952,7 +896,6 @@ const Kasa: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Kasa akış */}
                   <div className="gecmis-akis">
                     <div className="gakis-satir">
                       <span>Açılış</span>
@@ -977,7 +920,6 @@ const Kasa: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Admin özeti */}
                   {Object.keys(gun.adminOzet || {}).length > 0 && (
                     <div className="gecmis-admin-ozet">
                       {Object.entries(gun.adminOzet).map(([ad, tutar]) => (
@@ -1000,7 +942,7 @@ const Kasa: React.FC = () => {
       )}
 
       {/* ═══════════════════════════════════════════════════
-          GEÇMİŞ DETAY MODALİ (Satışlar / Tahsilatlar / Hareketler)
+          GEÇMİŞ DETAY MODALİ
       ═══════════════════════════════════════════════════ */}
       {gecmisDetay && (
         <div className="modal-overlay" onClick={() => setGecmisDetay(null)}>
@@ -1008,7 +950,6 @@ const Kasa: React.FC = () => {
             <div className="modal-header">
               <span>📋 {formatGun(gecmisDetay.kasaGun.gun)} — Detaylar</span>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {/* Modal içinde PDF */}
                 <button
                   className="btn-pdf-mini"
                   onClick={() => handlePdfIndir(gecmisDetay.kasaGun)}
@@ -1020,7 +961,6 @@ const Kasa: React.FC = () => {
               </div>
             </div>
 
-            {/* Modal özet */}
             <div className="modal-ozet-bant">
               <span>Açılış: <strong>{formatPrice(gecmisDetay.kasaGun.acilisBakiyesi)}</strong></span>
               <span>Nakit: <strong style={{ color: 'var(--green)' }}>{formatPrice(gecmisDetay.kasaGun.nakitSatis || 0)}</strong></span>
@@ -1029,7 +969,6 @@ const Kasa: React.FC = () => {
               <span className="gunsonu-badge">Gün Sonu: <strong>{formatPrice(gecmisDetay.kasaGun.gunSonuBakiyesi || 0)}</strong></span>
             </div>
 
-            {/* Modal tab bar */}
             <div className="modal-tab-bar">
               {(['satislar', 'tahsilatlar', 'hareketler'] as const).map(t => (
                 <button

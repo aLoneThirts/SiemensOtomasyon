@@ -154,24 +154,41 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  const kesintiCacheYukle = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'bankaKesintiler'));
-      const cache: Record<string, Record<string, number>> = {};
-      snap.docs.forEach(d => {
-        const data = d.data();
-        cache[d.id] = { tek: data.tek || 0, t2: data.t2 || 0, t3: data.t3 || 0, t4: data.t4 || 0, t5: data.t5 || 0, t6: data.t6 || 0, t7: data.t7 || 0, t8: data.t8 || 0, t9: data.t9 || 0 };
-      });
-      setKesintiCache(cache);
-    } catch (err) { console.error('Kesinti cache yüklenemedi:', err); }
-  };
+const kesintiCacheYukle = async () => {
+  try {
+    const snap = await getDocs(collection(db, 'bankaKesintiler'));
+    const cache: Record<string, Record<number, number>> = {};
+    snap.docs.forEach(d => {
+      const data = d.data();
+      // Yeni format: taksitler: { "1": 4.5, "4": 11.27 }
+      if (data.taksitler) {
+        const taksitMap: Record<number, number> = {};
+        Object.entries(data.taksitler).forEach(([key, val]) => {
+          taksitMap[Number(key)] = Number(val);
+        });
+        cache[d.id] = taksitMap;
+      }
+    });
+    setKesintiCache(cache);
+  } catch (err) { console.error('Kesinti cache yüklenemedi:', err); }
+};
+const getKesintiOrani = (banka: string, taksit: number): number => {
+  // Önce birebir ara
+  if (kesintiCache[banka]?.[taksit]) return kesintiCache[banka][taksit];
 
-  const getKesintiOrani = (banka: string, taksit: number): number => {
-    const bankaData = kesintiCache[banka];
-    if (!bankaData) return 0;
-    const key = taksit === 1 ? 'tek' : `t${taksit}`;
-    return bankaData[key] || 0;
-  };
+  // Bulamazsan normalize ederek ara
+  const normalize = (s: string) =>
+    s.toLowerCase()
+      .replace(/i̇/g, 'i').replace(/ı/g, 'i').replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o')
+      .replace(/ç/g, 'c').replace(/\s+/g, '').trim();
+
+  const normalBanka = normalize(banka);
+  const eslesen = Object.keys(kesintiCache).find(k => normalize(k).includes(normalBanka) || normalBanka.includes(normalize(k)));
+  if (eslesen) return kesintiCache[eslesen][taksit] || 0;
+
+  return 0;
+};
 
   const getSonSatisKodu = async (subeDbPath: string): Promise<string | null> => {
     try {

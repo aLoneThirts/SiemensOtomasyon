@@ -13,34 +13,28 @@ import * as XLSX from 'xlsx';
 import './AdminPanel.css';
 
 // ─── YARDIMCI ────────────────────────────────────────────────
-/** "YYYY-MM" formatında ay anahtarı üretir */
 const ayKey = (d: Date = new Date()): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-/** Firestore mağaza hedef doküman ID'si */
 const magazaDocId = (subeKod: string, ay: string): string => `${subeKod}-${ay}`;
 
 // ─── TIPLER ───────────────────────────────────────────────────
 interface BankaKesinti {
   banka: string;
-  tek: number;
-  t2: number; t3: number; t4: number; t5: number;
-  t6: number; t7: number; t8: number; t9: number;
+  taksitler: Record<number, number>;
 }
 interface Satici {
   id?: string;
   ad: string; soyad: string; email: string;
   subeKodu: string; aktif: boolean;
-  /** Aylık hedefler map: { "2025-02": 200000 } */
   hedefler?: Record<string, number>;
-  /** Eski format — geriye uyumluluk */
   hedef?: number;
   role?: string;
 }
 interface KampanyaAdmin {
   id?: string;
   ad: string; aciklama: string; aktif: boolean; subeKodu: string;
-  tutar?: number; // Kampanya indirim tutarı
+  tutar?: number;
 }
 interface YesilEtiketAdmin {
   id?: string;
@@ -59,7 +53,8 @@ type Modul =
   | 'satici-hedef'
   | 'magaza-hedef'
   | 'kampanya'
-  | 'yesil-etiket';
+  | 'yesil-etiket'
+  | 'email-guncelle';  // ← YENİ
 
 const AdminPanel: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -71,7 +66,7 @@ const AdminPanel: React.FC = () => {
     if (!isAdminUser) { navigate('/'); }
   }, [currentUser, navigate, isAdminUser]);
 
-  const buAy = ayKey(); // "2025-02" gibi
+  const buAy = ayKey();
 
   const [aktifModul,  setAktifModul]  = useState<Modul>('excel-fiyat');
   const [mesaj,       setMesaj]       = useState<{ tip: 'ok' | 'hata'; text: string } | null>(null);
@@ -80,10 +75,9 @@ const AdminPanel: React.FC = () => {
 
   const mesajGoster = (tip: 'ok' | 'hata', text: string) => {
     setMesaj({ tip, text });
-    setTimeout(() => setMesaj(null), 4000);
+    setTimeout(() => setMesaj(null), 5000);
   };
 
-  // Ay seçenekleri (tüm modüllerde kullanılır)
   const aySecenekleri = useMemo<string[]>(() => {
     const aylar: string[] = [];
     const now = new Date();
@@ -165,21 +159,71 @@ const AdminPanel: React.FC = () => {
   const [kesintiYuklendi,  setKesintiYuklendi]  = useState(false);
 
   const handleKesintiExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const wb = XLSX.read(ev.target!.result, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows: any[] = XLSX.utils.sheet_to_json(ws);
-      const parsed: BankaKesinti[] = rows.map(r => ({
-        banka: r['Banka'] || r['banka'] || '',
-        tek: parseFloat(r['Tek'] || r['tek'] || 0),
-        t2: parseFloat(r['2 Taksit'] || r['t2'] || 0), t3: parseFloat(r['3 Taksit'] || r['t3'] || 0),
-        t4: parseFloat(r['4 Taksit'] || r['t4'] || 0), t5: parseFloat(r['5 Taksit'] || r['t5'] || 0),
-        t6: parseFloat(r['6 Taksit'] || r['t6'] || 0), t7: parseFloat(r['7 Taksit'] || r['t7'] || 0),
-        t8: parseFloat(r['8 Taksit'] || r['t8'] || 0), t9: parseFloat(r['9 Taksit'] || r['t9'] || 0),
-      })).filter(r => r.banka);
-      setKesintiOnizleme(parsed); setKesintiYuklendi(true);
+      try {
+        const wb = XLSX.read(ev.target!.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows: any[] = XLSX.utils.sheet_to_json(ws);
+        if (rows.length === 0) { mesajGoster('hata', '❌ Excel dosyası boş!'); return; }
+        const anahtarlar = Object.keys(rows[0]);
+        const normalize = (s: string) =>
+          s.toLowerCase()
+            .replace(/i̇/g, 'i').replace(/ı/g, 'i').replace(/ğ/g, 'g')
+            .replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o')
+            .replace(/ç/g, 'c').replace(/\s+/g, ' ').trim();
+        const baslikEsleme: Record<string, string> = {};
+        anahtarlar.forEach(k => {
+          const norm = normalize(k);
+          if (norm.includes('banka')) baslikEsleme['Banka Adı'] = k;
+          if (norm.includes('taksit')) baslikEsleme['Taksit Sayısı'] = k;
+          if (norm.includes('komisyon') || norm.includes('oran')) baslikEsleme['Komisyon Oranı (%)'] = k;
+        });
+        const beklenenBasliklar = ['Banka Adı', 'Taksit Sayısı', 'Komisyon Oranı (%)'];
+        const eksikBaslik = beklenenBasliklar.find(b => !baslikEsleme[b]);
+        if (eksikBaslik) {
+          mesajGoster('hata', `❌ Eksik sütun: "${eksikBaslik}" — Başlıklar şu şekilde olmalı: ${beklenenBasliklar.join(' | ')}`);
+          if (kesintiFileRef.current) kesintiFileRef.current.value = '';
+          return;
+        }
+        const hatalar: string[] = [];
+        const tekiSatirlar = new Set<string>();
+        const bankaMap: Record<string, Record<number, number>> = {};
+        rows.forEach((r, i) => {
+          const satirNo = i + 2;
+          const bankaAdi = String(r[baslikEsleme['Banka Adı']] || '').trim();
+          const taksitSayisi = r[baslikEsleme['Taksit Sayısı']];
+          const komisyon = r[baslikEsleme['Komisyon Oranı (%)']];
+          if (!bankaAdi) { hatalar.push(`Satır ${satirNo}: Banka adı boş olamaz.`); return; }
+          const taksitNum = Number(taksitSayisi);
+          if (isNaN(taksitNum) || !Number.isInteger(taksitNum) || taksitNum <= 0) {
+            hatalar.push(`Satır ${satirNo}: Taksit sayısı pozitif tam sayı olmalı (mevcut: "${taksitSayisi}").`); return;
+          }
+          const komisyonStr = String(komisyon || '').replace('%', '').replace(',', '.').trim();
+          const komisyonNum = parseFloat(komisyonStr);
+          if (isNaN(komisyonNum) || komisyonNum < 0) {
+            hatalar.push(`Satır ${satirNo}: Komisyon oranı geçerli sayı olmalı, negatif olamaz (mevcut: "${komisyon}").`); return;
+          }
+          const tekKey = `${bankaAdi}__${taksitNum}`;
+          if (tekiSatirlar.has(tekKey)) { hatalar.push(`Satır ${satirNo}: "${bankaAdi}" + ${taksitNum} taksit kombinasyonu tekrar ediyor.`); return; }
+          tekiSatirlar.add(tekKey);
+          if (!bankaMap[bankaAdi]) bankaMap[bankaAdi] = {};
+          bankaMap[bankaAdi][taksitNum] = komisyonNum;
+        });
+        if (hatalar.length > 0) {
+          mesajGoster('hata', `❌ ${hatalar.length} hata bulundu:\n${hatalar.slice(0, 3).join('\n')}${hatalar.length > 3 ? `\n...ve ${hatalar.length - 3} hata daha` : ''}`);
+          if (kesintiFileRef.current) kesintiFileRef.current.value = '';
+          return;
+        }
+        const parsed: BankaKesinti[] = Object.entries(bankaMap).map(([banka, taksitler]) => ({ banka, taksitler }));
+        setKesintiOnizleme(parsed);
+        setKesintiYuklendi(true);
+      } catch (err: any) {
+        mesajGoster('hata', `❌ Dosya okunamadı: ${err.message}`);
+        if (kesintiFileRef.current) kesintiFileRef.current.value = '';
+      }
     };
     reader.readAsBinaryString(file);
   };
@@ -187,8 +231,18 @@ const AdminPanel: React.FC = () => {
   const kesintiKaydet = async () => {
     setYukleniyor(true);
     try {
-      for (const k of kesintiOnizleme) await setDoc(doc(db, `bankaKesintiler/${k.banka}`), k);
-      mesajGoster('ok', `✅ ${kesintiOnizleme.length} banka kaydedildi!`);
+      const mevcutSnap = await getDocs(collection(db, 'bankaKesintiler'));
+      if (mevcutSnap.docs.length > 0) {
+        const silBatch = writeBatch(db);
+        mevcutSnap.docs.forEach(d => silBatch.delete(d.ref));
+        await silBatch.commit();
+      }
+      const yazBatch = writeBatch(db);
+      for (const k of kesintiOnizleme) {
+        yazBatch.set(doc(db, 'bankaKesintiler', k.banka), { banka: k.banka, taksitler: k.taksitler, guncellemeTarihi: Timestamp.now() });
+      }
+      await yazBatch.commit();
+      mesajGoster('ok', `✅ Banka kesinti oranları başarıyla güncellendi. (${kesintiOnizleme.length} banka)`);
       setKesintiOnizleme([]); setKesintiYuklendi(false);
       if (kesintiFileRef.current) kesintiFileRef.current.value = '';
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
@@ -233,8 +287,7 @@ const AdminPanel: React.FC = () => {
       await setDoc(doc(db, 'users', uid), {
         ad: yeniSatici.ad, soyad: yeniSatici.soyad, email: yeniSatici.email,
         subeKodu: yeniSatici.subeKodu, role: 'SATICI', aktif: true,
-        hedefler: {}, // Boş aylık hedef map'i ile başla
-        olusturmaTarihi: Timestamp.now(),
+        hedefler: {}, olusturmaTarihi: Timestamp.now(),
       });
       mesajGoster('ok', `✅ ${yeniSatici.ad} ${yeniSatici.soyad} eklendi!`);
       setYeniSatici({ ad: '', soyad: '', email: '', subeKodu: SUBELER[0].kod, aktif: true, sifre: '' });
@@ -286,10 +339,7 @@ const AdminPanel: React.FC = () => {
   };
 
   /* ══════════════════════════════════════════════════════════
-     5) SATICI HEDEF  ← AY BAZLI YENİ YAPI
-     
-     Firestore: users/{uid}.hedefler["YYYY-MM"] = rakam
-     Her ay kendi key'iyle kaydedilir → otomatik reset yok gerek
+     5) SATICI HEDEF
   ══════════════════════════════════════════════════════════ */
   const [hedefSube,       setHedefSube]       = useState<string>(SUBELER[0].kod);
   const [hedefAy,         setHedefAy]         = useState<string>(buAy);
@@ -309,37 +359,22 @@ const AdminPanel: React.FC = () => {
     finally { setYukleniyor(false); }
   };
 
-  /** Seçili ay için satıcının hedefini döndürür */
   const getSaticiHedef = (s: Satici): number =>
     s.hedefler?.[hedefAy] ?? s.hedef ?? 0;
 
-  /** Satıcının seçili ay hedefini Firestore'a kaydeder */
   const saticiHedefKaydet = async (satici: Satici, yeniHedef: number) => {
     if (!satici.id) return;
     try {
-      // hedefler map'inin sadece ilgili ay key'ini güncelle (merge:true ile)
-      await setDoc(
-        doc(db, 'users', satici.id),
-        { hedefler: { [hedefAy]: yeniHedef } },
-        { merge: true }
-      );
-      // Local state güncelle
+      await setDoc(doc(db, 'users', satici.id), { hedefler: { [hedefAy]: yeniHedef } }, { merge: true });
       setHedefSaticilar(prev =>
-        prev.map(s =>
-          s.id === satici.id
-            ? { ...s, hedefler: { ...s.hedefler, [hedefAy]: yeniHedef } }
-            : s
-        )
+        prev.map(s => s.id === satici.id ? { ...s, hedefler: { ...s.hedefler, [hedefAy]: yeniHedef } } : s)
       );
       mesajGoster('ok', `✅ ${satici.ad} — ${hedefAy} hedefi kaydedildi`);
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
   };
 
   /* ══════════════════════════════════════════════════════════
-     6) MAĞAZA HEDEF  ← AY BAZLI YENİ YAPI
-     
-     Firestore: magazaHedefler/{SUBEKOD}-{YYYY-MM} = { hedef, subeKod, ay }
-     Her ay yeni doküman → otomatik sıfırlanma
+     6) MAĞAZA HEDEF
   ══════════════════════════════════════════════════════════ */
   const [magazaAy,            setMagazaAy]            = useState<string>(buAy);
   const [magazaHedefler,      setMagazaHedefler]      = useState<Record<string, number>>(
@@ -353,20 +388,14 @@ const AdminPanel: React.FC = () => {
       const snap = await getDocs(collection(db, 'magazaHedefler'));
       const data: Record<string, number> = {};
       snap.forEach(d => { data[d.id] = d.data().hedef || 0; });
-
-      // Seçili ay için değerleri doldur
       const aylikData: Record<string, number> = {};
-      SUBELER.forEach(s => {
-        const docId = magazaDocId(s.kod, magazaAy);
-        aylikData[s.kod] = data[docId] ?? 0;
-      });
+      SUBELER.forEach(s => { const docId = magazaDocId(s.kod, magazaAy); aylikData[s.kod] = data[docId] ?? 0; });
       setMagazaHedefler(aylikData);
       setMagazaHedefYuklendi(true);
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
     finally { setYukleniyor(false); }
   };
 
-  // Ay değiştiğinde yüklenmiş state sıfırla
   useEffect(() => {
     setMagazaHedefYuklendi(false);
     setMagazaHedefler(Object.fromEntries(SUBELER.map(s => [s.kod, 0])));
@@ -375,12 +404,7 @@ const AdminPanel: React.FC = () => {
   const magazaHedefKaydet = async (subeKod: string) => {
     try {
       const docId = magazaDocId(subeKod, magazaAy);
-      await setDoc(doc(db, 'magazaHedefler', docId), {
-        hedef: magazaHedefler[subeKod] || 0,
-        subeKod,
-        ay: magazaAy,
-        guncellemeTarihi: Timestamp.now(),
-      });
+      await setDoc(doc(db, 'magazaHedefler', docId), { hedef: magazaHedefler[subeKod] || 0, subeKod, ay: magazaAy, guncellemeTarihi: Timestamp.now() });
       mesajGoster('ok', `✅ ${getSubeByKod(subeKod as SubeKodu)?.ad} — ${magazaAy} hedefi kaydedildi`);
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
   };
@@ -390,12 +414,7 @@ const AdminPanel: React.FC = () => {
     try {
       for (const sube of SUBELER) {
         const docId = magazaDocId(sube.kod, magazaAy);
-        await setDoc(doc(db, 'magazaHedefler', docId), {
-          hedef: magazaHedefler[sube.kod] || 0,
-          subeKod: sube.kod,
-          ay: magazaAy,
-          guncellemeTarihi: Timestamp.now(),
-        });
+        await setDoc(doc(db, 'magazaHedefler', docId), { hedef: magazaHedefler[sube.kod] || 0, subeKod: sube.kod, ay: magazaAy, guncellemeTarihi: Timestamp.now() });
       }
       mesajGoster('ok', `✅ ${magazaAy} için tüm mağaza hedefleri kaydedildi!`);
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
@@ -548,17 +567,99 @@ const AdminPanel: React.FC = () => {
   };
 
   /* ══════════════════════════════════════════════════════════
+     9) EMAIL GÜNCELLE ← YENİ MODÜL
+     
+     Firebase Auth email'i sadece Admin SDK ile değiştirilebilir.
+     Biz Firestore'daki email alanını güncelleyip kullanıcıya
+     yeni email + şifre ile tekrar kayıt yaptıracağız.
+     
+     ÇÖZÜM AKIŞI:
+     1) Mevcut kullanıcıyı deaktif et (aktif: false)
+     2) Yeni email ile secondaryAuth'tan yeni hesap oluştur
+     3) Firestore'da yeni UID ile aynı veriyi yaz
+     4) Eski dokümanı sil
+  ══════════════════════════════════════════════════════════ */
+  const [emailSaticilar,     setEmailSaticilar]     = useState<Satici[]>([]);
+  const [emailSaticiYuklendi, setEmailSaticiYuklendi] = useState(false);
+  const [emailGuncelleSatici, setEmailGuncelleSatici] = useState<Satici | null>(null);
+  const [yeniEmail,           setYeniEmail]           = useState('');
+  const [yeniSifre,           setYeniSifre]           = useState('');
+  const [emailSifreGoster,    setEmailSifreGoster]    = useState(false);
+
+  const emailSaticilarGetir = async () => {
+    setYukleniyor(true);
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const liste = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Satici))
+        .filter(u => u.role?.toString().toUpperCase() !== 'ADMIN')
+        .sort((a, b) => (a.subeKodu || '').localeCompare(b.subeKodu || '') || (a.ad || '').localeCompare(b.ad || ''));
+      setEmailSaticilar(liste);
+      setEmailSaticiYuklendi(true);
+    } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
+    finally { setYukleniyor(false); }
+  };
+
+  useEffect(() => {
+    if (aktifModul === 'email-guncelle') emailSaticilarGetir();
+  }, [aktifModul]);
+
+  const emailGuncelle = async () => {
+    if (!emailGuncelleSatici) return;
+    if (!yeniEmail || !yeniEmail.includes('@')) { mesajGoster('hata', '❌ Geçerli bir email girin!'); return; }
+    if (!yeniSifre || yeniSifre.length < 6) { mesajGoster('hata', '❌ Yeni şifre en az 6 karakter olmalı!'); return; }
+
+    if (!window.confirm(`"${emailGuncelleSatici.ad} ${emailGuncelleSatici.soyad}" kullanıcısının emaili "${yeniEmail}" olarak güncellenecek. Devam edilsin mi?`)) return;
+
+    setYukleniyor(true);
+    try {
+      // 1) Yeni email ile Firebase Auth'a yeni hesap oluştur
+      const userCred = await createUserWithEmailAndPassword(secondaryAuth, yeniEmail, yeniSifre);
+      const yeniUid = userCred.user.uid;
+      await secondaryAuth.signOut();
+
+      // 2) Eski Firestore verisini al
+      const eskiSnap = await getDocs(collection(db, 'users'));
+      const eskiDoc = eskiSnap.docs.find(d => d.id === emailGuncelleSatici.id);
+      const eskiVeri = eskiDoc?.data() || {};
+
+      // 3) Yeni UID ile Firestore'a yaz (email güncellenerek)
+      await setDoc(doc(db, 'users', yeniUid), {
+        ...eskiVeri,
+        email: yeniEmail,
+        guncellemeTarihi: Timestamp.now(),
+      });
+
+      // 4) Eski Firestore dokümanını sil
+      if (emailGuncelleSatici.id) {
+        await deleteDoc(doc(db, 'users', emailGuncelleSatici.id));
+      }
+
+      mesajGoster('ok', `✅ ${emailGuncelleSatici.ad} ${emailGuncelleSatici.soyad} için email güncellendi! Yeni email: ${yeniEmail}`);
+      setEmailGuncelleSatici(null);
+      setYeniEmail('');
+      setYeniSifre('');
+      emailSaticilarGetir();
+    } catch (err: any) {
+      if (err.code === 'auth/email-already-in-use') mesajGoster('hata', '❌ Bu email zaten başka bir hesapta kullanılıyor!');
+      else if (err.code === 'auth/invalid-email')   mesajGoster('hata', '❌ Geçersiz email formatı!');
+      else mesajGoster('hata', `❌ Hata: ${err.message}`);
+    } finally { setYukleniyor(false); }
+  };
+
+  /* ══════════════════════════════════════════════════════════
      MENÜ & YARDIMCILAR
   ══════════════════════════════════════════════════════════ */
   const menuler: { id: Modul; label: string; icon: string; desc: string }[] = [
-    { id: 'excel-fiyat',    label: 'Excel Fiyat',    icon: 'fa-file-excel', desc: 'Toplu fiyat güncelle'  },
-    { id: 'banka-kesinti',  label: 'Banka Kesinti',  icon: 'fa-university', desc: 'Kesinti oranları'      },
-    { id: 'satici-ekle',    label: 'Satıcı Ekle',    icon: 'fa-user-plus',  desc: 'Yeni satıcı ekle'     },
-    { id: 'satici-disable', label: 'Satıcı Disable', icon: 'fa-user-slash', desc: 'Aktif / Deaktif'      },
-    { id: 'satici-hedef',   label: 'Satıcı Hedef',   icon: 'fa-bullseye',   desc: 'Aylık kişisel hedef'  },
-    { id: 'magaza-hedef',   label: 'Mağaza Hedef',   icon: 'fa-store',      desc: 'Aylık şube hedefleri' },
-    { id: 'kampanya',       label: 'Kampanya',        icon: 'fa-tags',       desc: 'Kampanya yönet'       },
-    { id: 'yesil-etiket',  label: 'Yeşil Etiket',   icon: 'fa-tag',        desc: 'İndirimli eski ürünler'},
+    { id: 'excel-fiyat',    label: 'Excel Fiyat',    icon: 'fa-file-excel',  desc: 'Toplu fiyat güncelle'   },
+    { id: 'banka-kesinti',  label: 'Banka Kesinti',  icon: 'fa-university',  desc: 'Kesinti oranları'       },
+    { id: 'satici-ekle',    label: 'Satıcı Ekle',    icon: 'fa-user-plus',   desc: 'Yeni satıcı ekle'      },
+    { id: 'satici-disable', label: 'Satıcı Disable', icon: 'fa-user-slash',  desc: 'Aktif / Deaktif'       },
+    { id: 'satici-hedef',   label: 'Satıcı Hedef',   icon: 'fa-bullseye',    desc: 'Aylık kişisel hedef'   },
+    { id: 'magaza-hedef',   label: 'Mağaza Hedef',   icon: 'fa-store',       desc: 'Aylık şube hedefleri'  },
+    { id: 'kampanya',       label: 'Kampanya',        icon: 'fa-tags',        desc: 'Kampanya yönet'        },
+    { id: 'yesil-etiket',  label: 'Yeşil Etiket',   icon: 'fa-tag',         desc: 'İndirimli eski ürünler' },
+    { id: 'email-guncelle', label: 'Email Güncelle', icon: 'fa-envelope',    desc: 'Kullanıcı email değiştir' },
   ];
 
   const resetModulStates = () => {
@@ -569,6 +670,8 @@ const AdminPanel: React.FC = () => {
     setYesilEtiketOnizlemde(false); setYesilEtiketOnizleme([]);
     setFiyatOnizlemde(false); setFiyatOnizleme([]);
     setTumSaticilarYuklendi(false); setTumSaticilar([]);
+    setEmailSaticiYuklendi(false); setEmailSaticilar([]);
+    setEmailGuncelleSatici(null); setYeniEmail(''); setYeniSifre('');
   };
 
   const aktifMenu = menuler.find(m => m.id === aktifModul);
@@ -581,25 +684,12 @@ const AdminPanel: React.FC = () => {
     return renkler[subeKodu] || '#009999';
   };
 
-  // Ortak ay seçici bileşeni
-  const AySecici = ({
-    value, onChange, label
-  }: { value: string; onChange: (v: string) => void; label?: string }) => (
+  const AySecici = ({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       {label && <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{label}</span>}
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{
-          border: '1.5px solid #009999', borderRadius: 8, padding: '5px 10px',
-          fontSize: 13, fontFamily: 'monospace', color: '#0f1f2e',
-          background: '#f0fafa', fontWeight: 700, cursor: 'pointer',
-        }}
-      >
+      <select value={value} onChange={e => onChange(e.target.value)} style={{ border: '1.5px solid #009999', borderRadius: 8, padding: '5px 10px', fontSize: 13, fontFamily: 'monospace', color: '#0f1f2e', background: '#f0fafa', fontWeight: 700, cursor: 'pointer' }}>
         {aySecenekleri.map(ay => (
-          <option key={ay} value={ay}>
-            {ay} {ay === buAy ? '← Bu Ay' : ''}
-          </option>
+          <option key={ay} value={ay}>{ay} {ay === buAy ? '← Bu Ay' : ''}</option>
         ))}
       </select>
     </div>
@@ -629,11 +719,7 @@ const AdminPanel: React.FC = () => {
         <nav className="ap-nav">
           <div className="ap-nav-section-label">YÖNETİM ALANLARI</div>
           {menuler.map(m => (
-            <button
-              key={m.id}
-              className={`ap-nav-item ${aktifModul === m.id ? 'active' : ''}`}
-              onClick={() => { setAktifModul(m.id); resetModulStates(); }}
-            >
+            <button key={m.id} className={`ap-nav-item ${aktifModul === m.id ? 'active' : ''}`} onClick={() => { setAktifModul(m.id); resetModulStates(); }}>
               <div className="ap-nav-icon"><i className={`fas ${m.icon}`} /></div>
               <div className="ap-nav-text">
                 <span className="ap-nav-item-label">{m.label}</span>
@@ -737,40 +823,71 @@ const AdminPanel: React.FC = () => {
 
           {/* ══ 2) BANKA KESİNTİ ══ */}
           {aktifModul === 'banka-kesinti' && (
-            <div className="ap-one-col">
+            <div className="ap-two-col">
               <div className="ap-panel">
                 <div className="ap-panel-header"><i className="fas fa-university" /><h3>Banka Kesinti Oranları Yükle</h3></div>
                 <div className="ap-panel-body">
-                  <div className="ap-field" style={{ maxWidth: 420 }}>
+                  <div className="ap-field">
                     <label>Excel Dosyası (.xlsx)</label>
                     <div className="ap-file-zone">
                       <i className="fas fa-university" />
                       <span>Kesinti oranları dosyasını seç</span>
-                      <input ref={kesintiFileRef} type="file" accept=".xlsx,.xls" onChange={handleKesintiExcel} />
+                      <input ref={kesintiFileRef} type="file" accept=".xlsx,.xls" onChange={handleKesintiExcel} disabled={yukleniyor} />
                     </div>
                   </div>
                   {kesintiYuklendi && kesintiOnizleme.length > 0 && (
                     <>
-                      <div className="ap-table-label"><i className="fas fa-eye" /> Önizleme — {kesintiOnizleme.length} banka bulundu</div>
+                      <div className="ap-table-label">
+                        <i className="fas fa-eye" /> Önizleme — {kesintiOnizleme.length} banka,{' '}
+                        {kesintiOnizleme.reduce((acc, k) => acc + Object.keys(k.taksitler).length, 0)} taksit kombinasyonu
+                      </div>
                       <div className="ap-table-scroll">
                         <table className="ap-table">
-                          <thead><tr><th>Banka</th><th>Tek</th><th>2T</th><th>3T</th><th>4T</th><th>5T</th><th>6T</th><th>7T</th><th>8T</th><th>9T</th></tr></thead>
+                          <thead><tr><th>Banka</th><th>Taksit Kırılımları</th></tr></thead>
                           <tbody>
                             {kesintiOnizleme.map(k => (
                               <tr key={k.banka}>
                                 <td><strong>{k.banka}</strong></td>
-                                <td>%{k.tek}</td><td>%{k.t2}</td><td>%{k.t3}</td><td>%{k.t4}</td><td>%{k.t5}</td>
-                                <td>%{k.t6}</td><td>%{k.t7}</td><td>%{k.t8}</td><td>%{k.t9}</td>
+                                <td>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                    {Object.entries(k.taksitler).sort(([a], [b]) => Number(a) - Number(b)).map(([taksit, oran]) => (
+                                      <span key={taksit} style={{ background: '#f0fafa', border: '1px solid #009999', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontFamily: 'monospace', color: '#0f1f2e', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                        {taksit}T: %{oran}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
                       <button className="ap-btn-primary" onClick={kesintiKaydet} disabled={yukleniyor}>
-                        <i className="fas fa-save" /> {yukleniyor ? 'Kaydediliyor...' : `${kesintiOnizleme.length} Bankayı Firebase'e Kaydet`}
+                        <i className="fas fa-save" />
+                        {yukleniyor ? 'Kaydediliyor...' : `${kesintiOnizleme.length} Bankayı Firebase'e Kaydet`}
                       </button>
                     </>
                   )}
+                </div>
+              </div>
+              <div className="ap-panel ap-panel--teal-soft">
+                <div className="ap-panel-header"><i className="fas fa-info-circle" /><h3>Beklenen Format</h3></div>
+                <div className="ap-panel-body">
+                  <div className="ap-format-preview">
+                    <div className="ap-format-header"><span>Banka Adı</span><span>Taksit Sayısı</span><span>Komisyon Oranı (%)</span></div>
+                    <div className="ap-format-row"><span>Ziraat</span><span>1</span><span>1.2</span></div>
+                    <div className="ap-format-row"><span>Ziraat</span><span>3</span><span>2.1</span></div>
+                    <div className="ap-format-row"><span>Ziraat</span><span>6</span><span>3.4</span></div>
+                    <div className="ap-format-row"><span>Garanti</span><span>1</span><span>1.5</span></div>
+                    <div className="ap-format-row"><span>Garanti</span><span>6</span><span>3.8</span></div>
+                  </div>
+                  <ul className="ap-tips">
+                    <li><i className="fas fa-check" /> Başlıklar birebir: <strong>Banka Adı | Taksit Sayısı | Komisyon Oranı (%)</strong></li>
+                    <li><i className="fas fa-check" /> Her satır bir banka + taksit kombinasyonu</li>
+                    <li><i className="fas fa-check" /> Komisyon ondalık destekler (örn: 2.5, 3.75)</li>
+                    <li><i className="fas fa-check" /> Aynı banka + taksit kombinasyonu tekrar edemez</li>
+                    <li><i className="fas fa-check" /> Yükleme sonrası eski tüm oranlar silinir, yenileri yazılır</li>
+                  </ul>
                 </div>
               </div>
             </div>
@@ -784,29 +901,15 @@ const AdminPanel: React.FC = () => {
                   <div className="ap-panel-header"><i className="fas fa-user-plus" /><h3>Yeni Satıcı Ekle</h3></div>
                   <div className="ap-panel-body">
                     <div className="ap-two-field">
-                      <div className="ap-field">
-                        <label>Ad *</label>
-                        <input type="text" placeholder="Ahmet" value={yeniSatici.ad} onChange={e => setYeniSatici(p => ({ ...p, ad: e.target.value }))} />
-                      </div>
-                      <div className="ap-field">
-                        <label>Soyad</label>
-                        <input type="text" placeholder="Yılmaz" value={yeniSatici.soyad} onChange={e => setYeniSatici(p => ({ ...p, soyad: e.target.value }))} />
-                      </div>
+                      <div className="ap-field"><label>Ad *</label><input type="text" placeholder="Ahmet" value={yeniSatici.ad} onChange={e => setYeniSatici(p => ({ ...p, ad: e.target.value }))} /></div>
+                      <div className="ap-field"><label>Soyad</label><input type="text" placeholder="Yılmaz" value={yeniSatici.soyad} onChange={e => setYeniSatici(p => ({ ...p, soyad: e.target.value }))} /></div>
                     </div>
-                    <div className="ap-field">
-                      <label>E-posta *</label>
-                      <input type="email" placeholder="ahmet@tufekci.com" value={yeniSatici.email} onChange={e => setYeniSatici(p => ({ ...p, email: e.target.value }))} />
-                    </div>
+                    <div className="ap-field"><label>E-posta *</label><input type="email" placeholder="ahmet@tufekci.com" value={yeniSatici.email} onChange={e => setYeniSatici(p => ({ ...p, email: e.target.value }))} /></div>
                     <div className="ap-field">
                       <label>Şifre * (min. 6 karakter)</label>
                       <div style={{ position: 'relative' }}>
-                        <input
-                          type={sifreGoster ? 'text' : 'password'} placeholder="••••••••"
-                          value={yeniSatici.sifre} onChange={e => setYeniSatici(p => ({ ...p, sifre: e.target.value }))}
-                          style={{ paddingRight: 44 }}
-                        />
-                        <button type="button" onClick={() => setSifreGoster(p => !p)}
-                          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 14 }}>
+                        <input type={sifreGoster ? 'text' : 'password'} placeholder="••••••••" value={yeniSatici.sifre} onChange={e => setYeniSatici(p => ({ ...p, sifre: e.target.value }))} style={{ paddingRight: 44 }} />
+                        <button type="button" onClick={() => setSifreGoster(p => !p)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 14 }}>
                           <i className={`fas ${sifreGoster ? 'fa-eye-slash' : 'fa-eye'}`} />
                         </button>
                       </div>
@@ -836,7 +939,6 @@ const AdminPanel: React.FC = () => {
                   </div>
                 </div>
               </div>
-
               <div className="ap-panel">
                 <div className="ap-panel-header">
                   <i className="fas fa-users" /><h3>Kayıtlı Satıcılar</h3>
@@ -853,12 +955,7 @@ const AdminPanel: React.FC = () => {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {tumSaticilar.map(s => (
-                        <div key={s.id} style={{
-                          display: 'flex', alignItems: 'center', gap: 12,
-                          background: s.aktif === false ? '#fef2f2' : '#f8fafc',
-                          border: `1px solid ${s.aktif === false ? '#fecaca' : '#e2e8f0'}`,
-                          borderRadius: 10, padding: '10px 14px', opacity: s.aktif === false ? 0.75 : 1
-                        }}>
+                        <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: s.aktif === false ? '#fef2f2' : '#f8fafc', border: `1px solid ${s.aktif === false ? '#fecaca' : '#e2e8f0'}`, borderRadius: 10, padding: '10px 14px', opacity: s.aktif === false ? 0.75 : 1 }}>
                           <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: subeRenk(s.subeKodu), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700 }}>
                             {s.ad?.charAt(0)}{s.soyad?.charAt(0)}
                           </div>
@@ -935,7 +1032,7 @@ const AdminPanel: React.FC = () => {
             </div>
           )}
 
-          {/* ══ 5) SATICI HEDEF — AY BAZLI ══ */}
+          {/* ══ 5) SATICI HEDEF ══ */}
           {aktifModul === 'satici-hedef' && (
             <div className="ap-one-col">
               <div className="ap-panel">
@@ -951,17 +1048,12 @@ const AdminPanel: React.FC = () => {
                     </button>
                   </div>
                 </div>
-
-                {/* Ay bilgi banner */}
                 <div style={{ padding: '10px 20px', background: hedefAy === buAy ? '#f0fdf4' : '#fffbeb', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 16 }}>{hedefAy === buAy ? '📅' : '📆'}</span>
                   <span style={{ fontSize: 12, color: hedefAy === buAy ? '#16a34a' : '#b45309', fontWeight: 600 }}>
-                    {hedefAy === buAy
-                      ? `Bu ay (${hedefAy}) için hedef giriyorsunuz — mevcut dönem`
-                      : `${hedefAy} için hedef giriyorsunuz — geçmiş/gelecek ay`}
+                    {hedefAy === buAy ? `Bu ay (${hedefAy}) için hedef giriyorsunuz — mevcut dönem` : `${hedefAy} için hedef giriyorsunuz — geçmiş/gelecek ay`}
                   </span>
                 </div>
-
                 <div className="ap-panel-body">
                   {!hedefYuklendi
                     ? <div className="ap-empty"><i className="fas fa-bullseye" /><p>Şube ve ay seçip "Getir" butonuna basın</p></div>
@@ -977,7 +1069,6 @@ const AdminPanel: React.FC = () => {
                                 <div className="ap-user-full-name">{s.ad} {s.soyad}</div>
                                 <div className="ap-user-email">{s.email}</div>
                               </div>
-                              {/* Mevcut hedef göstergesi */}
                               {mevcutHedef > 0 && (
                                 <span style={{ fontSize: 11, color: '#009999', fontWeight: 700, fontFamily: 'monospace', background: '#f0fafa', padding: '3px 8px', borderRadius: 8, whiteSpace: 'nowrap' }}>
                                   Mevcut: ₺{mevcutHedef.toLocaleString('tr-TR')}
@@ -985,15 +1076,10 @@ const AdminPanel: React.FC = () => {
                               )}
                               <div className="ap-currency-wrap">
                                 <span className="ap-currency-symbol">₺</span>
-                                <input
-                                  type="number" min="0" step="1000" placeholder="Aylık Hedef"
-                                  defaultValue={mevcutHedef || ''}
-                                  key={`${s.id}-${hedefAy}`} // ay değişince input'u sıfırla
+                                <input type="number" min="0" step="1000" placeholder="Aylık Hedef" defaultValue={mevcutHedef || ''} key={`${s.id}-${hedefAy}`}
                                   onBlur={e => {
                                     const val = parseFloat(e.target.value) || 0;
-                                    setHedefSaticilar(prev =>
-                                      prev.map((x, j) => j === i ? { ...x, hedefler: { ...x.hedefler, [hedefAy]: val } } : x)
-                                    );
+                                    setHedefSaticilar(prev => prev.map((x, j) => j === i ? { ...x, hedefler: { ...x.hedefler, [hedefAy]: val } } : x));
                                   }}
                                 />
                               </div>
@@ -1010,7 +1096,7 @@ const AdminPanel: React.FC = () => {
             </div>
           )}
 
-          {/* ══ 6) MAĞAZA HEDEF — AY BAZLI ══ */}
+          {/* ══ 6) MAĞAZA HEDEF ══ */}
           {aktifModul === 'magaza-hedef' && (
             <div className="ap-one-col">
               <div className="ap-panel">
@@ -1019,36 +1105,26 @@ const AdminPanel: React.FC = () => {
                   <div className="ap-panel-actions">
                     <AySecici value={magazaAy} onChange={(v: string) => setMagazaAy(v)} label="Ay:" />
                     {!magazaHedefYuklendi
-                      ? <button className="ap-btn-secondary" onClick={magazaHedefGetir} disabled={yukleniyor}>
-                          <i className="fas fa-download" /> {yukleniyor ? 'Yükleniyor...' : 'Hedefleri Getir'}
-                        </button>
-                      : <button className="ap-btn-primary" onClick={tumMagazaHedefKaydet} disabled={yukleniyor}>
-                          <i className="fas fa-save" /> {yukleniyor ? 'Kaydediliyor...' : 'Tümünü Kaydet'}
-                        </button>
+                      ? <button className="ap-btn-secondary" onClick={magazaHedefGetir} disabled={yukleniyor}><i className="fas fa-download" /> {yukleniyor ? 'Yükleniyor...' : 'Hedefleri Getir'}</button>
+                      : <button className="ap-btn-primary" onClick={tumMagazaHedefKaydet} disabled={yukleniyor}><i className="fas fa-save" /> {yukleniyor ? 'Kaydediliyor...' : 'Tümünü Kaydet'}</button>
                     }
                   </div>
                 </div>
-
-                {/* Ay bilgi banner */}
                 <div style={{ padding: '10px 20px', background: magazaAy === buAy ? '#f0fdf4' : '#fffbeb', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 16 }}>{magazaAy === buAy ? '📅' : '📆'}</span>
                   <span style={{ fontSize: 12, color: magazaAy === buAy ? '#16a34a' : '#b45309', fontWeight: 600 }}>
-                    {magazaAy === buAy
-                      ? `Bu ay (${magazaAy}) için hedef giriyorsunuz — mevcut dönem`
-                      : `${magazaAy} için hedef giriyorsunuz — geçmiş/gelecek ay`}
+                    {magazaAy === buAy ? `Bu ay (${magazaAy}) için hedef giriyorsunuz — mevcut dönem` : `${magazaAy} için hedef giriyorsunuz — geçmiş/gelecek ay`}
                   </span>
                   <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>
                     Firestore: <code style={{ background: '#f3f4f6', padding: '1px 5px', borderRadius: 4 }}>magazaHedefler/{'{SUBE}'}-{magazaAy}</code>
                   </span>
                 </div>
-
                 <div className="ap-panel-body">
                   {!magazaHedefYuklendi
                     ? <div className="ap-empty"><i className="fas fa-store" /><p>"Hedefleri Getir" butonuna basın</p></div>
                     : <div className="ap-hedef-list">
                         {SUBELER.map(sube => (
                           <div key={sube.kod} className="ap-hedef-row">
-                            {/* Şube renkli göstergesi */}
                             <div style={{ width: 4, height: 40, borderRadius: 3, background: subeRenk(sube.kod), flexShrink: 0 }} />
                             <div className="ap-store-icon-wrap"><i className="fas fa-store" /></div>
                             <div className="ap-user-details" style={{ flex: 1 }}>
@@ -1062,11 +1138,7 @@ const AdminPanel: React.FC = () => {
                             )}
                             <div className="ap-currency-wrap">
                               <span className="ap-currency-symbol">₺</span>
-                              <input
-                                type="number" min="0" step="10000" placeholder="Aylık Hedef"
-                                value={magazaHedefler[sube.kod] || ''}
-                                onChange={e => setMagazaHedefler(prev => ({ ...prev, [sube.kod]: parseFloat(e.target.value) || 0 }))}
-                              />
+                              <input type="number" min="0" step="10000" placeholder="Aylık Hedef" value={magazaHedefler[sube.kod] || ''} onChange={e => setMagazaHedefler(prev => ({ ...prev, [sube.kod]: parseFloat(e.target.value) || 0 }))} />
                             </div>
                             <button className="ap-btn-save" onClick={() => magazaHedefKaydet(sube.kod)}>
                               <i className="fas fa-save" /> Kaydet
@@ -1086,10 +1158,7 @@ const AdminPanel: React.FC = () => {
               <div className="ap-panel">
                 <div className="ap-panel-header"><i className="fas fa-plus-circle" /><h3>Yeni Kampanya Ekle</h3></div>
                 <div className="ap-panel-body">
-                  <div className="ap-field">
-                    <label>Kampanya Adı *</label>
-                    <input type="text" placeholder="Yaz Kampanyası 2025" value={yeniKampanya.ad} onChange={e => setYeniKampanya(p => ({ ...p, ad: e.target.value }))} />
-                  </div>
+                  <div className="ap-field"><label>Kampanya Adı *</label><input type="text" placeholder="Yaz Kampanyası 2025" value={yeniKampanya.ad} onChange={e => setYeniKampanya(p => ({ ...p, ad: e.target.value }))} /></div>
                   <div className="ap-field">
                     <label>Şube</label>
                     <select value={kampanyaSube} onChange={e => setKampanyaSube(e.target.value)}>
@@ -1097,10 +1166,7 @@ const AdminPanel: React.FC = () => {
                       {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
                     </select>
                   </div>
-                  <div className="ap-field">
-                    <label>Açıklama</label>
-                    <input type="text" placeholder="Kampanya açıklaması..." value={yeniKampanya.aciklama} onChange={e => setYeniKampanya(p => ({ ...p, aciklama: e.target.value }))} />
-                  </div>
+                  <div className="ap-field"><label>Açıklama</label><input type="text" placeholder="Kampanya açıklaması..." value={yeniKampanya.aciklama} onChange={e => setYeniKampanya(p => ({ ...p, aciklama: e.target.value }))} /></div>
                   <div className="ap-field">
                     <label>Kampanya Tutarı (TL) *</label>
                     <input type="number" min="0" placeholder="Örn: 3900" value={yeniKampanya.tutar || ''} onChange={e => setYeniKampanya(p => ({ ...p, tutar: parseFloat(e.target.value) || 0 }))} />
@@ -1211,19 +1277,10 @@ const AdminPanel: React.FC = () => {
                   <div className="ap-panel-header"><i className="fas fa-plus-circle" /><h3>Manuel Ekle / Güncelle</h3></div>
                   <div className="ap-panel-body">
                     <div className="ap-two-field">
-                      <div className="ap-field">
-                        <label>Ürün Kodu *</label>
-                        <input type="text" placeholder="WS75-0CA15-0AG5" value={yeniYesilEtiket.urunKodu} onChange={e => setYeniYesilEtiket(p => ({ ...p, urunKodu: e.target.value }))} />
-                      </div>
-                      <div className="ap-field">
-                        <label>Yeşil Etiket Fiyatı (TL) *</label>
-                         <input type="number" min="0" placeholder="1500" value={yeniYesilEtiket.maliyet || ''} onChange={e => setYeniYesilEtiket(p => ({ ...p, maliyet: parseFloat(e.target.value) || 0 }))} />
-                      </div>
+                      <div className="ap-field"><label>Ürün Kodu *</label><input type="text" placeholder="WS75-0CA15-0AG5" value={yeniYesilEtiket.urunKodu} onChange={e => setYeniYesilEtiket(p => ({ ...p, urunKodu: e.target.value }))} /></div>
+                      <div className="ap-field"><label>Yeşil Etiket Fiyatı (TL) *</label><input type="number" min="0" placeholder="1500" value={yeniYesilEtiket.maliyet || ''} onChange={e => setYeniYesilEtiket(p => ({ ...p, maliyet: parseFloat(e.target.value) || 0 }))} /></div>
                     </div>
-                    <div className="ap-field">
-                      <label>Açıklama</label>
-                      <input type="text" placeholder="Eski model, demo ürün vb." value={yeniYesilEtiket.aciklama || ''} onChange={e => setYeniYesilEtiket(p => ({ ...p, aciklama: e.target.value }))} />
-                    </div>
+                    <div className="ap-field"><label>Açıklama</label><input type="text" placeholder="Eski model, demo ürün vb." value={yeniYesilEtiket.aciklama || ''} onChange={e => setYeniYesilEtiket(p => ({ ...p, aciklama: e.target.value }))} /></div>
                     <button className="ap-btn-primary" onClick={yesilEtiketManuelEkle} disabled={yukleniyor}>
                       <i className="fas fa-plus" /> {yukleniyor ? 'Kaydediliyor...' : 'Kaydet / Güncelle'}
                     </button>
@@ -1257,6 +1314,133 @@ const AdminPanel: React.FC = () => {
                         ))}
                       </div>
                   }
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══ 9) EMAIL GÜNCELLE ══ */}
+          {aktifModul === 'email-guncelle' && (
+            <div className="ap-two-col">
+              <div className="ap-panel">
+                <div className="ap-panel-header"><i className="fas fa-envelope" /><h3>Kullanıcı Email Güncelle</h3></div>
+                <div className="ap-panel-body">
+
+                  {/* Uyarı banner */}
+                  <div className="ap-info-banner" style={{ background: '#fffbeb', borderColor: '#fbbf24' }}>
+                    <i className="fas fa-exclamation-triangle" style={{ color: '#d97706' }} />
+                    <span style={{ color: '#92400e' }}>
+                      Bu işlem kullanıcının Firebase Auth hesabını yeniden oluşturur.
+                      <strong> Kullanıcı bir sonraki girişinde yeni email ve yeni şifreyi kullanmalıdır.</strong>
+                    </span>
+                  </div>
+
+                  {!emailGuncelleSatici ? (
+                    <>
+                      <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
+                        Email'ini güncellemek istediğiniz kullanıcıyı sağdan seçin.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      {/* Seçili kullanıcı kartı */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f0fafa', border: '2px solid #009999', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: subeRenk(emailGuncelleSatici.subeKodu), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700 }}>
+                          {emailGuncelleSatici.ad?.charAt(0)}{emailGuncelleSatici.soyad?.charAt(0)}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: '#0f1f2e' }}>{emailGuncelleSatici.ad} {emailGuncelleSatici.soyad}</div>
+                          <div style={{ fontSize: 12, color: '#6b7280' }}>Mevcut email: <strong>{emailGuncelleSatici.email}</strong></div>
+                        </div>
+                        <button onClick={() => { setEmailGuncelleSatici(null); setYeniEmail(''); setYeniSifre(''); }} style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', color: '#6b7280', fontSize: 12 }}>
+                          <i className="fas fa-times" /> Değiştir
+                        </button>
+                      </div>
+
+                      <div className="ap-field">
+                        <label>Yeni E-posta *</label>
+                        <input
+                          type="email"
+                          placeholder="yenimail@example.com"
+                          value={yeniEmail}
+                          onChange={e => setYeniEmail(e.target.value.trim())}
+                        />
+                        {yeniEmail && !yeniEmail.includes('@') && <small style={{ color: '#ef4444' }}>⚠️ Geçerli bir email girin</small>}
+                        {yeniEmail && yeniEmail.includes('@') && <small style={{ color: '#16a34a' }}>✅ Email geçerli</small>}
+                      </div>
+
+                      <div className="ap-field">
+                        <label>Yeni Şifre * (min. 6 karakter)</label>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type={emailSifreGoster ? 'text' : 'password'}
+                            placeholder="••••••••"
+                            value={yeniSifre}
+                            onChange={e => setYeniSifre(e.target.value)}
+                            style={{ paddingRight: 44 }}
+                          />
+                          <button type="button" onClick={() => setEmailSifreGoster(p => !p)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 14 }}>
+                            <i className={`fas ${emailSifreGoster ? 'fa-eye-slash' : 'fa-eye'}`} />
+                          </button>
+                        </div>
+                        {yeniSifre && yeniSifre.length < 6 && <small style={{ color: '#ef4444' }}>⚠️ Şifre en az 6 karakter olmalı</small>}
+                        {yeniSifre && yeniSifre.length >= 6 && <small style={{ color: '#16a34a' }}>✅ Şifre geçerli</small>}
+                      </div>
+
+                      <button className="ap-btn-primary" onClick={emailGuncelle} disabled={yukleniyor || !yeniEmail.includes('@') || yeniSifre.length < 6}>
+                        <i className="fas fa-save" />
+                        {yukleniyor ? 'Güncelleniyor...' : 'Email & Şifreyi Güncelle'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Sağ: Kullanıcı listesi */}
+              <div className="ap-panel">
+                <div className="ap-panel-header">
+                  <i className="fas fa-users" /><h3>Kullanıcılar</h3>
+                  <div className="ap-panel-actions">
+                    <span style={{ fontSize: 12, color: '#6b7280', background: '#f3f4f6', padding: '4px 10px', borderRadius: 20 }}>{emailSaticilar.length} kullanıcı</span>
+                    <button className="ap-btn-secondary" onClick={emailSaticilarGetir} disabled={yukleniyor}><i className="fas fa-sync" /> Yenile</button>
+                  </div>
+                </div>
+                <div className="ap-panel-body">
+                  {!emailSaticiYuklendi ? (
+                    <div className="ap-empty"><i className="fas fa-spinner fa-spin" style={{ fontSize: 24, color: '#009999' }} /><p>Yükleniyor...</p></div>
+                  ) : emailSaticilar.length === 0 ? (
+                    <div className="ap-empty"><p>Kullanıcı bulunamadı</p></div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {emailSaticilar.map(s => (
+                        <div key={s.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 12,
+                          background: emailGuncelleSatici?.id === s.id ? '#f0fafa' : '#f8fafc',
+                          border: `1px solid ${emailGuncelleSatici?.id === s.id ? '#009999' : '#e2e8f0'}`,
+                          borderRadius: 10, padding: '10px 14px', cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                          onClick={() => { setEmailGuncelleSatici(s); setYeniEmail(''); setYeniSifre(''); }}
+                        >
+                          <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: subeRenk(s.subeKodu), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
+                            {s.ad?.charAt(0)}{s.soyad?.charAt(0)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>{s.ad} {s.soyad}</div>
+                            <div style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.email}</div>
+                          </div>
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: subeRenk(s.subeKodu) + '20', color: subeRenk(s.subeKodu), whiteSpace: 'nowrap' }}>
+                            {getSubeByKod(s.subeKodu as SubeKodu)?.ad || s.subeKodu}
+                          </span>
+                          {emailGuncelleSatici?.id === s.id && (
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: '#f0fafa', color: '#009999', whiteSpace: 'nowrap' }}>
+                              ✓ Seçili
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
