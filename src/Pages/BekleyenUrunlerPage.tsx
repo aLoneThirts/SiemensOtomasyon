@@ -14,17 +14,21 @@ const BekleyenUrunlerPage: React.FC = () => {
   const navigate = useNavigate();
   const [bekleyenSatislar, setBekleyenSatislar] = useState<SatisTeklifFormu[]>([]);
   const [loading, setLoading] = useState(true);
-  const [onaylaniyor, setOnaylaniyor] = useState<string | null>(null);
+  const [islemYapiliyor, setIslemYapiliyor] = useState<string | null>(null);
   const [secilenSube, setSecilenSube] = useState<string>('TUMU');
+  
+  // Modal state
+  const [modalAcik, setModalAcik] = useState(false);
+  const [seciliSatis, setSeciliSatis] = useState<SatisTeklifFormu | null>(null);
 
   const isAdmin = currentUser?.role === UserRole.ADMIN;
 
   useEffect(() => {
     if (!currentUser) { navigate('/login'); return; }
-    fetchBekleyenler();
+    fetchIleriTeslimler();
   }, [currentUser]);
 
-  const fetchBekleyenler = async () => {
+  const fetchIleriTeslimler = async () => {
     setLoading(true);
     try {
       const liste: SatisTeklifFormu[] = [];
@@ -36,45 +40,226 @@ const BekleyenUrunlerPage: React.FC = () => {
         const snapshot = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`));
         snapshot.forEach(d => {
           const data = d.data() as SatisTeklifFormu;
-          if (data.onayDurumu === false) {
-            liste.push({ id: d.id, ...data, subeKodu: sube.kod });
-          }
+
+          // İptal veya tamamlanmışları atla
+          const status = (data as any).satisStatusu;
+          if (status === 'TESLIM_EDILDI' || status === 'ILERI_TESLIM_IPTAL') return;
+
+          // Onay bekleyenler (SADECE onayDurumu false olanlar)
+          if (data.onayDurumu !== false) return;
+
+          // SADECE M.A. teslim tarihi girilmişse listeye al
+          if (!(data as any).ileriTeslimTarihi) return;
+
+          liste.push({ id: d.id, ...data, subeKodu: sube.kod } as any);
         });
       }
 
+      // En yakın M.A. teslim tarihi önce
       liste.sort((a: any, b: any) => {
-        const tA = a.olusturmaTarihi?.toDate ? a.olusturmaTarihi.toDate() : new Date(a.olusturmaTarihi || 0);
-        const tB = b.olusturmaTarihi?.toDate ? b.olusturmaTarihi.toDate() : new Date(b.olusturmaTarihi || 0);
-        return tB.getTime() - tA.getTime();
+        const toD = (v: any) => v?.toDate ? v.toDate() : new Date(v || 0);
+        return toD(a.ileriTeslimTarihi).getTime() - toD(b.ileriTeslimTarihi).getTime();
       });
 
       setBekleyenSatislar(liste);
     } catch (error) {
-      console.error('Bekleyen satışlar yüklenemedi:', error);
+      console.error('İleri teslimler yüklenemedi:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOnayla = async (satis: SatisTeklifFormu) => {
-    if (!isAdmin || !satis.id) return;
-    const sube = getSubeByKod(satis.subeKodu);
-    if (!sube) return;
-
-    setOnaylaniyor(satis.id);
-    try {
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
-        onayDurumu: true,
-        guncellemeTarihi: new Date()
-      });
-      setBekleyenSatislar(prev => prev.filter(s => s.id !== satis.id));
-    } catch {
-      alert('❌ Onaylama başarısız!');
-    } finally {
-      setOnaylaniyor(null);
-    }
+  // ── Modal açma ──────────────────────────────────────────
+  const onayModalAc = (satis: SatisTeklifFormu) => {
+    setSeciliSatis(satis);
+    setModalAcik(true);
   };
 
+// ── Onayla işlemi (Evet) ────────────────────────────────
+const handleOnayla = async () => {
+  if (!isAdmin) {
+    setModalAcik(false);
+    setSeciliSatis(null);
+    return;
+  }
+
+  if (!seciliSatis) {
+    setModalAcik(false);
+    setSeciliSatis(null);
+    return;
+  }
+
+  const satis = seciliSatis;
+  
+  // ID kontrolü - KESİN ÇÖZÜM
+  if (!satis.id) {
+    alert('❌ Satış ID bulunamadı!');
+    setModalAcik(false);
+    setSeciliSatis(null);
+    return;
+  }
+
+  // subeKodu kontrolü
+  if (!satis.subeKodu) {
+    alert('❌ Şube kodu bulunamadı!');
+    setModalAcik(false);
+    setSeciliSatis(null);
+    return;
+  }
+
+  const sube = getSubeByKod(satis.subeKodu);
+  
+  // sube ve dbPath kontrolü - KESİN ÇÖZÜM
+  if (!sube) {
+    alert('❌ Şube bulunamadı!');
+    setModalAcik(false);
+    setSeciliSatis(null);
+    return;
+  }
+
+  if (!sube.dbPath) {
+    alert('❌ Şube dbPath bulunamadı!');
+    setModalAcik(false);
+    setSeciliSatis(null);
+    return;
+  }
+
+  // Artık KESİN olarak string olduğunu biliyoruz
+  const satisId: string = satis.id;
+  const dbPath: string = sube.dbPath;
+
+  setIslemYapiliyor(satisId);
+  setModalAcik(false);
+
+  try {
+    // Firestore path'i güvenli bir şekilde oluştur
+    const docRef = doc(db, 'subeler', dbPath, 'satislar', satisId);
+    
+    await updateDoc(docRef, {
+      onayDurumu: true,
+      satisStatusu: 'ONAYLANDI',
+      guncellemeTarihi: new Date()
+    });
+
+    // Satışı listeden kaldır
+    setBekleyenSatislar(prev => prev.filter(s => s.id !== satisId));
+
+    // Bildirim göster
+    alert('✅ Satış onaylandı ve ileri teslimden çıkarıldı!');
+  } catch (error) {
+    console.error('Onaylama hatası:', error);
+    alert('❌ Onaylama başarısız!');
+  } finally {
+    setIslemYapiliyor(null);
+    setSeciliSatis(null);
+  }
+};
+
+// ── İleri Teslimden Çıkar ────────────────────────────────────────
+const handleIleriTeslimdenCikar = async (satis: SatisTeklifFormu) => {
+  if (!isAdmin) return;
+  
+  // ID kontrolü
+  if (!satis.id) {
+    alert('❌ Satış ID bulunamadı!');
+    return;
+  }
+
+  // subeKodu kontrolü
+  if (!satis.subeKodu) {
+    alert('❌ Şube kodu bulunamadı!');
+    return;
+  }
+
+  const sube = getSubeByKod(satis.subeKodu);
+  
+  // sube ve dbPath kontrolü
+  if (!sube) {
+    alert('❌ Şube bulunamadı!');
+    return;
+  }
+
+  if (!sube.dbPath) {
+    alert('❌ Şube dbPath bulunamadı!');
+    return;
+  }
+
+  if (!window.confirm(`"${satis.satisKodu}" satışını İleri Teslim listesinden çıkarmak istiyor musunuz?`)) return;
+
+  // Artık KESİN olarak string olduğunu biliyoruz
+  const satisId: string = satis.id;
+  const dbPath: string = sube.dbPath;
+
+  setIslemYapiliyor(satisId);
+  try {
+    const docRef = doc(db, 'subeler', dbPath, 'satislar', satisId);
+    
+    await updateDoc(docRef, {
+      satisStatusu: 'ILERI_TESLIM_IPTAL',
+      ileriTeslimTarihi: null,
+      guncellemeTarihi: new Date()
+    });
+    setBekleyenSatislar(prev => prev.filter(s => s.id !== satisId));
+  } catch (error) {
+    console.error('Çıkarma hatası:', error);
+    alert('❌ İşlem başarısız!');
+  } finally {
+    setIslemYapiliyor(null);
+  }
+};
+
+// ── Teslim Edildi ────────────────────────────────────────────────
+const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
+  if (!isAdmin) return;
+  
+  // ID kontrolü
+  if (!satis.id) {
+    alert('❌ Satış ID bulunamadı!');
+    return;
+  }
+
+  // subeKodu kontrolü
+  if (!satis.subeKodu) {
+    alert('❌ Şube kodu bulunamadı!');
+    return;
+  }
+
+  const sube = getSubeByKod(satis.subeKodu);
+  
+  // sube ve dbPath kontrolü
+  if (!sube) {
+    alert('❌ Şube bulunamadı!');
+    return;
+  }
+
+  if (!sube.dbPath) {
+    alert('❌ Şube dbPath bulunamadı!');
+    return;
+  }
+
+  // Artık KESİN olarak string olduğunu biliyoruz
+  const satisId: string = satis.id;
+  const dbPath: string = sube.dbPath;
+
+  setIslemYapiliyor(satisId);
+  try {
+    const docRef = doc(db, 'subeler', dbPath, 'satislar', satisId);
+    
+    await updateDoc(docRef, {
+      satisStatusu: 'TESLIM_EDILDI',
+      teslimEdildiMi: true,
+      guncellemeTarihi: new Date()
+    });
+    setBekleyenSatislar(prev => prev.filter(s => s.id !== satisId));
+  } catch (error) {
+    console.error('Teslim hatası:', error);
+    alert('❌ İşlem başarısız!');
+  } finally {
+    setIslemYapiliyor(null);
+  }
+};
+
+  // ── Yardımcılar ──────────────────────────────────────────────────
   const toDate = (d: any): Date => d?.toDate ? d.toDate() : new Date(d || 0);
 
   const formatDate = (date: any) => {
@@ -92,26 +277,21 @@ const BekleyenUrunlerPage: React.FC = () => {
 
   const getSubeAdi = (kod: string) => SUBELER.find(s => s.kod === kod)?.ad || kod;
 
+  const getTeslimDurum = (satis: SatisTeklifFormu) => {
+    const tarih = (satis as any).ileriTeslimTarihi;
+    if (!tarih) return 'normal';
+    const fark = Math.ceil((toDate(tarih).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (fark < 0) return 'gecmis';
+    if (fark <= 7) return 'yakin';
+    return 'normal';
+  };
+
   const filtreliSatislar = secilenSube === 'TUMU'
     ? bekleyenSatislar
     : bekleyenSatislar.filter(s => s.subeKodu === secilenSube);
 
-  const getTeslimDurum = (satis: SatisTeklifFormu) => {
-    // İleri teslim ise ileriTeslimTarihi'ni kullan, yoksa teslimatTarihi
-    const tarihKaynagi = (satis as any).ileriTeslim && (satis as any).ileriTeslimTarihi
-      ? (satis as any).ileriTeslimTarihi
-      : satis.teslimatTarihi;
-    if (!tarihKaynagi) return 'normal';
-    const teslim = toDate(tarihKaynagi);
-    const bugun = new Date();
-    const fark = Math.ceil((teslim.getTime() - bugun.getTime()) / (1000 * 60 * 60 * 24));
-    if (fark < 0) return 'gecmis';
-    if (fark <= 3) return 'yakin';
-    return 'normal';
-  };
-
   const yenileBtn = (
-    <button onClick={fetchBekleyenler} className="bu-btn-yenile" title="Yenile">
+    <button onClick={fetchIleriTeslimler} className="bu-btn-yenile" title="Yenile">
       <i className="fas fa-sync-alt"></i>
     </button>
   );
@@ -119,7 +299,7 @@ const BekleyenUrunlerPage: React.FC = () => {
   return (
     <Layout pageTitle={`İleri Teslim (${filtreliSatislar.length})`} headerExtra={yenileBtn}>
 
-      {/* FİLTRE - sadece admin */}
+      {/* FİLTRE — sadece admin */}
       {isAdmin && (
         <div className="bu-filtre-bar">
           <button
@@ -140,28 +320,56 @@ const BekleyenUrunlerPage: React.FC = () => {
         </div>
       )}
 
+      {/* ONAY MODAL */}
+      {modalAcik && (
+        <div className="modal-overlay" onClick={() => setModalAcik(false)}>
+          <div className="modal-container" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>İşlemi Onayla</h3>
+              <button className="modal-close" onClick={() => setModalAcik(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p>İşlemi gerçekleştirmek istediğinize emin misiniz?</p>
+              {seciliSatis && (
+                <div style={{
+                  background: '#f8f9fa',
+                  padding: 12,
+                  borderRadius: 8,
+                  marginTop: 8,
+                  fontSize: 13
+                }}>
+                  <div><strong>Satış Kodu:</strong> {seciliSatis.satisKodu}</div>
+                  <div><strong>Müşteri:</strong> {seciliSatis.musteriBilgileri?.isim || '-'}</div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="modal-btn modal-btn-hayir" onClick={() => setModalAcik(false)}>
+                Hayır
+              </button>
+              <button className="modal-btn modal-btn-evet" onClick={handleOnayla}>
+                Evet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* İÇERİK */}
       {loading ? (
         <div className="loading">Yükleniyor...</div>
       ) : filtreliSatislar.length === 0 ? (
         <div className="empty-state">
           <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-          <p>Bekleyen satış bulunmuyor!</p>
-          <small style={{ color: '#80868b' }}>Tüm satışlar onaylandı.</small>
+          <p>İleri teslim bekleyen satış bulunmuyor!</p>
+          <small style={{ color: '#80868b' }}>Tüm ileri teslimler tamamlandı.</small>
         </div>
       ) : (
         <div className="urun-cards">
           {filtreliSatislar.map(satis => {
             const teslimDurum = getTeslimDurum(satis);
             const kar = satis.zarar ?? 0;
-            const yukleniyor = onaylaniyor === satis.id;
-
-            // İleri teslim ise M.A. tarihini göster, değilse normal teslimat tarihi
-            const ileriTeslimVar = (satis as any).ileriTeslim && (satis as any).ileriTeslimTarihi;
-            const gosterilecekTeslimTarihi = ileriTeslimVar
-              ? (satis as any).ileriTeslimTarihi
-              : satis.teslimatTarihi;
-            const teslimTarihiLabel = ileriTeslimVar ? 'M.A. Teslim Tarihi' : 'Teslim Tarihi';
+            const yukleniyor = islemYapiliyor === satis.id;
 
             return (
               <div key={satis.id} className={`urun-card bu-satis-kart ${teslimDurum}`}>
@@ -174,11 +382,11 @@ const BekleyenUrunlerPage: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     {teslimDurum === 'gecmis' && <span className="durum-badge orange">⚠ TESLİM GEÇTİ</span>}
-                    {teslimDurum === 'yakin' && <span className="durum-badge blue">🔔 YAKLAŞIYOR</span>}
-                    {teslimDurum === 'normal' && <span className="durum-badge green">BEKLEMEDE</span>}
+                    {teslimDurum === 'yakin'  && <span className="durum-badge blue">🔔 YAKLAŞIYOR</span>}
+                    {teslimDurum === 'normal' && <span className="durum-badge green">İLERİ TESLİM</span>}
                     <span className="durum-badge" style={{
                       background: satis.odemeDurumu === OdemeDurumu.ODENDI ? '#f0fdf4' : '#fffbeb',
-                      color: satis.odemeDurumu === OdemeDurumu.ODENDI ? '#16a34a' : '#d97706',
+                      color:      satis.odemeDurumu === OdemeDurumu.ODENDI ? '#16a34a' : '#d97706',
                       border: `1px solid ${satis.odemeDurumu === OdemeDurumu.ODENDI ? '#bbf7d0' : '#fde68a'}`
                     }}>
                       {satis.odemeDurumu === OdemeDurumu.ODENDI ? 'ÖDENDİ' : 'AÇIK HESAP'}
@@ -207,31 +415,30 @@ const BekleyenUrunlerPage: React.FC = () => {
                     <span className="label">Satış Tarihi</span>
                     <span className="value">{formatDate(satis.tarih)}</span>
                   </div>
-                  {/* ✅ İleri teslim varsa M.A. Teslim Tarihi, yoksa normal Teslim Tarihi */}
                   <div className="info-row">
-                    <span className="label">{teslimTarihiLabel}</span>
+                    <span className="label">Normal Teslim</span>
+                    <span className="value">{formatDate(satis.teslimatTarihi)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="label">M.A. Teslim Tarihi</span>
                     <span className="value" style={{
                       fontWeight: 700,
-                      color: teslimDurum === 'gecmis' ? '#dc2626' : teslimDurum === 'yakin' ? '#d97706' : undefined
+                      color: teslimDurum === 'gecmis' ? '#dc2626' : teslimDurum === 'yakin' ? '#d97706' : '#1d4ed8'
                     }}>
-                      {formatDate(gosterilecekTeslimTarihi)}
-                      {ileriTeslimVar && (
-                        <span style={{ fontSize: 10, marginLeft: 6, background: '#dbeafe', color: '#1d4ed8', padding: '1px 6px', borderRadius: 10, fontWeight: 600 }}>
-                          İLERİ TESLİM
-                        </span>
-                      )}
+                      {formatDate((satis as any).ileriTeslimTarihi)}
+                      <span style={{
+                        fontSize: 9, marginLeft: 6,
+                        background: '#dbeafe', color: '#1d4ed8',
+                        padding: '1px 6px', borderRadius: 10, fontWeight: 600
+                      }}>
+                        M.A.
+                      </span>
                     </span>
                   </div>
-                  {(satis as any).notlar && (
+                  {((satis as any).notlar || satis.servisNotu) && (
                     <div className="info-row notlar">
                       <span className="label">Not</span>
-                      <span className="value">{(satis as any).notlar}</span>
-                    </div>
-                  )}
-                  {!((satis as any).notlar) && satis.servisNotu && (
-                    <div className="info-row notlar">
-                      <span className="label">Not</span>
-                      <span className="value">{satis.servisNotu}</span>
+                      <span className="value">{(satis as any).notlar || satis.servisNotu}</span>
                     </div>
                   )}
 
@@ -256,21 +463,46 @@ const BekleyenUrunlerPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="card-actions">
+                {/* BUTONLAR - Admin için Onayla butonu eklendi */}
+                <div className="card-actions" style={{ 
+                  display: 'flex', 
+                  justifyContent: 'flex-end', 
+                  gap: 8, 
+                  marginTop: 16,
+                  borderTop: '1px solid #f0f0f0',
+                  paddingTop: 16
+                }}>
                   <button
                     className="btn-durum hazir"
                     onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)}
+                    disabled={yukleniyor}
                   >
-                    Detay Görüntüle
+                    Detay
                   </button>
                   {isAdmin && (
-                    <button
-                      className="btn-durum teslim"
-                      onClick={() => handleOnayla(satis)}
-                      disabled={yukleniyor}
-                    >
-                      {yukleniyor ? '...' : '✓ Onayla'}
-                    </button>
+                    <>
+                      <button
+                        className="btn-durum teslim"
+                        onClick={() => handleTeslimEdildi(satis)}
+                        disabled={yukleniyor}
+                      >
+                        {yukleniyor ? '...' : '✓ Teslim Edildi'}
+                      </button>
+                      <button
+                        className="btn-durum onayla"
+                        onClick={() => onayModalAc(satis)}
+                        disabled={yukleniyor}
+                      >
+                        {yukleniyor ? '...' : '✓ Onayla'}
+                      </button>
+                      <button
+                        className="btn-durum cikar"
+                        onClick={() => handleIleriTeslimdenCikar(satis)}
+                        disabled={yukleniyor}
+                      >
+                        {yukleniyor ? '...' : '✕ Listeden Çıkar'}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

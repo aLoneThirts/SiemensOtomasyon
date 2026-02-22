@@ -582,3 +582,63 @@
 .bu-satis-kart.normal {
   border-left-color: #009999 !important;
 }
+/* Admin buton: Onayla */
+.btn-durum.onayla {
+  background: var(--green-light);
+  color: var(--green);
+  border: 1.5px solid var(--green-border);
+}
+.btn-durum.onayla:hover {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+  transform: translateY(-1px);
+}
+
+/* Admin buton: İleri Teslimden Çıkar */
+.btn-durum.cikar {
+  background: #fff1f2;
+  color: #e11d48;
+  border: 1.5px solid #fecdd3;
+  flex: 0 0 auto;
+  padding: 9px 10px;
+}
+.btn-durum.cikar:hover {
+  background: #e11d48;
+  color: white;
+  border-color: #e11d48;
+  transform: translateY(-1px);
+}
+
+/* Card actions 4 buton için küçük padding */
+.card-actions .btn-durum {
+  font-size: 10px;
+  padding: 8px 8px;
+}
+
+.btn-durum.onayla {
+  background: var(--green-light);
+  color: var(--green);
+  border: 1.5px solid var(--green-border);
+}
+.btn-durum.onayla:hover {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+}
+
+.btn-durum.cikar {
+  background: #fff1f2;
+  color: #e11d48;
+  border: 1.5px solid #fecdd3;
+}
+.btn-durum.cikar:hover {
+  background: #e11d48;
+  color: white;
+  border-color: #e11d48;
+}
+
+.card-actions .btn-durum {
+  font-size: 10px;
+  padding: 8px 8px;
+}

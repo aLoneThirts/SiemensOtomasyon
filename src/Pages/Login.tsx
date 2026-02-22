@@ -97,9 +97,6 @@ const Login: React.FC = () => {
             </button>
           </form>
 
-          <div className="auth-link">
-            Hesabınız yok mu? <Link to="/register">Kayıt Ol</Link>
-          </div>
         </div>
       </div>
     </div>

@@ -1,11 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  collection, getDocs, doc, updateDoc, addDoc, setDoc, deleteDoc, Timestamp, query, where,
+  collection, getDocs, doc, updateDoc, addDoc, setDoc, deleteDoc, Timestamp,
   writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
+// YENİ - ekle:
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { secondaryAuth } from '../firebase/config';
 import { SUBELER, getSubeByKod, SubeKodu } from '../types/sube';
 import * as XLSX from 'xlsx';
 import './AdminPanel.css';
@@ -20,6 +23,7 @@ interface Satici {
   id?: string;
   ad: string; soyad: string; email: string;
   subeKodu: string; aktif: boolean; hedef?: number;
+  role?: string;
 }
 interface KampanyaAdmin {
   id?: string;
@@ -49,7 +53,7 @@ const AdminPanel: React.FC = () => {
   const navigate = useNavigate();
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!currentUser) { navigate('/login'); return; }
     if (!isAdmin) { navigate('/'); }
   }, [currentUser]);
@@ -88,72 +92,45 @@ const AdminPanel: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
-  // TEK GLOBAL COLLECTION: urunler (şubeye bağlı değil)
   const fiyatKaydet = async () => {
     setYukleniyor(true);
     let toplamGuncellenen = 0;
     let toplamEklenen = 0;
     const BATCH_SIZE = 450;
-
     try {
       setIlerleme('Mevcut ürünler okunuyor...');
-
-      // Global collection'dan tek seferde çek
       const snap = await getDocs(collection(db, 'urunler'));
-
-      // kod → docId map (O(1) arama)
       const mevcutMap: Record<string, string> = {};
       snap.docs.forEach(d => {
         const kod = d.data().kod;
         if (kod) mevcutMap[kod.trim()] = d.id;
       });
-
       setIlerleme(`${fiyatOnizleme.length} ürün yazılıyor...`);
-
-      // Batch'lere böl
       for (let i = 0; i < fiyatOnizleme.length; i += BATCH_SIZE) {
         const chunk = fiyatOnizleme.slice(i, i + BATCH_SIZE);
         const batch = writeBatch(db);
-
         for (const row of chunk) {
           const mevcutId = mevcutMap[row.kod.trim()];
           if (mevcutId) {
-            batch.update(doc(db, 'urunler', mevcutId), {
-              alis: row.alis,
-              bip: row.bip,
-              urunTuru: row.tur,
-              guncellemeTarihi: Timestamp.now()
-            });
+            batch.update(doc(db, 'urunler', mevcutId), { alis: row.alis, bip: row.bip, urunTuru: row.tur, guncellemeTarihi: Timestamp.now() });
             toplamGuncellenen++;
           } else {
             const newRef = doc(collection(db, 'urunler'));
-            batch.set(newRef, {
-              kod: row.kod,
-              urunTuru: row.tur,
-              alis: row.alis,
-              bip: row.bip,
-              olusturmaTarihi: Timestamp.now(),
-              guncellemeTarihi: Timestamp.now()
-            });
+            batch.set(newRef, { kod: row.kod, urunTuru: row.tur, alis: row.alis, bip: row.bip, olusturmaTarihi: Timestamp.now(), guncellemeTarihi: Timestamp.now() });
             toplamEklenen++;
           }
         }
-
         await batch.commit();
         setIlerleme(`Yazılıyor... ${Math.min(i + BATCH_SIZE, fiyatOnizleme.length)}/${fiyatOnizleme.length}`);
       }
-
       setIlerleme('');
       mesajGoster('ok', `✅ ${toplamGuncellenen} ürün güncellendi, ${toplamEklenen} yeni ürün eklendi!`);
-      setFiyatOnizleme([]);
-      setFiyatOnizlemde(false);
+      setFiyatOnizleme([]); setFiyatOnizlemde(false);
       if (fiyatFileRef.current) fiyatFileRef.current.value = '';
     } catch (err: any) {
       setIlerleme('');
       mesajGoster('hata', `❌ Hata: ${err.message}`);
-    } finally {
-      setYukleniyor(false);
-    }
+    } finally { setYukleniyor(false); }
   };
 
   /* ── BANKA KESİNTİ ── */
@@ -193,19 +170,80 @@ const AdminPanel: React.FC = () => {
   };
 
   /* ── SATICI EKLE ── */
-  const [yeniSatici, setYeniSatici] = useState<Satici>({ ad: '', soyad: '', email: '', subeKodu: SUBELER[0].kod, aktif: true });
+  const [yeniSatici, setYeniSatici] = useState<Satici & { sifre: string }>({
+    ad: '', soyad: '', email: '', subeKodu: SUBELER[0].kod, aktif: true, sifre: ''
+  });
+  const [sifreGoster, setSifreGoster] = useState(false);
+  const [tumSaticilar, setTumSaticilar] = useState<Satici[]>([]);
+  const [tumSaticilarYuklendi, setTumSaticilarYuklendi] = useState(false);
+  const [saticiSilOnay, setSaticiSilOnay] = useState<string | null>(null);
+
+  const tumSaticilarGetir = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const liste = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Satici))
+        .filter(u => u.role?.toString().toUpperCase() !== 'ADMIN')
+        .sort((a, b) => (a.subeKodu || '').localeCompare(b.subeKodu || '') || (a.ad || '').localeCompare(b.ad || ''));
+      setTumSaticilar(liste);
+      setTumSaticilarYuklendi(true);
+    } catch (err) { console.error('Satıcılar çekilemedi:', err); }
+  };
+
+  useEffect(() => {
+    if (aktifModul === 'satici-ekle') {
+      tumSaticilarGetir();
+    }
+  }, [aktifModul]);
 
   const saticiEkle = async () => {
-    if (!yeniSatici.ad || !yeniSatici.email) { mesajGoster('hata', '❌ Ad ve email zorunlu!'); return; }
-    setYukleniyor(true);
+  if (!yeniSatici.ad || !yeniSatici.email) { mesajGoster('hata', '❌ Ad ve email zorunlu!'); return; }
+  if (!yeniSatici.sifre || yeniSatici.sifre.length < 6) { mesajGoster('hata', '❌ Şifre en az 6 karakter!'); return; }
+  setYukleniyor(true);
+  try {
+    // secondaryAuth kullan - admin oturumu etkilenmez!
+    const userCred = await createUserWithEmailAndPassword(
+      secondaryAuth, 
+      yeniSatici.email, 
+      yeniSatici.sifre
+    );
+    const uid = userCred.user.uid;
+
+    // Hemen secondary'den çıkış yap
+    await secondaryAuth.signOut();
+
+    // Firestore'a kaydet
+    await setDoc(doc(db, 'users', uid), {
+      ad: yeniSatici.ad,
+      soyad: yeniSatici.soyad,
+      email: yeniSatici.email,
+      subeKodu: yeniSatici.subeKodu,
+      role: 'SATICI',
+      aktif: true,
+      olusturmaTarihi: Timestamp.now(),
+    });
+
+    mesajGoster('ok', `✅ ${yeniSatici.ad} ${yeniSatici.soyad} eklendi!`);
+    setYeniSatici({ ad: '', soyad: '', email: '', subeKodu: SUBELER[0].kod, aktif: true, sifre: '' });
+    tumSaticilarGetir();
+  } catch (err: any) {
+    if (err.code === 'auth/email-already-in-use') mesajGoster('hata', '❌ Bu e-posta zaten kayıtlı!');
+    else if (err.code === 'auth/invalid-email') mesajGoster('hata', '❌ Geçersiz e-posta!');
+    else if (err.code === 'auth/weak-password') mesajGoster('hata', '❌ Şifre çok zayıf!');
+    else mesajGoster('hata', `❌ Hata: ${err.message}`);
+  }
+  finally { setYukleniyor(false); }
+};
+
+  const saticiSilFirestore = async (saticiId: string) => {
     try {
-      const sube = getSubeByKod(yeniSatici.subeKodu as SubeKodu);
-      if (!sube) throw new Error('Şube bulunamadı');
-      await addDoc(collection(db, `subeler/${sube.dbPath}/saticilar`), { ...yeniSatici, olusturmaTarihi: Timestamp.now() });
-      mesajGoster('ok', `✅ ${yeniSatici.ad} ${yeniSatici.soyad} eklendi!`);
-      setYeniSatici({ ad: '', soyad: '', email: '', subeKodu: SUBELER[0].kod, aktif: true });
-    } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
-    finally { setYukleniyor(false); }
+      await setDoc(doc(db, 'users', saticiId), { aktif: false }, { merge: true });
+      mesajGoster('ok', '✅ Satıcı deaktif edildi (Firebase Auth hesabı korundu)');
+      setSaticiSilOnay(null);
+      tumSaticilarGetir();
+    } catch (err: any) {
+      mesajGoster('hata', `❌ Hata: ${err.message}`);
+    }
   };
 
   /* ── SATICI DİSABLE ── */
@@ -216,19 +254,20 @@ const AdminPanel: React.FC = () => {
   const saticiListeGetir = async () => {
     setYukleniyor(true);
     try {
-      const sube = getSubeByKod(disableSube as SubeKodu); if (!sube) return;
-      const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/saticilar`));
-      setSaticiListesi(snap.docs.map(d => ({ id: d.id, ...d.data() } as Satici)));
+      const snap = await getDocs(collection(db, 'users'));
+      const liste = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Satici))
+        .filter(u => u.subeKodu === disableSube && u.role?.toString().toUpperCase() !== 'ADMIN');
+      setSaticiListesi(liste);
       setSaticiYuklendi(true);
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
     finally { setYukleniyor(false); }
   };
 
   const saticiAktifToggle = async (satici: Satici) => {
-    const sube = getSubeByKod(disableSube as SubeKodu);
-    if (!sube || !satici.id) return;
+    if (!satici.id) return;
     try {
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/saticilar`, satici.id), { aktif: !satici.aktif });
+      await updateDoc(doc(db, 'users', satici.id), { aktif: !satici.aktif });
       setSaticiListesi(prev => prev.map(s => s.id === satici.id ? { ...s, aktif: !s.aktif } : s));
       mesajGoster('ok', `✅ ${satici.ad} ${satici.aktif ? 'deaktif' : 'aktif'} edildi`);
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
@@ -242,19 +281,20 @@ const AdminPanel: React.FC = () => {
   const hedefSaticiGetir = async () => {
     setYukleniyor(true);
     try {
-      const sube = getSubeByKod(hedefSube as SubeKodu); if (!sube) return;
-      const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/saticilar`));
-      setHedefSaticilar(snap.docs.map(d => ({ id: d.id, ...d.data() } as Satici)));
+      const snap = await getDocs(collection(db, 'users'));
+      const liste = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Satici))
+        .filter(u => u.subeKodu === hedefSube && u.role?.toString().toUpperCase() !== 'ADMIN');
+      setHedefSaticilar(liste);
       setHedefYuklendi(true);
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
     finally { setYukleniyor(false); }
   };
 
   const saticiHedefKaydet = async (satici: Satici) => {
-    const sube = getSubeByKod(hedefSube as SubeKodu);
-    if (!sube || !satici.id) return;
+    if (!satici.id) return;
     try {
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/saticilar`, satici.id), { hedef: satici.hedef || 0 });
+      await updateDoc(doc(db, 'users', satici.id), { hedef: satici.hedef || 0 });
       mesajGoster('ok', `✅ ${satici.ad} hedefi kaydedildi`);
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
   };
@@ -338,16 +378,13 @@ const AdminPanel: React.FC = () => {
   };
 
   /* ── YEŞİL ETİKET ── */
-  // FIX 2: Yeşil etiket upsert - ürün kodu varsa güncelle, yoksa ekle
   const yesilEtiketFileRef = useRef<HTMLInputElement>(null);
   const [yesilEtiketSube, setYesilEtiketSube] = useState<string>(SUBELER[0].kod);
   const [yesilEtiketler, setYesilEtiketler] = useState<YesilEtiketAdmin[]>([]);
   const [yesilEtiketYuklendi, setYesilEtiketYuklendi] = useState(false);
   const [yesilEtiketOnizleme, setYesilEtiketOnizleme] = useState<YesilEtiketAdmin[]>([]);
   const [yesilEtiketOnizlemde, setYesilEtiketOnizlemde] = useState(false);
-  const [yeniYesilEtiket, setYeniYesilEtiket] = useState<YesilEtiketAdmin>({
-    urunKodu: '', maliyet: 0, aciklama: '', subeKodu: SUBELER[0].kod
-  });
+  const [yeniYesilEtiket, setYeniYesilEtiket] = useState<YesilEtiketAdmin>({ urunKodu: '', maliyet: 0, aciklama: '', subeKodu: SUBELER[0].kod });
 
   const handleYesilEtiketExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -359,8 +396,7 @@ const AdminPanel: React.FC = () => {
       const parsed: YesilEtiketAdmin[] = rows.map(r => ({
         urunKodu: String(r['ÜRÜN KODU'] || r['Ürün Kodu'] || r['urunKodu'] || r['kod'] || '').trim(),
         urunTuru: String(r['ÜRÜN TÜRÜ'] || r['Ürün Türü'] || r['tur'] || '').trim(),
-        // FIX: maliyet alanına "YEŞİL ETİKET" kolonunu eşle
-        maliyet: parseFloat(r['YEŞİL ETİKET'] || r['Yeşil Etiket'] || r['yesilEtiket'] || r['Maliyet'] || r['maliyet'] || r['İndirim'] || 0),
+        maliyet: parseFloat(r['YEŞİL ETİKET'] || r['Yeşil Etiket'] || r['yesilEtiket'] || r['Maliyet'] || r['maliyet'] || 0),
         aciklama: r['Açıklama'] || r['aciklama'] || '',
         subeKodu: yesilEtiketSube,
       })).filter(r => r.urunKodu && r.maliyet > 0);
@@ -370,75 +406,44 @@ const AdminPanel: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
-  // TEK GLOBAL COLLECTION: yesilEtiketler (şubeye bağlı değil)
   const yesilEtiketExcelKaydet = async () => {
     setYukleniyor(true);
     const BATCH_SIZE = 450;
-
     try {
       setIlerleme('Mevcut yeşil etiketler okunuyor...');
-
-      // Global collection'dan çek
       const mevcutSnap = await getDocs(collection(db, 'yesilEtiketler'));
       const mevcutMap: Record<string, string> = {};
       mevcutSnap.docs.forEach(d => {
         const kod = d.data().urunKodu;
         if (kod) mevcutMap[kod.trim().toLowerCase()] = d.id;
       });
-
-      let guncellenen = 0;
-      let eklenen = 0;
-
+      let guncellenen = 0; let eklenen = 0;
       setIlerleme(`${yesilEtiketOnizleme.length} yeşil etiket yazılıyor...`);
-
       for (let i = 0; i < yesilEtiketOnizleme.length; i += BATCH_SIZE) {
         const chunk = yesilEtiketOnizleme.slice(i, i + BATCH_SIZE);
         const batch = writeBatch(db);
-
         for (const etiket of chunk) {
           const key = etiket.urunKodu.trim().toLowerCase();
           const mevcutId = mevcutMap[key];
-
-          const veri = {
-            urunKodu: etiket.urunKodu,
-            urunTuru: etiket.urunTuru || '',
-            maliyet: etiket.maliyet,
-            aciklama: etiket.aciklama || '',
-            guncellemeTarihi: Timestamp.now()
-          };
-
-          if (mevcutId) {
-            batch.update(doc(db, 'yesilEtiketler', mevcutId), veri);
-            guncellenen++;
-          } else {
-            const newRef = doc(collection(db, 'yesilEtiketler'));
-            batch.set(newRef, { ...veri, olusturmaTarihi: Timestamp.now() });
-            eklenen++;
-          }
+          const veri = { urunKodu: etiket.urunKodu, urunTuru: etiket.urunTuru || '', maliyet: etiket.maliyet, aciklama: etiket.aciklama || '', guncellemeTarihi: Timestamp.now() };
+          if (mevcutId) { batch.update(doc(db, 'yesilEtiketler', mevcutId), veri); guncellenen++; }
+          else { const newRef = doc(collection(db, 'yesilEtiketler')); batch.set(newRef, { ...veri, olusturmaTarihi: Timestamp.now() }); eklenen++; }
         }
-
         await batch.commit();
         setIlerleme(`Yazılıyor... ${Math.min(i + BATCH_SIZE, yesilEtiketOnizleme.length)}/${yesilEtiketOnizleme.length}`);
       }
-
       setIlerleme('');
       mesajGoster('ok', `✅ ${guncellenen} güncellendi, ${eklenen} yeni eklendi!`);
-      setYesilEtiketOnizleme([]);
-      setYesilEtiketOnizlemde(false);
+      setYesilEtiketOnizleme([]); setYesilEtiketOnizlemde(false);
       if (yesilEtiketFileRef.current) yesilEtiketFileRef.current.value = '';
       yesilEtiketListeGetir();
-    } catch (err: any) {
-      setIlerleme('');
-      mesajGoster('hata', `❌ Hata: ${err.message}`);
-    } finally {
-      setYukleniyor(false);
-    }
+    } catch (err: any) { setIlerleme(''); mesajGoster('hata', `❌ Hata: ${err.message}`); }
+    finally { setYukleniyor(false); }
   };
 
   const yesilEtiketListeGetir = async () => {
     setYukleniyor(true);
     try {
-      // Global collection'dan çek
       const snap = await getDocs(collection(db, 'yesilEtiketler'));
       setYesilEtiketler(snap.docs.map(d => ({ id: d.id, ...d.data() } as YesilEtiketAdmin)));
       setYesilEtiketYuklendi(true);
@@ -446,34 +451,15 @@ const AdminPanel: React.FC = () => {
     finally { setYukleniyor(false); }
   };
 
-  // Manuel yeşil etiket - global collection
   const yesilEtiketManuelEkle = async () => {
-    if (!yeniYesilEtiket.urunKodu || !yeniYesilEtiket.maliyet) {
-      mesajGoster('hata', '❌ Ürün kodu ve maliyet zorunlu!'); return;
-    }
+    if (!yeniYesilEtiket.urunKodu || !yeniYesilEtiket.maliyet) { mesajGoster('hata', '❌ Ürün kodu ve maliyet zorunlu!'); return; }
     setYukleniyor(true);
     try {
-      // Global collection'da aynı ürün kodu var mı?
       const mevcutSnap = await getDocs(collection(db, 'yesilEtiketler'));
-      const mevcutDoc = mevcutSnap.docs.find(
-        d => d.data().urunKodu?.trim().toLowerCase() === yeniYesilEtiket.urunKodu.trim().toLowerCase()
-      );
-
-      const veri = {
-        urunKodu: yeniYesilEtiket.urunKodu.trim(),
-        maliyet: yeniYesilEtiket.maliyet,
-        aciklama: yeniYesilEtiket.aciklama || '',
-        guncellemeTarihi: Timestamp.now()
-      };
-
-      if (mevcutDoc) {
-        await updateDoc(doc(db, 'yesilEtiketler', mevcutDoc.id), veri);
-        mesajGoster('ok', `✅ "${yeniYesilEtiket.urunKodu}" yeşil etiket güncellendi!`);
-      } else {
-        await addDoc(collection(db, 'yesilEtiketler'), { ...veri, olusturmaTarihi: Timestamp.now() });
-        mesajGoster('ok', `✅ "${yeniYesilEtiket.urunKodu}" yeşil etiket eklendi!`);
-      }
-
+      const mevcutDoc = mevcutSnap.docs.find(d => d.data().urunKodu?.trim().toLowerCase() === yeniYesilEtiket.urunKodu.trim().toLowerCase());
+      const veri = { urunKodu: yeniYesilEtiket.urunKodu.trim(), maliyet: yeniYesilEtiket.maliyet, aciklama: yeniYesilEtiket.aciklama || '', guncellemeTarihi: Timestamp.now() };
+      if (mevcutDoc) { await updateDoc(doc(db, 'yesilEtiketler', mevcutDoc.id), veri); mesajGoster('ok', `✅ "${yeniYesilEtiket.urunKodu}" güncellendi!`); }
+      else { await addDoc(collection(db, 'yesilEtiketler'), { ...veri, olusturmaTarihi: Timestamp.now() }); mesajGoster('ok', `✅ "${yeniYesilEtiket.urunKodu}" eklendi!`); }
       setYeniYesilEtiket({ urunKodu: '', maliyet: 0, aciklama: '', subeKodu: SUBELER[0].kod });
       if (yesilEtiketYuklendi) yesilEtiketListeGetir();
     } catch (err: any) { mesajGoster('hata', `❌ Hata: ${err.message}`); }
@@ -508,9 +494,19 @@ const AdminPanel: React.FC = () => {
     setYesilEtiketYuklendi(false); setYesilEtiketler([]);
     setYesilEtiketOnizlemde(false); setYesilEtiketOnizleme([]);
     setFiyatOnizlemde(false); setFiyatOnizleme([]);
+    setTumSaticilarYuklendi(false); setTumSaticilar([]);
   };
 
   const aktifMenu = menuler.find(m => m.id === aktifModul);
+
+  // Şubeye göre renk
+  const subeRenk = (subeKodu: string) => {
+    const renkler: Record<string, string> = {
+      'KARTAL': '#0ea5e9', 'PENDIK': '#8b5cf6', 'SANCAKTEPE': '#f59e0b',
+      'BUYAKA': '#10b981', 'SOGANLIK': '#ef4444'
+    };
+    return renkler[subeKodu] || '#009999';
+  };
 
   return (
     <div className="ap-layout">
@@ -594,22 +590,12 @@ const AdminPanel: React.FC = () => {
                       <input ref={fiyatFileRef} type="file" accept=".xlsx,.xls" onChange={handleFiyatExcel} disabled={yukleniyor} />
                     </div>
                   </div>
-
                   {fiyatOnizlemde && fiyatOnizleme.length > 0 && (
                     <>
-                      <div className="ap-table-label">
-                        <i className="fas fa-eye" /> Önizleme — {fiyatOnizleme.length} ürün bulundu
-                      </div>
+                      <div className="ap-table-label"><i className="fas fa-eye" /> Önizleme — {fiyatOnizleme.length} ürün bulundu</div>
                       <div className="ap-table-scroll">
                         <table className="ap-table">
-                          <thead>
-                            <tr>
-                              <th>Ürün Kodu</th>
-                              <th>Ürün Türü</th>
-                              <th>Alış (TL)</th>
-                              <th>BİP (TL)</th>
-                            </tr>
-                          </thead>
+                          <thead><tr><th>Ürün Kodu</th><th>Ürün Türü</th><th>Alış (TL)</th><th>BİP (TL)</th></tr></thead>
                           <tbody>
                             {fiyatOnizleme.map((r, i) => (
                               <tr key={i}>
@@ -624,41 +610,21 @@ const AdminPanel: React.FC = () => {
                       </div>
                       <button className="ap-btn-primary" onClick={fiyatKaydet} disabled={yukleniyor}>
                         <i className="fas fa-save" />
-                        {yukleniyor
-                          ? (ilerleme || 'Güncelleniyor...')
-                          : `${fiyatOnizleme.length} Ürünü Tüm Şubelere İşle`}
+                        {yukleniyor ? (ilerleme || 'Güncelleniyor...') : `${fiyatOnizleme.length} Ürünü Tüm Şubelere İşle`}
                       </button>
                     </>
                   )}
-
-                  {yukleniyor && (
-                    <div className="ap-loading">
-                      <i className="fas fa-spinner fa-spin" />
-                      {ilerleme || 'Güncelleniyor...'}
-                    </div>
-                  )}
+                  {yukleniyor && <div className="ap-loading"><i className="fas fa-spinner fa-spin" />{ilerleme || 'Güncelleniyor...'}</div>}
                 </div>
               </div>
-
               <div className="ap-panel ap-panel--teal-soft">
                 <div className="ap-panel-header"><i className="fas fa-info-circle" /><h3>Beklenen Format</h3></div>
                 <div className="ap-panel-body">
                   <div className="ap-format-preview">
-                    <div className="ap-format-header">
-                      <span>ÜRÜN KODU</span>
-                      <span>ÜRÜN TÜRÜ</span>
-                      <span>ALIŞ</span>
-                      <span>BİP</span>
-                    </div>
-                    <div className="ap-format-row">
-                      <span>WM12N180TR</span><span>ÇAMAŞIR MAK.</span><span>31</span><span>10</span>
-                    </div>
-                    <div className="ap-format-row">
-                      <span>WG42A1X2TR</span><span>ÇAMAŞIR MAK.</span><span>31</span><span>10</span>
-                    </div>
-                    <div className="ap-format-row">
-                      <span>KG36NXWDF</span><span>BUZDOLABI</span><span>45</span><span>15</span>
-                    </div>
+                    <div className="ap-format-header"><span>ÜRÜN KODU</span><span>ÜRÜN TÜRÜ</span><span>ALIŞ</span><span>BİP</span></div>
+                    <div className="ap-format-row"><span>WM12N180TR</span><span>ÇAMAŞIR MAK.</span><span>31</span><span>10</span></div>
+                    <div className="ap-format-row"><span>WG42A1X2TR</span><span>ÇAMAŞIR MAK.</span><span>31</span><span>10</span></div>
+                    <div className="ap-format-row"><span>KG36NXWDF</span><span>BUZDOLABI</span><span>45</span><span>15</span></div>
                   </div>
                   <ul className="ap-tips">
                     <li><i className="fas fa-check" /> Sütun başlıkları: <strong>ÜRÜN KODU, ÜRÜN TÜRÜ, ALIŞ, BİP</strong></li>
@@ -685,15 +651,12 @@ const AdminPanel: React.FC = () => {
                       <input ref={kesintiFileRef} type="file" accept=".xlsx,.xls" onChange={handleKesintiExcel} />
                     </div>
                   </div>
-
                   {kesintiYuklendi && kesintiOnizleme.length > 0 && (
                     <>
                       <div className="ap-table-label"><i className="fas fa-eye" /> Önizleme — {kesintiOnizleme.length} banka bulundu</div>
                       <div className="ap-table-scroll">
                         <table className="ap-table">
-                          <thead>
-                            <tr><th>Banka</th><th>Tek</th><th>2T</th><th>3T</th><th>4T</th><th>5T</th><th>6T</th><th>7T</th><th>8T</th><th>9T</th></tr>
-                          </thead>
+                          <thead><tr><th>Banka</th><th>Tek</th><th>2T</th><th>3T</th><th>4T</th><th>5T</th><th>6T</th><th>7T</th><th>8T</th><th>9T</th></tr></thead>
                           <tbody>
                             {kesintiOnizleme.map(k => (
                               <tr key={k.banka}>
@@ -718,45 +681,183 @@ const AdminPanel: React.FC = () => {
           {/* ══ 3) SATICI EKLE ══ */}
           {aktifModul === 'satici-ekle' && (
             <div className="ap-two-col">
-              <div className="ap-panel">
-                <div className="ap-panel-header"><i className="fas fa-user-plus" /><h3>Satıcı Bilgileri</h3></div>
-                <div className="ap-panel-body">
-                  <div className="ap-two-field">
-                    <div className="ap-field">
-                      <label>Ad *</label>
-                      <input type="text" placeholder="Ahmet" value={yeniSatici.ad}
-                        onChange={e => setYeniSatici(p => ({ ...p, ad: e.target.value }))} />
+              {/* SOL: Form */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div className="ap-panel">
+                  <div className="ap-panel-header"><i className="fas fa-user-plus" /><h3>Yeni Satıcı Ekle</h3></div>
+                  <div className="ap-panel-body">
+                    <div className="ap-two-field">
+                      <div className="ap-field">
+                        <label>Ad *</label>
+                        <input type="text" placeholder="Ahmet" value={yeniSatici.ad}
+                          onChange={e => setYeniSatici(p => ({ ...p, ad: e.target.value }))} />
+                      </div>
+                      <div className="ap-field">
+                        <label>Soyad</label>
+                        <input type="text" placeholder="Yılmaz" value={yeniSatici.soyad}
+                          onChange={e => setYeniSatici(p => ({ ...p, soyad: e.target.value }))} />
+                      </div>
                     </div>
                     <div className="ap-field">
-                      <label>Soyad</label>
-                      <input type="text" placeholder="Yılmaz" value={yeniSatici.soyad}
-                        onChange={e => setYeniSatici(p => ({ ...p, soyad: e.target.value }))} />
+                      <label>E-posta *</label>
+                      <input type="email" placeholder="ahmet@tufekci.com" value={yeniSatici.email}
+                        onChange={e => setYeniSatici(p => ({ ...p, email: e.target.value }))} />
                     </div>
+                    <div className="ap-field">
+                      <label>Şifre * (min. 6 karakter)</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={sifreGoster ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={yeniSatici.sifre}
+                          onChange={e => setYeniSatici(p => ({ ...p, sifre: e.target.value }))}
+                          style={{ paddingRight: 44 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setSifreGoster(p => !p)}
+                          style={{
+                            position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                            background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 14
+                          }}
+                        >
+                          <i className={`fas ${sifreGoster ? 'fa-eye-slash' : 'fa-eye'}`} />
+                        </button>
+                      </div>
+                      {yeniSatici.sifre && yeniSatici.sifre.length < 6 && (
+                        <small style={{ color: '#ef4444' }}>⚠️ Şifre en az 6 karakter olmalı</small>
+                      )}
+                      {yeniSatici.sifre && yeniSatici.sifre.length >= 6 && (
+                        <small style={{ color: '#16a34a' }}>✅ Şifre geçerli</small>
+                      )}
+                    </div>
+                    <div className="ap-field">
+                      <label>Şube *</label>
+                      <select value={yeniSatici.subeKodu} onChange={e => setYeniSatici(p => ({ ...p, subeKodu: e.target.value }))}>
+                        {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
+                      </select>
+                    </div>
+                    <button className="ap-btn-primary" onClick={saticiEkle} disabled={yukleniyor}>
+                      <i className="fas fa-user-plus" /> {yukleniyor ? 'Ekleniyor...' : 'Satıcıyı Ekle'}
+                    </button>
                   </div>
-                  <div className="ap-field">
-                    <label>E-posta *</label>
-                    <input type="email" placeholder="ahmet@siemens.com" value={yeniSatici.email}
-                      onChange={e => setYeniSatici(p => ({ ...p, email: e.target.value }))} />
+                </div>
+
+                {/* Bilgi Kutusu */}
+                <div className="ap-panel ap-panel--teal-soft">
+                  <div className="ap-panel-header"><i className="fas fa-info-circle" /><h3>Bilgi</h3></div>
+                  <div className="ap-panel-body">
+                    <ul className="ap-tips">
+                      <li><i className="fas fa-check" /> Satıcı Firebase Auth + Firestore'a kaydedilir</li>
+                      <li><i className="fas fa-check" /> E-posta adresi benzersiz olmalıdır</li>
+                      <li><i className="fas fa-check" /> Şifre en az 6 karakter olmalıdır</li>
+                      <li><i className="fas fa-check" /> Satıcı yalnızca kendi şubesini görebilir</li>
+                      <li><i className="fas fa-check" /> Satıcı eklenince listede hemen görünür</li>
+                    </ul>
                   </div>
-                  <div className="ap-field">
-                    <label>Şube *</label>
-                    <select value={yeniSatici.subeKodu} onChange={e => setYeniSatici(p => ({ ...p, subeKodu: e.target.value }))}>
-                      {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
-                    </select>
-                  </div>
-                  <button className="ap-btn-primary" onClick={saticiEkle} disabled={yukleniyor}>
-                    <i className="fas fa-user-plus" /> {yukleniyor ? 'Ekleniyor...' : 'Satıcıyı Ekle'}
-                  </button>
                 </div>
               </div>
-              <div className="ap-panel ap-panel--teal-soft">
-                <div className="ap-panel-header"><i className="fas fa-info-circle" /><h3>Bilgi</h3></div>
+
+              {/* SAĞ: Satıcı Listesi */}
+              <div className="ap-panel">
+                <div className="ap-panel-header">
+                  <i className="fas fa-users" />
+                  <h3>Kayıtlı Satıcılar</h3>
+                  <div className="ap-panel-actions">
+                    <span style={{ fontSize: 12, color: '#6b7280', background: '#f3f4f6', padding: '4px 10px', borderRadius: 20 }}>
+                      {tumSaticilar.length} satıcı
+                    </span>
+                    <button className="ap-btn-secondary" onClick={tumSaticilarGetir} disabled={yukleniyor}>
+                      <i className="fas fa-sync" /> Yenile
+                    </button>
+                  </div>
+                </div>
                 <div className="ap-panel-body">
-                  <ul className="ap-tips">
-                    <li><i className="fas fa-check" /> Satıcı eklendikten sonra şifresi admin tarafından atanır</li>
-                    <li><i className="fas fa-check" /> E-posta adresi benzersiz olmalıdır</li>
-                    <li><i className="fas fa-check" /> Satıcı yalnızca kendi şubesini görebilir</li>
-                  </ul>
+                  {!tumSaticilarYuklendi ? (
+                    <div className="ap-empty">
+                      <i className="fas fa-spinner fa-spin" style={{ fontSize: 24, color: '#009999' }} />
+                      <p>Yükleniyor...</p>
+                    </div>
+                  ) : tumSaticilar.length === 0 ? (
+                    <div className="ap-empty">
+                      <i className="fas fa-users" style={{ fontSize: 32, color: '#d1d5db' }} />
+                      <p>Henüz satıcı eklenmemiş</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {tumSaticilar.map(s => (
+                        <div key={s.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 12,
+                          background: s.aktif === false ? '#fef2f2' : '#f8fafc',
+                          border: `1px solid ${s.aktif === false ? '#fecaca' : '#e2e8f0'}`,
+                          borderRadius: 10, padding: '10px 14px',
+                          opacity: s.aktif === false ? 0.75 : 1
+                        }}>
+                          {/* Avatar */}
+                          <div style={{
+                            width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                            background: subeRenk(s.subeKodu),
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontSize: 13, fontWeight: 700
+                          }}>
+                            {s.ad?.charAt(0)}{s.soyad?.charAt(0)}
+                          </div>
+                          {/* Bilgiler */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                              {s.ad} {s.soyad}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {s.email}
+                            </div>
+                          </div>
+                          {/* Şube badge */}
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
+                            background: subeRenk(s.subeKodu) + '20',
+                            color: subeRenk(s.subeKodu),
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {getSubeByKod(s.subeKodu as SubeKodu)?.ad || s.subeKodu}
+                          </span>
+                          {/* Aktif/Deaktif badge */}
+                          <span style={{
+                            fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 20,
+                            background: s.aktif === false ? '#fee2e2' : '#dcfce7',
+                            color: s.aktif === false ? '#dc2626' : '#16a34a',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {s.aktif === false ? '⛔ Deaktif' : '✅ Aktif'}
+                          </span>
+                          {/* Sil butonu */}
+                          {saticiSilOnay === s.id ? (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button
+                                onClick={() => saticiSilFirestore(s.id!)}
+                                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+                              >
+                                Evet, Deaktif Et
+                              </button>
+                              <button
+                                onClick={() => setSaticiSilOnay(null)}
+                                style={{ background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                              >
+                                İptal
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setSaticiSilOnay(s.id!)}
+                              style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', color: '#9ca3af', fontSize: 12 }}
+                              title="Deaktif Et"
+                            >
+                              <i className="fas fa-ban" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -928,9 +1029,7 @@ const AdminPanel: React.FC = () => {
                   <div className="ap-field">
                     <label>Kampanya Tutarı (TL) *</label>
                     <input
-                      type="number"
-                      min="0"
-                      placeholder="Örn: 3900"
+                      type="number" min="0" placeholder="Örn: 3900"
                       value={(yeniKampanya as any).tutar || ''}
                       onChange={e => setYeniKampanya(p => ({ ...p, tutar: parseFloat(e.target.value) || 0 } as any))}
                     />
@@ -941,7 +1040,6 @@ const AdminPanel: React.FC = () => {
                   </button>
                 </div>
               </div>
-
               <div className="ap-panel">
                 <div className="ap-panel-header">
                   <i className="fas fa-list" /><h3>Mevcut Kampanyalar</h3>
@@ -991,14 +1089,9 @@ const AdminPanel: React.FC = () => {
           {/* ══ 8) YEŞİL ETİKET ══ */}
           {aktifModul === 'yesil-etiket' && (
             <div className="ap-two-col">
-
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-                {/* Excel Yükle */}
                 <div className="ap-panel">
-                  <div className="ap-panel-header">
-                    <i className="fas fa-file-excel" /><h3>Excel ile Toplu Yükle</h3>
-                  </div>
+                  <div className="ap-panel-header"><i className="fas fa-file-excel" /><h3>Excel ile Toplu Yükle</h3></div>
                   <div className="ap-panel-body">
                     <div className="ap-field">
                       <label>Şube</label>
@@ -1011,25 +1104,15 @@ const AdminPanel: React.FC = () => {
                       <div className="ap-file-zone">
                         <i className="fas fa-tag" style={{ color: '#16a34a' }} />
                         <span>Yeşil etiket dosyasını seç</span>
-                        <input
-                          ref={yesilEtiketFileRef}
-                          type="file"
-                          accept=".xlsx,.xls"
-                          onChange={handleYesilEtiketExcel}
-                        />
+                        <input ref={yesilEtiketFileRef} type="file" accept=".xlsx,.xls" onChange={handleYesilEtiketExcel} />
                       </div>
                     </div>
-
                     {yesilEtiketOnizlemde && yesilEtiketOnizleme.length > 0 && (
                       <>
-                        <div className="ap-table-label">
-                          <i className="fas fa-eye" /> Önizleme — {yesilEtiketOnizleme.length} ürün bulundu
-                        </div>
+                        <div className="ap-table-label"><i className="fas fa-eye" /> Önizleme — {yesilEtiketOnizleme.length} ürün bulundu</div>
                         <div className="ap-table-scroll">
                           <table className="ap-table">
-                            <thead>
-                              <tr><th>Ürün Kodu</th><th>Yeşil Etiket Fiyatı (TL)</th><th>Açıklama</th></tr>
-                            </thead>
+                            <thead><tr><th>Ürün Kodu</th><th>Yeşil Etiket Fiyatı (TL)</th><th>Açıklama</th></tr></thead>
                             <tbody>
                               {yesilEtiketOnizleme.map((e, i) => (
                                 <tr key={i}>
@@ -1046,7 +1129,6 @@ const AdminPanel: React.FC = () => {
                         </button>
                       </>
                     )}
-
                     <div className="ap-panel ap-panel--teal-soft" style={{ marginTop: 12 }}>
                       <div className="ap-panel-header"><i className="fas fa-info-circle" /><h3>Beklenen Format</h3></div>
                       <div className="ap-panel-body">
@@ -1059,56 +1141,30 @@ const AdminPanel: React.FC = () => {
                           <li><i className="fas fa-check" /> Sütunlar: <strong>ÜRÜN KODU, ÜRÜN TÜRÜ, YEŞİL ETİKET</strong></li>
                           <li><i className="fas fa-check" /> YEŞİL ETİKET = satış fiyatı (TL)</li>
                           <li><i className="fas fa-check" /> Aynı ürün kodu varsa güncellenir, yoksa yeni eklenir</li>
-                          <li><i className="fas fa-check" /> Satış ekranında ürün kodu eşleşirse otomatik aktif olur</li>
                         </ul>
                       </div>
                     </div>
                   </div>
                 </div>
-
-                {/* Manuel Ekle */}
                 <div className="ap-panel">
-                  <div className="ap-panel-header">
-                    <i className="fas fa-plus-circle" /><h3>Manuel Ekle / Güncelle</h3>
-                  </div>
+                  <div className="ap-panel-header"><i className="fas fa-plus-circle" /><h3>Manuel Ekle / Güncelle</h3></div>
                   <div className="ap-panel-body">
                     <div className="ap-two-field">
                       <div className="ap-field">
                         <label>Ürün Kodu *</label>
-                        <input
-                          type="text"
-                          placeholder="WS75-0CA15-0AG5"
-                          value={yeniYesilEtiket.urunKodu}
-                          onChange={e => setYeniYesilEtiket(p => ({ ...p, urunKodu: e.target.value }))}
-                        />
+                        <input type="text" placeholder="WS75-0CA15-0AG5" value={yeniYesilEtiket.urunKodu}
+                          onChange={e => setYeniYesilEtiket(p => ({ ...p, urunKodu: e.target.value }))} />
                       </div>
                       <div className="ap-field">
                         <label>Yeşil Etiket Fiyatı (TL) *</label>
-                        <input
-                          type="number" min="0"
-                          placeholder="1500"
-                          value={yeniYesilEtiket.maliyet || ''}
-                          onChange={e => setYeniYesilEtiket(p => ({ ...p, maliyet: parseFloat(e.target.value) || 0 }))}
-                        />
+                        <input type="number" min="0" placeholder="1500" value={yeniYesilEtiket.maliyet || ''}
+                          onChange={e => setYeniYesilEtiket(p => ({ ...p, maliyet: parseFloat(e.target.value) || 0 }))} />
                       </div>
                     </div>
                     <div className="ap-field">
                       <label>Açıklama</label>
-                      <input
-                        type="text"
-                        placeholder="Eski model, demo ürün vb."
-                        value={yeniYesilEtiket.aciklama || ''}
-                        onChange={e => setYeniYesilEtiket(p => ({ ...p, aciklama: e.target.value }))}
-                      />
-                    </div>
-                    <div className="ap-field">
-                      <label>Şube</label>
-                      <select
-                        value={yeniYesilEtiket.subeKodu}
-                        onChange={e => setYeniYesilEtiket(p => ({ ...p, subeKodu: e.target.value }))}
-                      >
-                        {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
-                      </select>
+                      <input type="text" placeholder="Eski model, demo ürün vb." value={yeniYesilEtiket.aciklama || ''}
+                        onChange={e => setYeniYesilEtiket(p => ({ ...p, aciklama: e.target.value }))} />
                     </div>
                     <button className="ap-btn-primary" onClick={yesilEtiketManuelEkle} disabled={yukleniyor}>
                       <i className="fas fa-plus" /> {yukleniyor ? 'Kaydediliyor...' : 'Kaydet / Güncelle'}
@@ -1116,15 +1172,10 @@ const AdminPanel: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              {/* SAĞ: Mevcut Yeşil Etiketler */}
               <div className="ap-panel">
                 <div className="ap-panel-header">
                   <i className="fas fa-list" /><h3>Mevcut Yeşil Etiketler</h3>
                   <div className="ap-panel-actions">
-                    <select value={yesilEtiketSube} onChange={e => { setYesilEtiketSube(e.target.value); setYesilEtiketYuklendi(false); setYesilEtiketler([]); }}>
-                      {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
-                    </select>
                     <button className="ap-btn-secondary" onClick={yesilEtiketListeGetir} disabled={yukleniyor}>
                       <i className="fas fa-sync" /> {yukleniyor ? 'Yükleniyor...' : 'Yükle'}
                     </button>
@@ -1132,27 +1183,18 @@ const AdminPanel: React.FC = () => {
                 </div>
                 <div className="ap-panel-body">
                   {!yesilEtiketYuklendi
-                    ? <div className="ap-empty">
-                        <i className="fas fa-tag" style={{ color: '#16a34a', fontSize: 32, marginBottom: 8 }} />
-                        <p>Şube seçip "Yükle" butonuna basın</p>
-                      </div>
+                    ? <div className="ap-empty"><i className="fas fa-tag" style={{ color: '#16a34a', fontSize: 32, marginBottom: 8 }} /><p>"Yükle" butonuna basın</p></div>
                     : yesilEtiketler.length === 0
-                    ? <div className="ap-empty"><p>Bu şubede yeşil etiket bulunamadı</p></div>
+                    ? <div className="ap-empty"><p>Yeşil etiket bulunamadı</p></div>
                     : <div className="ap-kampanya-list">
                         {yesilEtiketler.map(e => (
                           <div key={e.id} className="ap-kampanya-item">
                             <div style={{ flex: 1 }}>
-                              <div className="ap-kampanya-name" style={{ color: '#16a34a' }}>
-                                🟢 {e.urunKodu}
-                              </div>
+                              <div className="ap-kampanya-name" style={{ color: '#16a34a' }}>🟢 {e.urunKodu}</div>
                               {e.aciklama && <div className="ap-kampanya-desc">{e.aciklama}</div>}
                             </div>
-                            <span className="ap-pill green">
-                              ₺{(e.maliyet || 0).toLocaleString('tr-TR')}
-                            </span>
-                            <button className="ap-delete-btn" onClick={() => yesilEtiketSilFn(e.id!)}>
-                              <i className="fas fa-trash" />
-                            </button>
+                            <span className="ap-pill green">₺{(e.maliyet || 0).toLocaleString('tr-TR')}</span>
+                            <button className="ap-delete-btn" onClick={() => yesilEtiketSilFn(e.id!)}><i className="fas fa-trash" /></button>
                           </div>
                         ))}
                       </div>

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu } from '../types/satis';
 import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
-import { UserRole, User } from '../types/user';
+import { User } from '../types/user';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid
@@ -13,138 +13,272 @@ import {
 import Layout from '../components/Layout';
 import './CiroPerformans.css';
 
+// Constants
 const HEDEF = 1_000_000;
 const RENKLER = ['#009999', '#00cccc', '#007575', '#33dddd', '#005555', '#66eeee'];
+const ZAMAN_OPTIONS = [
+  { value: 'gunluk', label: 'Günlük' },
+  { value: 'haftalik', label: 'Haftalık' },
+  { value: 'aylik', label: 'Aylık' }
+] as const;
+
+// Types
+type ZamanType = typeof ZAMAN_OPTIONS[number]['value'];
+
+// Admin kontrolü - tek satırda halleder
+const isAdmin = (role: any): boolean => 
+  role && String(role).toUpperCase().trim() === 'ADMIN';
 
 const CiroPerformansPage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
+  // State
   const [satislar, setSatislar] = useState<SatisTeklifFormu[]>([]);
   const [saticilar, setSaticilar] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [zaman, setZaman] = useState<'gunluk' | 'haftalik' | 'aylik'>('aylik');
+  const [zaman, setZaman] = useState<ZamanType>('aylik');
+  const [seciliSube, setSeciliSube] = useState<SubeKodu | 'tumu'>('tumu');
 
-  const isAdmin = currentUser?.role === UserRole.ADMIN;
+  // Hesaplanan değerler
+  const userIsAdmin = useMemo(() => isAdmin(currentUser?.role), [currentUser]);
+  const simdi = useMemo(() => new Date(), []);
 
+  // Aktif şube - admin için seçime göre, normal için kendi şubesi
+  const aktifSube = useMemo((): SubeKodu | null => {
+    if (!userIsAdmin) return (currentUser?.subeKodu as SubeKodu) ?? null;
+    return seciliSube === 'tumu' ? null : seciliSube;
+  }, [userIsAdmin, seciliSube, currentUser]);
+
+  // Veri çekme
   useEffect(() => {
-    if (!currentUser) { navigate('/login'); return; }
-    fetchData();
-  }, [currentUser]);
-
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    
   const fetchData = async () => {
-    setLoading(true);
-    try {
-      const tumSatislar: SatisTeklifFormu[] = [];
-      const subelerToFetch = isAdmin
-        ? SUBELER
-        : SUBELER.filter(s => s.kod === currentUser!.subeKodu);
+  setLoading(true);
+  try {
+    const satisPromises = SUBELER.map(sube => 
+      getDocs(collection(db, `subeler/${sube.dbPath}/satislar`))
+        .then(snap => snap.docs.map(d => {
+          const data = d.data();
+          
+          // HANGİ SATIŞTA SORUN VAR GÖRMEK İÇİN:
+          if (!data.tarih) {
+            console.warn('⚠️ tarih yok:', d.id, data);
+          }
+          
+          return {
+            id: d.id,
+            ...data,
+            subeKodu: sube.kod
+          } as SatisTeklifFormu;
+        }))
+        .catch(err => {
+          console.warn(`${sube.ad} şubesi hata:`, err);
+          return [];
+        })
+    );
 
-      for (const sube of subelerToFetch) {
-        const snapshot = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`));
-        snapshot.forEach(d => {
-          tumSatislar.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu);
-        });
+        const [satisResults, usersSnap] = await Promise.all([
+          Promise.all(satisPromises),
+          getDocs(collection(db, 'users'))
+        ]);
+
+        // Satışları birleştir
+        setSatislar(satisResults.flat());
+
+        // Satıcıları filtrele (adminler hariç)
+        setSaticilar(
+          usersSnap.docs
+            .map(d => ({ ...d.data(), uid: d.id } as User))
+            .filter(u => !isAdmin(u.role))
+        );
+
+        console.log(`📊 ${satisResults.flat().length} satış, ${usersSnap.docs.length} kullanıcı yüklendi`);
+      } catch (error) {
+        console.error('Veri çekme hatası:', error);
+      } finally {
+        setLoading(false);
       }
-      setSatislar(tumSatislar);
+    };
 
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const saticiListesi: User[] = [];
-      usersSnapshot.forEach(d => {
-        const data = d.data() as User;
-        if (data.role !== UserRole.ADMIN) {
-          saticiListesi.push({ ...data, uid: d.id });
-        }
-      });
-      setSaticilar(saticiListesi);
-    } catch (error) {
-      console.error('Veri çekilemedi:', error);
-    } finally {
-      setLoading(false);
+    fetchData();
+  }, [currentUser, navigate]);
+
+  // Tarih dönüştürücü
+const toDate = useCallback((d: any): Date => {
+  try {
+    if (!d) return new Date(0);
+    if (typeof d.toDate === 'function') return d.toDate();
+    if (d?.seconds) return new Date(d.seconds * 1000);
+    return new Date(d);
+  } catch {
+    return new Date(0);
+  }
+}, []);
+
+  // Zaman filtresi
+const zamanFiltreliSatislar = useMemo(() => {
+  const now = new Date();
+  return satislar.filter(s => {
+    if (!s.tarih) return false; // ← BU SATIRI EKLE
+    const t = toDate(s.tarih);
+    if (isNaN(t.getTime())) return false; // ← BU SATIRI DA EKLE
+    switch (zaman) {
+      case 'gunluk':
+        return t.toDateString() === now.toDateString();
+      case 'haftalik': {
+        const weekAgo = new Date(now);
+        weekAgo.setDate(now.getDate() - 7);
+        return t >= weekAgo;
+      }
+      case 'aylik':
+        return t.getMonth() === now.getMonth() &&
+               t.getFullYear() === now.getFullYear();
+      default:
+        return true;
     }
-  };
-
-  const toDate = (d: any): Date => d?.toDate ? d.toDate() : new Date(d);
-
-  const filtreliSatislar = satislar.filter(s => {
-    const tarih = toDate(s.tarih);
-    const simdi = new Date();
-    if (zaman === 'gunluk') return tarih.toDateString() === simdi.toDateString();
-    if (zaman === 'haftalik') {
-      const haftaOnce = new Date(simdi);
-      haftaOnce.setDate(simdi.getDate() - 7);
-      return tarih >= haftaOnce;
-    }
-    return tarih.getMonth() === simdi.getMonth() && tarih.getFullYear() === simdi.getFullYear();
   });
+}, [satislar, zaman, toDate]);
 
-  const pastaVerisi = SUBELER.map(sube => {
-    const subeSatislar = filtreliSatislar.filter(s => s.subeKodu === sube.kod);
-    const toplam = subeSatislar.reduce((sum, s) => sum + (s.toplamTutar || 0), 0);
-    return { name: sube.ad, value: toplam };
-  }).filter(s => s.value > 0);
+  // Şube filtresi
+  const filtreliSatislar = useMemo(() => 
+    aktifSube 
+      ? zamanFiltreliSatislar.filter(s => s.subeKodu === aktifSube)
+      : zamanFiltreliSatislar,
+  [zamanFiltreliSatislar, aktifSube]);
 
-  const simdi = new Date();
-  const buAyinGunleri = new Date(simdi.getFullYear(), simdi.getMonth() + 1, 0).getDate();
+  // Satıcı filtresi
+  const filtreliSaticilar = useMemo(() => 
+    aktifSube
+      ? saticilar.filter(u => u.subeKodu === aktifSube)
+      : saticilar,
+  [saticilar, aktifSube]);
 
-  const barVerisi = Array.from({ length: buAyinGunleri }, (_, i) => {
+  // KPI hesaplamaları
+  const kpi = useMemo(() => {
+    const ciro = filtreliSatislar.reduce((s, x) => s + (x.toplamTutar || 0), 0);
+    const kar = filtreliSatislar.reduce((s, x) => s + (x.zarar ?? 0), 0);
+    const adet = filtreliSatislar.length;
+    
+    return {
+      ciro,
+      kar,
+      adet,
+      ortalamaKar: adet > 0 ? kar / adet : 0
+    };
+  }, [filtreliSatislar]);
+
+  // Pasta verisi
+  const pastaVerisi = useMemo(() => {
+    if (!aktifSube) {
+      // Şube bazlı
+      return SUBELER
+        .map(s => ({
+          name: s.ad,
+          value: zamanFiltreliSatislar
+            .filter(x => x.subeKodu === s.kod)
+            .reduce((a, x) => a + (x.toplamTutar || 0), 0)
+        }))
+        .filter(s => s.value > 0);
+    } else {
+      // Satıcı bazlı
+      return filtreliSaticilar
+        .map(s => {
+          const ad = `${s.ad} ${s.soyad}`;
+          return {
+            name: ad,
+            value: filtreliSatislar
+              .filter(x => 
+              x.musteriTemsilcisiId === s.uid || 
+              x.musteriTemsilcisiAd === ad ||
+              x.olusturanKullanici === ad
+            )
+              .reduce((a, x) => a + (x.toplamTutar || 0), 0)
+          };
+        })
+        .filter(s => s.value > 0);
+    }
+  }, [aktifSube, zamanFiltreliSatislar, filtreliSatislar, filtreliSaticilar]);
+
+  // Bar grafik verisi
+const barVerisi = useMemo(() => {
+  const gunSayisi = new Date(simdi.getFullYear(), simdi.getMonth() + 1, 0).getDate();
+  
+  return Array.from({ length: gunSayisi }, (_, i) => {
     const gun = i + 1;
     const gunSatislari = satislar.filter(s => {
-      const t = toDate(s.tarih);
-      return t.getDate() === gun && t.getMonth() === simdi.getMonth() && t.getFullYear() === simdi.getFullYear();
+      if (!s.tarih) return false; // ← KORUMA
+      try {
+        const t = toDate(s.tarih);
+        if (isNaN(t.getTime())) return false; // ← KORUMA
+        if (aktifSube && s.subeKodu !== aktifSube) return false;
+        return t.getDate() === gun &&
+               t.getMonth() === simdi.getMonth() &&
+               t.getFullYear() === simdi.getFullYear();
+      } catch {
+        return false; // ← KORUMA
+      }
     });
+
     return {
       gun: `${gun}`,
-      ciro: gunSatislari.reduce((sum, s) => sum + (s.toplamTutar || 0), 0),
-      kar: gunSatislari.reduce((sum, s) => sum + (s.zarar ?? 0), 0),
+      ciro: gunSatislari.reduce((a, s) => a + (s.toplamTutar || 0), 0),
+      kar: gunSatislari.reduce((a, s) => a + (s.zarar ?? 0), 0)
     };
   });
+}, [satislar, aktifSube, simdi, toDate]);
 
-  const saticiPerformansi = saticilar.map(satici => {
-    const ad = `${satici.ad} ${satici.soyad}`;
-    const saticiSatislari = satislar.filter(s => s.olusturanKullanici === ad);
-    const toplamCiro = saticiSatislari.reduce((sum, s) => sum + (s.toplamTutar || 0), 0);
-    const toplamKar = saticiSatislari.reduce((sum, s) => sum + (s.zarar ?? 0), 0);
-    const yuzde = Math.min((toplamCiro / HEDEF) * 100, 100);
-    const satisSayisi = saticiSatislari.length;
-    const yildiz = Math.min(Math.round((toplamCiro / HEDEF) * 10), 10);
-    const sube = getSubeByKod(satici.subeKodu);
-    return { ad, toplamCiro, toplamKar, yuzde, satisSayisi, yildiz, subeAd: sube?.ad || '' };
-  }).sort((a, b) => b.toplamCiro - a.toplamCiro);
+  // Satıcı performansı
+  const performans = useMemo(() => 
+    filtreliSaticilar
+      .map(s => {
+        const ad = `${s.ad} ${s.soyad}`;
+        const satislar = filtreliSatislar.filter(x => 
+        x.musteriTemsilcisiId === s.uid || 
+        x.musteriTemsilcisiAd === ad ||
+        x.olusturanKullanici === ad  // geriye uyumluluk için eski satışlar
+      );
+        const ciro = satislar.reduce((a, x) => a + (x.toplamTutar || 0), 0);
+        const kar = satislar.reduce((a, x) => a + (x.zarar ?? 0), 0);
+        const yuzde = Math.min((ciro / HEDEF) * 100, 100);
+        
+        return {
+          ad,
+          subeAd: getSubeByKod(s.subeKodu as SubeKodu)?.ad || '',
+          ciro,
+          kar,
+          satisSayisi: satislar.length,
+          yuzde,
+          yildiz: Math.min(Math.round((ciro / HEDEF) * 10), 10)
+        };
+      })
+      .sort((a, b) => b.ciro - a.ciro),
+  [filtreliSaticilar, filtreliSatislar]);
 
-  const toplamCiro = filtreliSatislar.reduce((sum, s) => sum + (s.toplamTutar || 0), 0);
-  const toplamKar = filtreliSatislar.reduce((sum, s) => sum + (s.zarar ?? 0), 0);
-  const satisSayisi = filtreliSatislar.length;
-  const ortalamaKar = satisSayisi > 0 ? toplamKar / satisSayisi : 0;
+  // Formatlayıcılar
+  const formatTL = useCallback((n: number) => 
+    new Intl.NumberFormat('tr-TR', { 
+      style: 'currency', 
+      currency: 'TRY', 
+      maximumFractionDigits: 0 
+    }).format(n), []);
 
-  const formatPrice = (n: number) =>
-    new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n);
-
-  const formatPriceShort = (n: number) => {
-    if (n >= 1_000_000) return `₺${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `₺${(n / 1_000).toFixed(0)}K`;
+  const formatKisa = useCallback((n: number) => {
+    if (n >= 1_000_000) return `₺${(n/1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `₺${(n/1_000).toFixed(0)}K`;
     return `₺${n}`;
-  };
+  }, []);
 
-  const zamanToggle = (
-    <div className="cp-zaman-toggle">
-      {(['gunluk', 'haftalik', 'aylik'] as const).map(z => (
-        <button
-          key={z}
-          className={`cp-toggle-btn ${zaman === z ? 'active' : ''}`}
-          onClick={() => setZaman(z)}
-        >
-          {z === 'gunluk' ? 'Günlük' : z === 'haftalik' ? 'Haftalık' : 'Aylık'}
-        </button>
-      ))}
-    </div>
-  );
-
+  // Loading
   if (loading) {
     return (
       <Layout pageTitle="Ciro & Performans">
         <div className="cp-loading">
-          <div className="cp-loading-spinner"></div>
+          <div className="cp-loading-spinner" />
           <span>Veriler yükleniyor...</span>
         </div>
       </Layout>
@@ -152,134 +286,179 @@ const CiroPerformansPage: React.FC = () => {
   }
 
   return (
-    <Layout pageTitle="Ciro & Performans" headerExtra={zamanToggle}>
+    <Layout 
+      pageTitle="Ciro & Performans" 
+      headerExtra={
+        <div className="cp-zaman-toggle">
+          {ZAMAN_OPTIONS.map(z => (
+            <button
+              key={z.value}
+              className={`cp-toggle-btn ${zaman === z.value ? 'active' : ''}`}
+              onClick={() => setZaman(z.value)}
+            >
+              {z.label}
+            </button>
+          ))}
+        </div>
+      }
+    >
+      {/* Admin Şube Filtresi */}
+      {userIsAdmin && (
+        <div className="cp-sube-filtre">
+          <button
+            className={`cp-pill ${seciliSube === 'tumu' ? 'aktif' : ''}`}
+            onClick={() => setSeciliSube('tumu')}
+          >
+            🌍 Tümü (Genel)
+          </button>
+          {SUBELER.map(s => (
+            <button
+              key={s.kod}
+              className={`cp-pill ${seciliSube === s.kod ? 'aktif' : ''}`}
+              onClick={() => setSeciliSube(s.kod)}
+            >
+              {s.ad}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* ÖZET KARTLAR */}
+      {/* KPI Kartları */}
       <div className="cp-ozet-grid">
         <div className="cp-ozet-kart">
           <div className="cp-ozet-ikon">💰</div>
-          <div className="cp-ozet-bilgi">
-            <span className="cp-ozet-label">Toplam Ciro</span>
-            <span className="cp-ozet-deger">{formatPrice(toplamCiro)}</span>
+          <div>
+            <div className="cp-ozet-label">Toplam Ciro</div>
+            <div className="cp-ozet-deger">{formatTL(kpi.ciro)}</div>
           </div>
         </div>
-        <div className={`cp-ozet-kart ${toplamKar >= 0 ? 'kar' : 'zarar'}`}>
-          <div className="cp-ozet-ikon">{toplamKar >= 0 ? '📈' : '📉'}</div>
-          <div className="cp-ozet-bilgi">
-            <span className="cp-ozet-label">Toplam Kâr/Zarar</span>
-            <span className="cp-ozet-deger">{formatPrice(toplamKar)}</span>
+        <div className={`cp-ozet-kart ${kpi.kar >= 0 ? 'kar' : 'zarar'}`}>
+          <div className="cp-ozet-ikon">{kpi.kar >= 0 ? '📈' : '📉'}</div>
+          <div>
+            <div className="cp-ozet-label">Toplam Kâr/Zarar</div>
+            <div className="cp-ozet-deger">{formatTL(kpi.kar)}</div>
           </div>
         </div>
         <div className="cp-ozet-kart">
           <div className="cp-ozet-ikon">🧾</div>
-          <div className="cp-ozet-bilgi">
-            <span className="cp-ozet-label">Satış Sayısı</span>
-            <span className="cp-ozet-deger">{satisSayisi}</span>
+          <div>
+            <div className="cp-ozet-label">Satış Sayısı</div>
+            <div className="cp-ozet-deger">{kpi.adet}</div>
           </div>
         </div>
-        <div className={`cp-ozet-kart ${ortalamaKar >= 0 ? 'kar' : 'zarar'}`}>
+        <div className={`cp-ozet-kart ${kpi.ortalamaKar >= 0 ? 'kar' : 'zarar'}`}>
           <div className="cp-ozet-ikon">⚡</div>
-          <div className="cp-ozet-bilgi">
-            <span className="cp-ozet-label">Ortalama Kâr</span>
-            <span className="cp-ozet-deger">{formatPrice(ortalamaKar)}</span>
+          <div>
+            <div className="cp-ozet-label">Ortalama Kâr</div>
+            <div className="cp-ozet-deger">{formatTL(kpi.ortalamaKar)}</div>
           </div>
         </div>
       </div>
 
-      {/* GRAFİKLER */}
+      {/* Grafikler */}
       <div className="cp-grafik-grid">
-        <div className="cp-kart cp-pasta">
+        {/* Pasta Grafik */}
+        <div className="cp-kart">
           <div className="cp-kart-baslik">
-            <h2>Şube Ciro Dağılımı</h2>
-            <span className="cp-alt-baslik">{zaman === 'gunluk' ? 'Bugün' : zaman === 'haftalik' ? 'Bu Hafta' : 'Bu Ay'}</span>
+            <h2>{!aktifSube ? 'Şube Ciro Dağılımı' : 'Satıcı Dağılımı'}</h2>
+            <span>{zaman === 'gunluk' ? 'Bugün' : zaman === 'haftalik' ? 'Bu Hafta' : 'Bu Ay'}</span>
           </div>
           {pastaVerisi.length === 0 ? (
-            <div className="cp-bos">Bu dönemde satış bulunmuyor</div>
+            <div className="cp-bos">📊 Veri yok</div>
           ) : (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={pastaVerisi} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={3} dataKey="value">
-                  {pastaVerisi.map((_, index) => (
-                    <Cell key={index} fill={RENKLER[index % RENKLER.length]} />
+                <Pie
+                  data={pastaVerisi}
+                  cx="50%" cy="50%"
+                  innerRadius={68} outerRadius={108}
+                  paddingAngle={3} dataKey="value"
+                >
+                  {pastaVerisi.map((_, i) => (
+                    <Cell key={i} fill={RENKLER[i % RENKLER.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(val: any) => formatPrice(val)} />
-                <Legend formatter={(val) => <span style={{ fontSize: 12 }}>{val}</span>} />
+                <Tooltip formatter={(v: any) => formatTL(v)} />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
           )}
         </div>
 
-        <div className="cp-kart cp-bar">
+        {/* Bar Grafik */}
+        <div className="cp-kart">
           <div className="cp-kart-baslik">
-            <h2>Bu Ay Günlük Satışlar</h2>
-            <span className="cp-alt-baslik">{simdi.toLocaleString('tr-TR', { month: 'long', year: 'numeric' })}</span>
+            <h2>Günlük Satışlar</h2>
+            <span>
+              {simdi.toLocaleString('tr-TR', { month: 'long' })}
+              {aktifSube && ` · ${getSubeByKod(aktifSube)?.ad}`}
+            </span>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={barVerisi} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e8eaed" vertical={false} />
-              <XAxis dataKey="gun" tick={{ fontSize: 10, fill: '#80868b' }} tickLine={false} axisLine={false} interval={2} />
-              <YAxis tick={{ fontSize: 10, fill: '#80868b' }} tickLine={false} axisLine={false} tickFormatter={formatPriceShort} />
-              <Tooltip
-                formatter={(val: any, name: string | undefined) => [formatPrice(val), name === 'ciro' ? 'Ciro' : 'Kâr/Zarar']}
-                labelFormatter={(l) => `${l}. Gün`}
-                contentStyle={{ borderRadius: 8, border: '1px solid #e8eaed', fontSize: 12 }}
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={barVerisi}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="gun" tick={{ fontSize: 10 }} interval={2} />
+              <YAxis tickFormatter={formatKisa} tick={{ fontSize: 10 }} />
+              <Tooltip 
+                formatter={(v: any) => formatTL(v)}
+                labelFormatter={l => `${l}. Gün`}
               />
-              <Bar dataKey="ciro" fill="#009999" radius={[3, 3, 0, 0]} maxBarSize={20} />
-              <Bar dataKey="kar" fill="#33dddd" radius={[3, 3, 0, 0]} maxBarSize={20} />
+              <Bar dataKey="ciro" fill="#009999" radius={[3,3,0,0]} maxBarSize={20} />
+              <Bar dataKey="kar" fill="#33dddd" radius={[3,3,0,0]} maxBarSize={20} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* SATICI PERFORMANS */}
-      <div className="cp-kart cp-saticilar">
+      {/* Satıcı Performansı */}
+      <div className="cp-kart">
         <div className="cp-kart-baslik">
-          <h2>Satıcı Performansı</h2>
-          <span className="cp-alt-baslik">Hedef: {formatPrice(HEDEF)}</span>
+          <h2>🏆 Satıcı Performansı</h2>
+          <span>Hedef: {formatTL(HEDEF)}</span>
         </div>
-        {saticiPerformansi.length === 0 ? (
-          <div className="cp-bos">Satıcı bulunamadı</div>
+        
+        {performans.length === 0 ? (
+          <div className="cp-bos">👥 Satıcı bulunamadı</div>
         ) : (
           <div className="cp-satici-listesi">
-            {saticiPerformansi.map((satici, index) => (
-              <div key={index} className="cp-satici-satir">
+            {performans.map((s, i) => (
+              <div key={i} className="cp-satici-satir">
                 <div className="cp-satici-sol">
                   <div className="cp-satici-avatar">
-                    {satici.ad.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    {s.ad.split(' ').map(n => n[0]).join('').slice(0,2)}
                   </div>
-                  <div className="cp-satici-bilgi">
-                    <span className="cp-satici-ad">{satici.ad}</span>
-                    <span className="cp-satici-sube">{satici.subeAd}</span>
+                  <div>
+                    <div className="cp-satici-ad">{s.ad}</div>
+                    <div className="cp-satici-sube">{s.subeAd}</div>
                   </div>
                 </div>
+                
                 <div className="cp-satici-orta">
-                  <div className="cp-progress-wrapper">
-                    <div className="cp-progress-labels">
-                      <span>₺0</span>
-                      <span className="cp-progress-current">{formatPriceShort(satici.toplamCiro)}</span>
-                      <span>Hedef {formatPriceShort(HEDEF)}</span>
-                    </div>
-                    <div className="cp-progress-track">
-                      <div className="cp-progress-fill" style={{ width: `${satici.yuzde}%` }}>
-                        {satici.yuzde > 8 && <span className="cp-progress-yuzde">%{satici.yuzde.toFixed(0)}</span>}
-                      </div>
-                    </div>
-                    <div className="cp-satici-stats">
-                      <span>{satici.satisSayisi} satış</span>
-                      <span className={satici.toplamKar >= 0 ? 'kar' : 'zarar'}>
-                        {satici.toplamKar >= 0 ? '+' : ''}{formatPriceShort(satici.toplamKar)} kâr
-                      </span>
+                  <div className="cp-progress-labels">
+                    <span>₺0</span>
+                    <span className="cp-progress-current">{formatKisa(s.ciro)}</span>
+                    <span>{formatKisa(HEDEF)}</span>
+                  </div>
+                  <div className="cp-progress-track">
+                    <div className="cp-progress-fill" style={{ width: `${s.yuzde}%` }}>
+                      {s.yuzde > 8 && <span className="cp-progress-yuzde">%{s.yuzde.toFixed(0)}</span>}
                     </div>
                   </div>
+                  <div className="cp-satici-stats">
+                    <span>📦 {s.satisSayisi} satış</span>
+                    <span className={s.kar >= 0 ? 'kar' : 'zarar'}>
+                      {s.kar >= 0 ? '📈' : '📉'} {formatKisa(Math.abs(s.kar))} {s.kar >= 0 ? 'kâr' : 'zarar'}
+                    </span>
+                  </div>
                 </div>
+
                 <div className="cp-satici-sag">
                   <div className="cp-yildizlar">
-                    {Array.from({ length: 10 }).map((_, i) => (
-                      <span key={i} className={`cp-yildiz ${i < satici.yildiz ? 'dolu' : 'bos'}`}>★</span>
+                    {[...Array(10)].map((_, j) => (
+                      <span key={j} className={`cp-yildiz ${j < s.yildiz ? 'dolu' : 'bos'}`}>★</span>
                     ))}
                   </div>
-                  <span className="cp-yildiz-skor">{satici.yildiz}/10</span>
+                  <span className="cp-yildiz-skor">{s.yildiz}/10</span>
                 </div>
               </div>
             ))}

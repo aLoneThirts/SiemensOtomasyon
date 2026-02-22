@@ -1,58 +1,91 @@
+// ===================================================
+//  KASA TİPLERİ - TAM VERSİYON
+// ===================================================
+
 export enum KasaHareketTipi {
-  NAKIT_SATIS = 'NAKİT SATIŞ',       // ✅ Kasaya GİRER (+)
-  KART        = 'KART',               // ❌ Kasaya yansımaz
-  HAVALE      = 'HAVALE',             // ❌ Kasaya yansımaz
-  GIDER       = 'GİDER',             // ✅ Kasadan ÇIKAR (-)
-  CIKIS       = 'ÇIKIŞ YAPILAN PARA',// ✅ Kasadan ÇIKAR (-)
-  DIGER       = 'DİĞER',             // ✅ Kasadan ÇIKAR (-)
+  NAKIT_SATIS  = 'NAKİT SATIŞ',
+  KART         = 'KART',
+  HAVALE       = 'HAVALE',
+  GIDER        = 'GİDER',
+  CIKIS        = 'ÇIKIŞ',
+  ADMIN_ALIM   = 'ADMİN ALIM',
+  DIGER        = 'DİĞER',
 }
 
-export function kasayaYansiyor(tip: KasaHareketTipi): boolean {
-  return tip !== KasaHareketTipi.KART && tip !== KasaHareketTipi.HAVALE;
-}
+// Kasaya fiziksel olarak yansıyor mu?
+export const kasayaYansiyor = (tip: KasaHareketTipi): boolean => {
+  return [
+    KasaHareketTipi.NAKIT_SATIS,
+    KasaHareketTipi.GIDER,
+    KasaHareketTipi.CIKIS,
+    KasaHareketTipi.ADMIN_ALIM,
+    KasaHareketTipi.DIGER,
+  ].includes(tip);
+};
 
-export function kasaYonu(tip: KasaHareketTipi): 'giris' | 'cikis' | 'yansimaz' {
-  if (tip === KasaHareketTipi.NAKIT_SATIS) return 'giris';
-  if (tip === KasaHareketTipi.KART || tip === KasaHareketTipi.HAVALE) return 'yansimaz';
-  return 'cikis';
-}
+// Para girişi mi çıkışı mı?
+export const kasaYonu = (tip: KasaHareketTipi): 'giris' | 'cikis' | 'yansimaz' => {
+  if (tip === KasaHareketTipi.NAKIT_SATIS)  return 'giris';
+  if (tip === KasaHareketTipi.KART)         return 'yansimaz';
+  if (tip === KasaHareketTipi.HAVALE)       return 'yansimaz';
+  if (tip === KasaHareketTipi.GIDER)        return 'cikis';
+  if (tip === KasaHareketTipi.CIKIS)        return 'cikis';
+  if (tip === KasaHareketTipi.ADMIN_ALIM)   return 'cikis';
+  if (tip === KasaHareketTipi.DIGER)        return 'giris';
+  return 'yansimaz';
+};
+
+// Admin listesi — isimlerini kendi admin isimlerinle değiştir
+export const ADMIN_LISTESI = [
+  { id: 'berat',  ad: 'Berat Bey'  },
+  { id: 'hamza',  ad: 'Hamza Bey'  },
+  { id: 'ender',  ad: 'Ender Bey'  },
+] as const;
+
+export type AdminId = typeof ADMIN_LISTESI[number]['id'];
 
 export interface KasaHareket {
-  id?: string;
-  aciklama: string;
-  tutar: number;
-  tip: KasaHareketTipi;
-  belgeNo?: string;
-  not?: string;
-  tarih: Date;
-  saat?: string;
-  kullanici: string;
-  kullaniciId: string;
-  subeKodu: string;
+  id:           string;
+  tip:          KasaHareketTipi;
+  aciklama:     string;
+  tutar:        number;
+  tarih:        Date;
+  saat:         string;
+  kullanici:    string;
+  kullaniciId:  string;
+  subeKodu:     string;
+  belgeNo?:     string;
+  not?:         string;
+  // Admin alım için ek alanlar
+  adminId?:     string;
+  adminAd?:     string;
 }
 
 export interface KasaGun {
-  id?: string;
-  gun: string;
-  subeKodu: string;
-  acilisTarihi?: Date;
-  acilisBakiyesi: number;
-  hareketler?: KasaHareket[];
-  durum: 'ACIK' | 'KAPALI';
-  kapanisTarihi?: Date;
+  id:               string;
+  gun:              string;       // "YYYY-MM-DD"
+  subeKodu:         string;
+  durum:            'ACIK' | 'KAPALI';
 
-  // Orijinal alanlar (korundu)
-  toplamGelir: number;
-  toplamGider: number;
-  marketHarcamalari: number;
-  digerGiderler: number;
+  acilisBakiyesi:   number;
+  gunSonuBakiyesi:  number;
 
-  // Yeni alanlar
-  nakitSatis: number;         // NAKİT SATIŞ toplamı → kasaya girer
-  kartSatis: number;          // KART toplamı → kasaya yansımaz
-  havaleSatis: number;        // HAVALE toplamı → kasaya yansımaz
-  cikisYapilanPara: number;   // ÇIKIŞ YAPILAN PARA → kasadan çıkar
+  // Kasaya yansıyanlar
+  nakitSatis:       number;       // + giriş
+  toplamGider:      number;       // - çıkış
+  cikisYapilanPara: number;       // - çıkış
+  adminAlimlar:     number;       // - çıkış (admin para aldı)
 
-  // Gün sonu = Açılış + NakitSatış - Gider - Çıkış - Diğer
-  gunSonuBakiyesi: number;
+  // Kasaya yansımayanlar (kayıt amaçlı)
+  kartSatis:        number;
+  havaleSatis:      number;
+
+  hareketler:       KasaHareket[];
+
+  // Admin bazlı alım özeti { 'Berat Bey': 500, 'Admin 2': 200 }
+  adminOzet:        Record<string, number>;
+
+  acilisYapan:      string;
+  olusturmaTarihi:  Date;
+  guncellemeTarihi: Date;
 }

@@ -1,203 +1,201 @@
-/* ===== LOADING ===== */
+/* ============================================================
+   CiroPerformans.css  –  Tüfekçi Home Satış Paneli
+   Estetik: Kurumsal / Refined Teal — IBM Plex + Mono
+   ============================================================ */
+
+/* ─── FONT IMPORT ─────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+
+/* ─── LAYOUT HEADER DÜZELTMESİ ────────────────────────────── */
+/* Header'daki zaman toggle'ın görünmesi için kritik! */
+.cp-zaman-toggle {
+  display: flex !important;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+  backdrop-filter: blur(8px);
+  margin-left: auto;
+  z-index: 100;
+}
+
+.cp-toggle-btn {
+  background: transparent;
+  border: none;
+  color: white !important; /* Beyaz yapıyoruz ki görünsün */
+  padding: 7px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'IBM Plex Sans', sans-serif;
+  letter-spacing: 0.4px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
+.cp-toggle-btn.active {
+  background: #009999;
+  color: white !important;
+  box-shadow: 0 2px 10px rgba(0, 153, 153, 0.4);
+  opacity: 1;
+}
+
+.cp-toggle-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.2);
+  color: white !important;
+  opacity: 1;
+}
+
+/* ─── LOADING ─────────────────────────────────────────────── */
 .cp-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100vh;
-  gap: 16px;
+  gap: 18px;
   color: #009999;
   font-family: 'IBM Plex Sans', sans-serif;
+  background: #f0f4f8;
 }
 
 .cp-loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #e8eaed;
+  width: 44px;
+  height: 44px;
+  border: 3px solid #c8e6e6;
   border-top-color: #009999;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: cp-spin 0.75s linear infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ===== CONTAINER ===== */
-.cp-container {
-  min-height: 100vh;
-  background: #f5f7fa;
-  padding: 24px;
-  font-family: 'IBM Plex Sans', sans-serif;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+@keyframes cp-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* ===== HEADER ===== */
-.cp-header {
+/* ─── ŞUBE FİLTRESİ (Admin için) ──────────────────────────── */
+.cp-sube-filtre {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  background: #1a2332;
-  border-radius: 12px;
-  padding: 16px 24px;
-  border-bottom: 3px solid #009999;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e4ecec;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 }
 
-.cp-header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.cp-header h1 {
-  color: #fff;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  margin: 0;
-}
-
-.cp-header h1::before {
-  content: '// ';
-  color: #009999;
-  font-family: 'IBM Plex Mono', monospace;
-}
-
-.cp-btn-back {
-  background: rgba(0,153,153,0.15);
-  color: #009999;
-  border: 1px solid #009999;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
-.cp-btn-back:hover {
-  background: #009999;
-  color: #fff;
-}
-
-/* ===== ZAMAN TOGGLE ===== */
-.cp-zaman-toggle {
-  display: flex;
-  background: rgba(255,255,255,0.08);
-  border-radius: 8px;
-  padding: 3px;
-  gap: 2px;
-}
-
-.cp-toggle-btn {
-  background: transparent;
-  border: none;
-  color: #aaa;
-  padding: 8px 18px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  transition: all 0.2s;
-}
-
-.cp-toggle-btn.active {
-  background: #009999;
-  color: #fff;
-}
-
-.cp-toggle-btn:hover:not(.active) {
-  color: #fff;
-  background: rgba(255,255,255,0.1);
-}
-
-/* ===== ÖZET KARTLAR ===== */
+/* ─── KPI KARTLAR ─────────────────────────────────────────── */
 .cp-ozet-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
+  margin-bottom: 20px;
 }
 
 .cp-ozet-kart {
   background: #fff;
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 14px;
+  padding: 18px 20px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  border: 1px solid #e8eaed;
+  gap: 14px;
+  border: 1px solid #e4ecec;
   border-left: 4px solid #009999;
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .cp-ozet-kart:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  box-shadow: 0 6px 20px rgba(0, 153, 153, 0.10);
 }
 
-.cp-ozet-kart.kar { border-left-color: #16a34a; }
-.cp-ozet-kart.zarar { border-left-color: #dc2626; }
+.cp-ozet-kart.kar {
+  border-left-color: #059669;
+}
+
+.cp-ozet-kart.zarar {
+  border-left-color: #dc2626;
+}
 
 .cp-ozet-ikon {
-  font-size: 28px;
-}
-
-.cp-ozet-bilgi {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  font-size: 26px;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
 .cp-ozet-label {
-  font-size: 11px;
-  color: #80868b;
+  font-size: 10px;
+  color: #8a9aaa;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  font-weight: 600;
+  letter-spacing: 1px;
+  font-weight: 700;
+  font-family: 'IBM Plex Sans', sans-serif;
+  white-space: nowrap;
 }
 
 .cp-ozet-deger {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
-  color: #1a2332;
+  color: #0f1f2e;
   font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ===== GRAFİK GRID ===== */
+/* ─── GRAFİK GRID ─────────────────────────────────────────── */
 .cp-grafik-grid {
   display: grid;
-  grid-template-columns: 380px 1fr;
-  gap: 16px;
+  grid-template-columns: 400px 1fr;
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 20px;
 }
 
-/* ===== KART ===== */
+/* ─── ORTAK KART ──────────────────────────────────────────── */
 .cp-kart {
   background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  border: 1px solid #e8eaed;
+  border-radius: 14px;
+  padding: 22px;
+  border: 1px solid #e4ecec;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
 }
 
 .cp-kart-baslik {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  gap: 8px;
 }
 
 .cp-kart-baslik h2 {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
-  color: #1a2332;
+  color: #0f1f2e;
   margin: 0;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.7px;
+  font-family: 'IBM Plex Sans', sans-serif;
 }
 
-.cp-alt-baslik {
-  font-size: 12px;
-  color: #80868b;
+.cp-kart-baslik span {
+  font-size: 11.5px;
+  color: #8a9aaa;
   font-weight: 500;
+  white-space: nowrap;
+  background: #f5f9f9;
+  padding: 4px 10px;
+  border-radius: 20px;
 }
 
 .cp-bos {
@@ -205,111 +203,142 @@
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #80868b;
-  font-size: 14px;
+  color: #8a9aaa;
+  font-size: 13px;
+  font-family: 'IBM Plex Sans', sans-serif;
 }
 
+/* ─── PİLL BUTONLAR (Şube filtreleri için) ────────────────── */
+.cp-pill {
+  background: #fff;
+  border: 1.5px solid #dce8e8;
+  color: #4a6565;
+  padding: 6px 16px;
+  border-radius: 30px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'IBM Plex Sans', sans-serif;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+}
 
+.cp-pill:hover:not(.aktif) {
+  border-color: #009999;
+  color: #009999;
+  background: rgba(0, 153, 153, 0.05);
+  transform: translateY(-1px);
+}
 
+.cp-pill.aktif {
+  background: #009999;
+  border-color: #009999;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 153, 153, 0.3);
+}
+
+/* ─── SATICI LİSTESİ ──────────────────────────────────────── */
 .cp-satici-listesi {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 .cp-satici-satir {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e8eaed;
-  transition: border-color 0.2s;
+  gap: 18px;
+  padding: 14px 16px;
+  background: #f7fafa;
+  border-radius: 12px;
+  border: 1px solid #e4ecec;
+  transition: all 0.18s ease;
 }
 
 .cp-satici-satir:hover {
   border-color: #009999;
+  box-shadow: 0 4px 15px rgba(0, 153, 153, 0.1);
+  transform: translateX(2px);
 }
 
-/* Sol - Avatar + İsim */
+/* Avatar */
 .cp-satici-sol {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 180px;
+  min-width: 170px;
+  flex-shrink: 0;
 }
 
 .cp-satici-avatar {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  background: #009999;
+  background: linear-gradient(135deg, #007575, #009999);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
+  font-family: 'IBM Plex Sans', sans-serif;
   flex-shrink: 0;
-}
-
-.cp-satici-bilgi {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  box-shadow: 0 2px 8px rgba(0, 153, 153, 0.25);
 }
 
 .cp-satici-ad {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: #1a2332;
+  color: #0f1f2e;
+  font-family: 'IBM Plex Sans', sans-serif;
+  white-space: nowrap;
 }
 
 .cp-satici-sube {
   font-size: 11px;
-  color: #80868b;
+  color: #8a9aaa;
+  font-family: 'IBM Plex Sans', sans-serif;
+  margin-top: 2px;
 }
 
-/* Orta - Progress Bar */
+/* Progress */
 .cp-satici-orta {
   flex: 1;
-}
-
-.cp-progress-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  min-width: 0;
 }
 
 .cp-progress-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
-  color: #80868b;
+  font-size: 10.5px;
+  color: #8a9aaa;
   font-family: 'IBM Plex Mono', monospace;
+  margin-bottom: 4px;
 }
 
 .cp-progress-current {
   color: #009999;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 .cp-progress-track {
   width: 100%;
-  height: 28px;
-  background: #e8eaed;
+  height: 26px;
+  background: #e8f0f0;
   border-radius: 6px;
   overflow: hidden;
   position: relative;
+  margin-bottom: 4px;
 }
 
 .cp-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #007575, #009999, #33dddd);
+  background: linear-gradient(90deg, #006666, #009999, #2ec4c4);
   border-radius: 6px;
-  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.9s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -322,77 +351,168 @@
 .cp-progress-fill::after {
   content: '';
   position: absolute;
-  top: 0; left: -100%;
+  top: 0;
+  left: -100%;
   width: 60%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  animation: shimmer 2s infinite;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: cp-shimmer 2.2s ease-in-out infinite;
 }
 
-@keyframes shimmer {
-  to { left: 200%; }
+@keyframes cp-shimmer {
+  to {
+    left: 200%;
+  }
 }
 
 .cp-progress-yuzde {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   color: #fff;
   font-family: 'IBM Plex Mono', monospace;
+  position: relative;
+  z-index: 2;
 }
 
 .cp-satici-stats {
   display: flex;
-  gap: 16px;
-  font-size: 11px;
-  color: #80868b;
+  gap: 14px;
+  font-size: 10.5px;
+  color: #8a9aaa;
+  font-family: 'IBM Plex Sans', sans-serif;
 }
 
-.cp-satici-stats .kar { color: #16a34a; font-weight: 600; }
-.cp-satici-stats .zarar { color: #dc2626; font-weight: 600; }
+.cp-satici-stats .kar {
+  color: #059669;
+  font-weight: 600;
+}
 
-/* Sağ - Yıldızlar */
+.cp-satici-stats .zarar {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+/* Yıldız */
 .cp-satici-sag {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  min-width: 120px;
+  min-width: 112px;
+  flex-shrink: 0;
 }
 
 .cp-yildizlar {
   display: flex;
-  gap: 1px;
+  gap: 2px;
 }
 
 .cp-yildiz {
   font-size: 14px;
-  transition: transform 0.15s;
+  transition: transform 0.15s ease;
+  line-height: 1;
 }
 
-.cp-yildiz.dolu { color: #f59e0b; }
-.cp-yildiz.bos { color: #e8eaed; }
+.cp-yildiz.dolu {
+  color: #f59e0b;
+  text-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+}
+
+.cp-yildiz.bos {
+  color: #dce8e8;
+}
 
 .cp-yildiz-skor {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  color: #1a2332;
+  color: #0f1f2e;
   font-family: 'IBM Plex Mono', monospace;
 }
 
-/* ===== RESPONSIVE ===== */
-@media (max-width: 1100px) {
+/* ─── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 1180px) {
   .cp-grafik-grid {
     grid-template-columns: 1fr;
   }
+
   .cp-ozet-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 768px) {
-  .cp-container { padding: 12px; }
-  .cp-header { flex-direction: column; gap: 12px; }
-  .cp-ozet-grid { grid-template-columns: 1fr 1fr; }
-  .cp-satici-satir { flex-direction: column; align-items: flex-start; }
-  .cp-satici-orta { width: 100%; }
+@media (max-width: 780px) {
+  .cp-ozet-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cp-satici-satir {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cp-satici-orta {
+    width: 100%;
+  }
+
+  .cp-satici-sol {
+    min-width: 100%;
+  }
+
+  .cp-satici-sag {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    min-width: 0;
+  }
+
+  .cp-sube-filtre {
+    padding: 10px;
+  }
+
+  .cp-pill {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  /* Header toggle mobil görünüm */
+  .cp-zaman-toggle {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .cp-toggle-btn {
+    padding: 5px 12px;
+    font-size: 11px;
+  }
+}
+
+/* Küçük ekranlar için ek düzenlemeler */
+@media (max-width: 480px) {
+  .cp-ozet-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cp-kart {
+    padding: 16px;
+  }
+
+  .cp-satici-stats {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+/* Print styles - Rapor çıktısı için */
+@media print {
+  .cp-zaman-toggle,
+  .cp-sube-filtre {
+    display: none;
+  }
+
+  .cp-kart {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
 }

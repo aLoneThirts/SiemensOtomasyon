@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './Pages/Login';
-import Register from './Pages/Register';
 import Dashboard from './Pages/Dashboard';
 import SatisTeklifPage from './Pages/SatisTeklifPage';
 import BekleyenUrunlerPage from './Pages/BekleyenUrunlerPage';
@@ -34,7 +33,6 @@ function App() {
         <Routes>
           {/* PUBLIC */}
           <Route path="/login"    element={<Login />} />
-          <Route path="/register" element={<Register />} />
 
           {/* PRIVATE */}
           <Route path="/dashboard"                   element={<PrivateRoute><Dashboard /></PrivateRoute>} />

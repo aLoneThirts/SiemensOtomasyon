@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
@@ -13,11 +13,16 @@ const firebaseConfig = {
   measurementId: "G-6CL2MGBP3G"
 };
 
-// Initialize Firebase
+// Ana app
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase Authentication and Firestore
+// İkinci app - admin oturumunu bozmadan kullanıcı oluşturmak için
+const secondaryApp = getApps().find(a => a.name === 'Secondary')
+  || initializeApp(firebaseConfig, 'Secondary');
+
+// Auth ve Firestore
 export const auth = getAuth(app);
+export const secondaryAuth = getAuth(secondaryApp);
 export const db = getFirestore(app);
 
 export default app;

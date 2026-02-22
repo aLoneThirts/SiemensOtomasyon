@@ -14,6 +14,17 @@ import {
 import { getSubeByKod, SubeKodu } from '../types/sube';
 import './SatisTeklif.css';
 
+// Kullanıcı tipi - DÜZELTİLDİ
+interface Kullanici {
+  id: string;        // Firestore doküman ID'si (uid ile aynı)
+  ad: string;
+  soyad: string;
+  email: string;
+  role: string;
+  subeKodu: string;
+  displayName?: string;
+}
+
 const HAVALE_BANKALARI = [
   'Ziraat Bankası', 'Halkbank', 'Vakıfbank', 'İş Bankası', 'Garanti BBVA',
   'Yapı Kredi', 'Akbank', 'QNB Finansbank', 'Denizbank', 'TEB',
@@ -29,11 +40,14 @@ const SatisTeklifPage: React.FC = () => {
 
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
+  // Kullanıcı listesi state'i
+  const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
+  const [musteriTemsilcisiId, setMusteriTemsilcisiId] = useState<string>('');
+
   const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>({
     isim: '', adres: '', faturaAdresi: '', isAdresi: '',
     vergiNumarasi: '', vkNo: '', vd: '', cep: ''
   });
-  const [musteriTemsilcisi, setMusteriTemsilcisi] = useState('');
   const [musteriTemsilcisiTel, setMusteriTemsilcisiTel] = useState('');
 
   const [urunler, setUrunler] = useState<Urun[]>([
@@ -52,10 +66,8 @@ const SatisTeklifPage: React.FC = () => {
   const [cevap, setCevap] = useState('');
   const [fatura, setFatura] = useState(false);
   const [ileriTeslim, setIleriTeslim] = useState(false);
-  // ✅ 6. Madde: İleri teslim tarihi zorunlu alan
   const [ileriTeslimTarihi, setIleriTeslimTarihi] = useState('');
   const [servis, setServis] = useState(false);
-  // ✅ 5. Madde: Notlar alanı
   const [notlar, setNotlar] = useState('');
 
   const [kampanyaListesi, setKampanyaListesi] = useState<KampanyaAdmin[]>([]);
@@ -73,6 +85,74 @@ const SatisTeklifPage: React.FC = () => {
   const [manuelSatisTutari, setManuelSatisTutari] = useState<number | null>(null);
   const [urunCache, setUrunCache] = useState<Record<string, { ad: string; alis: number; bip: number; urunTuru: string }>>({});
   const [urunAramaDropdown, setUrunAramaDropdown] = useState<{ index: number; sonuclar: string[] } | null>(null);
+
+  // Kullanıcıları çek - DÜZELTİLMİŞ VERSİYON
+  const kullanicilariCek = async () => {
+    try {
+      console.log('👤 Kullanıcılar çekiliyor...');
+      console.log('👤 Mevcut kullanıcı:', currentUser);
+      
+      // DOĞRU KOLEKSİYON: 'users' (eski 'kullanicilar' DEĞİL!)
+      const kullanicilarSnapshot = await getDocs(collection(db, 'users'));
+      
+      console.log('👤 Toplam kullanıcı sayısı:', kullanicilarSnapshot.size);
+      
+      const tumKullanicilar = kullanicilarSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,  // Firestore doküman ID'si (uid ile aynı)
+          ad: data.ad || '',
+          soyad: data.soyad || '',
+          email: data.email || '',
+          role: data.role || '',
+          subeKodu: data.subeKodu || '',
+        } as Kullanici;
+      });
+      
+      console.log('👤 Tüm kullanıcılar:', tumKullanicilar);
+
+      // Adminleri filtrele (role'ü ADMIN olanlar)
+      const adminler = tumKullanicilar.filter(k => 
+        k.role?.toString().trim().toUpperCase() === 'ADMIN'
+      );
+      console.log('👤 Adminler:', adminler);
+
+      // Mevcut şubedeki satıcıları filtrele (admin olmayanlar)
+      const subeSatıcıları = tumKullanicilar.filter(k => 
+        k.subeKodu === currentUser?.subeKodu && 
+        k.role?.toString().trim().toUpperCase() !== 'ADMIN'
+      );
+      console.log('👤 Şube satıcıları:', subeSatıcıları);
+
+      // Adminleri ve şube satıcılarını birleştir
+      const birlesikKullanicilar = [...adminler, ...subeSatıcıları];
+      
+      // Display name oluştur
+      const formattedKullanicilar = birlesikKullanicilar.map(k => ({
+        ...k,
+        displayName: `${k.ad} ${k.soyad}${k.role === 'ADMIN' ? ' (Admin)' : ''}`
+      }));
+
+      // Ada göre sırala
+      formattedKullanicilar.sort((a, b) => 
+        (a.displayName || '').localeCompare(b.displayName || '')
+      );
+
+      console.log('👤 Formatlanmış kullanıcılar:', formattedKullanicilar);
+      setKullanicilar(formattedKullanicilar);
+
+      // Varsayılan olarak current user'ı seç
+      // Not: currentUser.uid ile Firestore'daki id eşleşmeli
+      if (currentUser?.uid) {
+        // currentUser.uid'yi kullan (çünkü Firestore'da doküman ID'si uid ile aynı)
+        setMusteriTemsilcisiId(currentUser.uid);
+        console.log('👤 Varsayılan temsilci seçildi:', currentUser.uid);
+      }
+
+    } catch (err) {
+      console.error('❌ Kullanıcılar çekilemedi:', err);
+    }
+  };
 
   const kesintiCacheYukle = async () => {
     try {
@@ -125,18 +205,15 @@ const SatisTeklifPage: React.FC = () => {
     return secili.reduce((t, k) => t + (k.tutar || 0), 0);
   };
 
-  // ✅ Yeşil etiket tutarını hesapla
   const yesilEtiketToplamHesapla = (): number => {
     return eslesenYesilEtiketler().reduce((t, e) => t + e.maliyet * e.adet, 0);
   };
 
-  // ✅ GÜNCELLENEN: Toplam Maliyet = Normal maliyet (yeşil etiketli ürünler hariç) + Yeşil etiket tutarları
   const toplamMaliyetHesapla = (): number => {
     const normalMaliyet = Math.max(0, alisToplamHesapla() - bipToplamHesapla() - kampanyaToplamiHesapla());
     const etiketler = eslesenYesilEtiketler();
     if (etiketler.length === 0) return normalMaliyet;
 
-    // Yeşil etiketli ürünlerin alış toplamını çıkar, yeşil etiket tutarını ekle
     let yesilEtiketliAlis = 0;
     for (const e of etiketler) {
       const urun = urunler.find(u => u.kod.trim().toLowerCase() === e.urunKodu.trim().toLowerCase());
@@ -343,6 +420,7 @@ const SatisTeklifPage: React.FC = () => {
     yesilEtiketleriCek();
     urunCacheYukle();
     kesintiCacheYukle();
+    kullanicilariCek(); // Kullanıcıları çek - DÜZELTİLDİ
   }, [currentUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -359,7 +437,6 @@ const SatisTeklifPage: React.FC = () => {
       return;
     }
 
-    // ✅ 6. Madde: İleri teslim seçildiyse tarih zorunlu
     if (ileriTeslim && !ileriTeslimTarihi) {
       alert('❌ İleri teslim seçildiğinde müşteriyle anlaşılan teslim tarihi zorunludur!');
       return;
@@ -371,10 +448,19 @@ const SatisTeklifPage: React.FC = () => {
       return;
     }
 
+    // Müşteri temsilcisi seçildi mi kontrol et
+    if (!musteriTemsilcisiId) {
+      alert('❌ Müşteri temsilcisi seçilmelidir!');
+      return;
+    }
+
     setLoading(true);
     try {
       const sube = getSubeByKod(currentUser!.subeKodu);
       if (!sube) { alert('Şube bilgisi bulunamadı!'); return; }
+
+      // Seçilen müşteri temsilcisinin bilgilerini bul
+      const seciliTemsilci = kullanicilar.find(k => k.id === musteriTemsilcisiId);
 
       const etiketler = eslesenYesilEtiketler();
 
@@ -382,8 +468,12 @@ const SatisTeklifPage: React.FC = () => {
         satisKodu,
         subeKodu: currentUser!.subeKodu,
         musteriBilgileri,
-        musteriTemsilcisi,
+        // Müşteri temsilcisi bilgileri - ID ve isim olarak kaydet
+        musteriTemsilcisiId: musteriTemsilcisiId,
+        musteriTemsilcisiAd: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
         musteriTemsilcisiTel,
+        // Eski alanı da doldur (geriye uyumluluk için)
+        musteriTemsilcisi: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
         urunler,
         toplamTutar: manuelSatisTutari,
         kampanyaToplami: kampanyaToplamiHesapla(),
@@ -395,7 +485,6 @@ const SatisTeklifPage: React.FC = () => {
         servisNotu,
         teslimEdildiMi,
         cevap,
-        // ✅ 5. Madde: Notlar
         notlar: notlar.trim() || null,
         kampanyalar: seciliKampanyalar.map(k => ({ id: k.id!, ad: k.ad, tutar: k.tutar || 0 })),
         yesilEtiketler: etiketler.map(e => ({
@@ -415,7 +504,6 @@ const SatisTeklifPage: React.FC = () => {
         pesinatTutar: pesinatToplamHesapla(),
         havaleTutar: havaleToplamHesapla(),
         fatura,
-        // ✅ 6. Madde: İleri teslim tarihi
         ileriTeslim,
         ileriTeslimTarihi: ileriTeslim && ileriTeslimTarihi ? new Date(ileriTeslimTarihi) : null,
         servis,
@@ -424,7 +512,10 @@ const SatisTeklifPage: React.FC = () => {
         zarar: karZararHesapla(),
         olusturanKullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
         olusturmaTarihi: new Date(),
-        guncellemeTarihi: new Date()
+        guncellemeTarihi: new Date(),
+        // Satışın kime atandığı bilgisi (sorgulama için)
+        assignedUserId: musteriTemsilcisiId,
+        assignedUserRole: seciliTemsilci?.role || ''
       };
 
       await addDoc(collection(db, `subeler/${sube.dbPath}/satislar`), satisTeklifi);
@@ -443,7 +534,7 @@ const SatisTeklifPage: React.FC = () => {
       }
 
       await logKaydet(satisKodu, 'YENİ_SATIS',
-        `Yeni satış. Müşteri: ${musteriBilgileri.isim}, Tutar: ${manuelSatisTutari} TL`);
+        `Yeni satış. Müşteri: ${musteriBilgileri.isim}, Tutar: ${manuelSatisTutari} TL, Temsilci: ${seciliTemsilci?.ad} ${seciliTemsilci?.soyad}`);
 
       alert('✅ Satış teklifi başarıyla oluşturuldu!');
       navigate('/dashboard');
@@ -453,6 +544,12 @@ const SatisTeklifPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Seçili temsilcinin adını bul
+  const seciliTemsilciAdi = () => {
+    const temsilci = kullanicilar.find(k => k.id === musteriTemsilcisiId);
+    return temsilci ? temsilci.displayName || `${temsilci.ad} ${temsilci.soyad}` : '';
   };
 
   return (
@@ -481,7 +578,38 @@ const SatisTeklifPage: React.FC = () => {
         <section className="form-section">
           <h3 className="section-title">Satış Bilgileri</h3>
           <div className="form-grid-4">
-            <div className="form-field"><label>Müşteri Temsilcisi</label><input value={musteriTemsilcisi} onChange={e => setMusteriTemsilcisi(e.target.value)} /></div>
+            {/* Müşteri Temsilcisi - Dropdown olarak güncellendi */}
+            <div className="form-field">
+              <label>Müşteri Temsilcisi *</label>
+              <select 
+                value={musteriTemsilcisiId} 
+                onChange={e => setMusteriTemsilcisiId(e.target.value)}
+                required
+                style={{ 
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  width: '100%',
+                  backgroundColor: '#fff'
+                }}
+              >
+                <option value="">Temsilci Seçin</option>
+                {kullanicilar.map(kullanici => (
+                  <option key={kullanici.id} value={kullanici.id}>
+                    {kullanici.displayName || `${kullanici.ad} ${kullanici.soyad}`}
+                  </option>
+                ))}
+              </select>
+              {musteriTemsilcisiId && (
+                <small style={{ color: '#6b7280', marginTop: 4, display: 'block' }}>
+                  Seçilen: {seciliTemsilciAdi()}
+                </small>
+              )}
+              
+            </div>
+            
+            
             <div className="form-field">
               <label>Teslimat Tarihi *</label>
               <input type="date" value={teslimatTarihi} onChange={e => setTeslimatTarihi(e.target.value)} required={!ileriTeslim} />
@@ -496,7 +624,7 @@ const SatisTeklifPage: React.FC = () => {
           </div>
         </section>
 
-        {/* NOTLAR VE ZORUNLU ALANLAR */}
+        {/* NOTLAR VE ZORUNLU ALANLAR - aynı kalacak */}
         <section className="form-section">
           <h3 className="section-title">Notlar ve Zorunlu Alanlar</h3>
           <div className="form-grid-4">
@@ -524,7 +652,7 @@ const SatisTeklifPage: React.FC = () => {
             </div>
           </div>
 
-          {/* ✅ 5. Madde: Notlar alanı */}
+          {/* Notlar alanı */}
           <div className="form-field" style={{ marginTop: 12 }}>
             <label>📝 Notlar</label>
             <textarea
@@ -562,7 +690,7 @@ const SatisTeklifPage: React.FC = () => {
             </label>
           </div>
 
-          {/* ✅ 6. Madde: İleri teslim tarihi - sadece ileri teslim seçiliyse göster */}
+          {/* İleri teslim tarihi */}
           {ileriTeslim && (
             <div className="form-field" style={{ marginTop: 12, maxWidth: 320, padding: '12px 16px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
               <label style={{ fontWeight: 600, color: '#1e40af' }}>
@@ -580,7 +708,7 @@ const SatisTeklifPage: React.FC = () => {
           )}
         </section>
 
-        {/* ÜRÜNLER */}
+        {/* ÜRÜNLER - aynı kalacak */}
         <section className="form-section">
           <div className="section-header">
             <h3 className="section-title">Ürünler</h3>
@@ -642,7 +770,7 @@ const SatisTeklifPage: React.FC = () => {
           )}
         </section>
 
-        {/* KAMPANYALAR */}
+        {/* KAMPANYALAR - aynı kalacak */}
         <section className="form-section">
           <h3 className="section-title">Kampanyalar</h3>
           {kampanyaListesi.length === 0 ? (
@@ -669,7 +797,7 @@ const SatisTeklifPage: React.FC = () => {
           )}
         </section>
 
-        {/* ÖDEME BİLGİLERİ */}
+        {/* ÖDEME BİLGİLERİ - aynı kalacak */}
         <section className="form-section">
           <h3 className="section-title">💳 Ödeme Bilgileri</h3>
 

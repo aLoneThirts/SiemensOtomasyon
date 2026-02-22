@@ -34,15 +34,15 @@ export const SUBELER: Sube[] = [
   },
   {
     kod: SubeKodu.BUYAKA_AVM,
-    ad: 'Büyaka AVM Şubesi',
+    ad: 'Buyaka AVM Şubesi',
     satisKoduPrefix: 4050,
     dbPath: 'buyaka'
   },
   {
     kod: SubeKodu.MALTEPE,
-    ad: 'Maltepe Şubesi',
+    ad: 'Soğanlık Şubesi',
     satisKoduPrefix: 5060,
-    dbPath: 'maltepe'
+    dbPath: 'soğanlık'
   }
 ];
 
