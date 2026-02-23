@@ -5,6 +5,7 @@
 //  2) Kasa çıktısı → print preview (stok dahil)
 //  3) Geçmiş kayıtlar: tarih aralığı + pagination
 //  4) Font sadeleşti
+
 //  5) Gelen/Çıkan Ürün + Mağaza Stoğu paneli (devir daim)
 //  6) Tahsilatlar → created_at = today
 //  7) Satış iptali → negatif tahsilat
@@ -20,7 +21,7 @@ import {
 } from '../types/kasa';
 import {
   getBugununKasaGunu, kasaHareketEkle, getKasaGecmisi,
-  getSatislar, getTahsilatlar,
+  getSatislar, getTahsilatlar, recalculateTumGunler,
   KasaSatisOzet, KasaTahsilatOzet, KasaSatisDetay,
 } from '../services/kasaService';
 import { db } from '../firebase/config';
@@ -247,7 +248,7 @@ const kasaPrintPreviewYap = (params: {
 
   <h2>💸 Günlük Giderler</h2>
   ${(() => {
-    const giderler = (kasaGun.hareketler || []).filter(h => 
+    const giderler = (kasaGun.hareketler || []).filter(h =>
       h.tip === KasaHareketTipi.GIDER || h.tip === KasaHareketTipi.DIGER
     );
     if (giderler.length === 0) return '<p style="color:#aaa;padding:8px 0">Bu gün gider kaydı yok.</p>';
@@ -347,6 +348,12 @@ const Kasa: React.FC = () => {
   const [adminTutar, setAdminTutar] = useState<number>(0);
   const [adminNot, setAdminNot]     = useState('');
   const [adminHata, setAdminHata]   = useState('');
+
+  // ── ✅ Backfill state'leri ────────────────────────────────────
+  const [recalcYukleniyor, setRecalcYukleniyor] = useState(false);
+  const [recalcLog, setRecalcLog]               = useState<string[]>([]);
+  const [recalcSonuc, setRecalcSonuc]           = useState<{ guncellenen: number; hatali: number } | null>(null);
+  const [recalcPanelAcik, setRecalcPanelAcik]   = useState(false);
 
   // 5️⃣ Stok Hareketleri (günlük log)
   const [stokHareketler, setStokHareketler] = useState<StokHareket[]>([]);
@@ -457,6 +464,8 @@ const Kasa: React.FC = () => {
     setMagazaStok([]);
     setKasaGun(null);
     setGecmis([]);
+    setRecalcLog([]);
+    setRecalcSonuc(null);
     loadKasa();
   }, [aktifSubeKodu, currentUser]);
 
@@ -507,7 +516,6 @@ const Kasa: React.FC = () => {
         id: d.id, ...d.data(), tarih: d.data().tarih?.toDate?.() ?? new Date(),
       } as StokHareket));
 
-      // Satış ve tahsilatların kartOdemeler/havaleler detaylarını Firestore'dan çek
       const tumSatisIds = [...sat.satislar, ...tah.tahsilatlar].map((s: any) => s.id).filter(Boolean);
       const satisDetayMap: Record<string, any> = {};
       await Promise.all(tumSatisIds.map(async (id: string) => {
@@ -540,7 +548,6 @@ const Kasa: React.FC = () => {
       ]);
       const stokListe: MagazaStokKaydi[] = stokSnap.docs.map(d => ({ urunKodu: d.id, ...d.data() } as MagazaStokKaydi));
 
-      // Satış ve tahsilatların kartOdemeler/havaleler detaylarını Firestore'dan çek
       const tumSatisIds = [...sat.satislar, ...tah.tahsilatlar].map((s: any) => s.id).filter(Boolean);
       const satisDetayMap: Record<string, any> = {};
       await Promise.all(tumSatisIds.map(async (id: string) => {
@@ -548,13 +555,8 @@ const Kasa: React.FC = () => {
         if (d.exists()) satisDetayMap[id] = d.data();
       }));
 
-      // Satışlara detay bilgilerini ekle
-      const satislarDetayli = sat.satislar.map((s: any) => ({
-        ...s, ...(satisDetayMap[s.id] || {}),
-      }));
-      const tahsilatlarDetayli = tah.tahsilatlar.map((s: any) => ({
-        ...s, ...(satisDetayMap[s.id] || {}),
-      }));
+      const satislarDetayli = sat.satislar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) }));
+      const tahsilatlarDetayli = tah.tahsilatlar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) }));
 
       kasaPrintPreviewYap({
         kasaGun, satislar: satislarDetayli, tahsilatlar: tahsilatlarDetayli,
@@ -636,6 +638,33 @@ const Kasa: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────
+  //  ✅ BACKFILL HANDLER
+  // ─────────────────────────────────────────────────────────────
+
+  const handleRecalcKasa = async () => {
+    if (!isAdmin || !aktifSubeKodu) return;
+    if (!window.confirm(
+      `⚠️ "${aktifSube?.ad ?? aktifSubeKodu}" şubesinin tüm geçmiş kasa günleri yeniden hesaplanacak.\n\nBu işlem:\n• Satış ve tahsilat nakit toplamlarını kasaya yansıtır\n• Gün sonu bakiyelerini zincirleme günceller\n• Geri alınamaz\n\nDevam edilsin mi?`
+    )) return;
+    setRecalcYukleniyor(true);
+    setRecalcLog([]);
+    setRecalcSonuc(null);
+    setRecalcPanelAcik(true);
+    try {
+      const sonuc = await recalculateTumGunler(
+        aktifSubeKodu,
+        (mesaj) => setRecalcLog(prev => [...prev, mesaj]),
+      );
+      setRecalcSonuc(sonuc);
+      await loadKasa();
+    } catch (err) {
+      alert('❌ Backfill hatası: ' + (err as Error).message);
+    } finally {
+      setRecalcYukleniyor(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
   //  5️⃣ STOK HAREKETİ EKLE + MAĞAZA STOĞU GÜNCELLE
   // ─────────────────────────────────────────────────────────────
 
@@ -647,22 +676,16 @@ const Kasa: React.FC = () => {
     if (stokTip === 'CIKAN' && !stokMustaeri.trim()) { setStokHata('Çıkan ürün için müşteri/satış kodu giriniz!'); return; }
     setStokHata('');
 
-<<<<<<< HEAD
-    const subeKoduAnlik = aktifSubeKodu; // closure'dan kopyala
-    const sube = getSubeByKod(subeKoduAnlik as any);
-    if (!sube) { setStokHata('Şube bulunamadı!'); return; }
-=======
     const subeKoduAnlik = aktifSubeKodu;
     const sube = getSubeByKod(subeKoduAnlik as any);
 
-    // DEBUG — bunu görürsen hangi path kullanıldığını anlarsın
+    // DEBUG — hangi path kullanıldığını görmek için
     console.log('🔍 STOK DEBUG:', { subeKoduAnlik, sube, dbPath: sube?.dbPath });
 
     if (!sube) {
       setStokHata(`Şube bulunamadı! (kod: ${subeKoduAnlik})`);
       return;
     }
->>>>>>> 95ed0f4640b50b20366f4ca2f294978926842c0a
 
     const kod = stokKod.trim().toUpperCase();
     const adAnlik = stokAd.trim();
@@ -690,21 +713,15 @@ const Kasa: React.FC = () => {
       });
 
       // 2. Kalıcı stok — runTransaction ile atomic güncelleme
-<<<<<<< HEAD
-=======
       const magazaStokPath = `subeler/${sube.dbPath}/magazaStok`;
       console.log('📦 magazaStok path:', magazaStokPath, '| kod:', kod);
 
->>>>>>> 95ed0f4640b50b20366f4ca2f294978926842c0a
       await runTransaction(db, async (transaction) => {
         const mevcut = await transaction.get(stokRef);
         const mevcutAdet = mevcut.exists() ? (mevcut.data().adet ?? 0) : 0;
         const mevcutAd   = mevcut.exists() ? (mevcut.data().urunAdi ?? '') : '';
         const yeniAdet = tipAnlik === 'GELEN' ? mevcutAdet + adetAnlik : mevcutAdet - adetAnlik;
-<<<<<<< HEAD
-=======
         console.log('💾 Transaction:', { mevcutAdet, yeniAdet, tipAnlik, adetAnlik });
->>>>>>> 95ed0f4640b50b20366f4ca2f294978926842c0a
         transaction.set(stokRef, {
           urunKodu: kod,
           urunAdi: adAnlik || mevcutAd,
@@ -810,6 +827,62 @@ const Kasa: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════ */}
+      {/* ✅ ADMİN RECALC PANELİ — sadece admin görür */}
+      {isAdmin && (
+        <div style={{
+          margin: '0 0 16px 0',
+          border: '1.5px solid #f59e0b',
+          borderRadius: 10,
+          background: '#fffbeb',
+          overflow: 'hidden',
+        }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', cursor: 'pointer', flexWrap: 'wrap' }}
+            onClick={() => setRecalcPanelAcik(p => !p)}
+          >
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>🔧 Kasa Yeniden Hesaplama</span>
+            <span style={{ fontSize: 12, color: '#b45309' }}>Satış/tahsilat nakitlerini kasaya yansıtır ve geçmiş gün sonlarını düzeltir</span>
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#92400e' }}>{recalcPanelAcik ? '▲ Gizle' : '▼ Göster'}</span>
+          </div>
+          {recalcPanelAcik && (
+            <div style={{ padding: '0 18px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                <button
+                  onClick={handleRecalcKasa}
+                  disabled={recalcYukleniyor}
+                  style={{
+                    padding: '8px 20px',
+                    background: recalcYukleniyor ? '#d1d5db' : '#f59e0b',
+                    color: 'white', border: 'none', borderRadius: 8,
+                    fontWeight: 700, fontSize: 13,
+                    cursor: recalcYukleniyor ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {recalcYukleniyor ? '⏳ Hesaplanıyor...' : '🔄 Tüm Geçmiş Günleri Yeniden Hesapla'}
+                </button>
+                {recalcSonuc && !recalcYukleniyor && (
+                  <span style={{ fontSize: 13, fontWeight: 700, color: recalcSonuc.hatali > 0 ? '#dc2626' : '#16a34a' }}>
+                    ✅ {recalcSonuc.guncellenen} gün güncellendi
+                    {recalcSonuc.hatali > 0 && ` · ❌ ${recalcSonuc.hatali} hata`}
+                  </span>
+                )}
+              </div>
+              {recalcLog.length > 0 && (
+                <div style={{
+                  maxHeight: 220, overflowY: 'auto',
+                  background: '#1e1e1e', borderRadius: 8,
+                  padding: '10px 14px', fontFamily: 'monospace',
+                  fontSize: 11, color: '#a3e635', lineHeight: 1.8,
+                }}>
+                  {recalcLog.map((log, i) => <div key={i}>{log}</div>)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════ */}
       {!gecmisGorunuyor ? (

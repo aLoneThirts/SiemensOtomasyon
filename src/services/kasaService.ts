@@ -180,14 +180,20 @@ export const recalcNakitSatis = async (
     const buGununSatisi = tarihGunEsit(satisTarih, gun);
 
     if (buGununSatisi) {
-      // Nakit (peşinat)
-      const nakit = Number(
-        data.pesinatTutar ??
-        data.odemeOzeti?.kasayaYansiran ??
-        data.nakitTutar ??
-        data.nakit ??
-        0
-      );
+      // Nakit (peşinat) — pesinatlar array'i varsa toplamını al, yoksa pesinatTutar
+      const pesinatlarA: any[] = data.pesinatlar ?? [];
+      let nakit = 0;
+      if (pesinatlarA.length > 0) {
+        pesinatlarA.forEach((p: any) => { nakit += Number(p.tutar ?? 0); });
+      } else {
+        nakit = Number(
+          data.pesinatTutar ??
+          data.odemeOzeti?.kasayaYansiran ??
+          data.nakitTutar ??
+          data.nakit ??
+          0
+        );
+      }
       // Kart ödemeleri
       let kart = 0;
       (data.kartOdemeler ?? []).forEach((k: any) => {
@@ -203,21 +209,37 @@ export const recalcNakitSatis = async (
     }
 
     // ── B) Önceki günlerin SATIŞLARININ bu güne gelen tahsilatı ───────
-    // Nakit ödeme tarihi bu güne denk geliyorsa sayıyoruz
-
-    const nakit = Number(
-      data.pesinatTutar ??
-      data.odemeOzeti?.kasayaYansiran ??
-      data.nakitTutar ??
-      data.nakit ??
-      0
-    );
-    if (nakit > 0) {
-      const nakitOdemeTarih = toDate(
-        data.nakitOdemeTarihi ?? data.guncellemeTarihi ?? data.olusturmaTarihi
+    // pesinatlar array'i varsa her peşinatın id'si Unix ms timestamp — tarih oradan çıkar
+    const pesinatlar: any[] = data.pesinatlar ?? [];
+    if (pesinatlar.length > 0) {
+      pesinatlar.forEach((p: any) => {
+        const pTutar = Number(p.tutar ?? 0);
+        if (pTutar <= 0) return;
+        const pTarih = p.tarih
+          ? toDate(p.tarih)
+          : p.id
+          ? new Date(Number(p.id))
+          : toDate(data.olusturmaTarihi);
+        if (tarihGunEsit(pTarih, gun)) {
+          nakitSatis += pTutar;
+        }
+      });
+    } else {
+      // Peşinat array'i yoksa eski yöntem
+      const nakit = Number(
+        data.pesinatTutar ??
+        data.odemeOzeti?.kasayaYansiran ??
+        data.nakitTutar ??
+        data.nakit ??
+        0
       );
-      if (tarihGunEsit(nakitOdemeTarih, gun)) {
-        nakitSatis += nakit;
+      if (nakit > 0) {
+        const nakitOdemeTarih = toDate(
+          data.nakitOdemeTarihi ?? data.guncellemeTarihi ?? data.olusturmaTarihi
+        );
+        if (tarihGunEsit(nakitOdemeTarih, gun)) {
+          nakitSatis += nakit;
+        }
       }
     }
 
@@ -491,13 +513,48 @@ export const getSatislar = async (
       const olusturmaTarih = toDate(data.olusturmaTarihi);
       const buGununSatisi = aralikta(olusturmaTarih);
 
-      const nakitTutar = Number(
-        data.pesinatTutar ?? data.odemeOzeti?.kasayaYansiran ?? data.nakitTutar ?? data.nakit ?? 0
-      );
-      const nakitOdemeTarih: Date | null = nakitTutar > 0
-        ? toDate(data.nakitOdemeTarihi ?? data.guncellemeTarihi ?? data.olusturmaTarihi)
-        : null;
-      const nakitBuGun = aralikta(nakitOdemeTarih);
+      // Peşinatlı satışlarda nakit hesaplama
+      const pesinatlarArr: any[] = data.pesinatlar ?? [];
+      let nakitTutar = 0;
+      let nakitBuGun = false;
+
+      if (buGununSatisi) {
+        // Bugünün satışı: tüm peşinat toplamını al, tarih filtresi yok
+        if (pesinatlarArr.length > 0) {
+          pesinatlarArr.forEach((p: any) => { nakitTutar += Number(p.tutar ?? 0); });
+          nakitBuGun = nakitTutar > 0;
+        } else {
+          nakitTutar = Number(
+            data.pesinatTutar ?? data.odemeOzeti?.kasayaYansiran ?? data.nakitTutar ?? data.nakit ?? 0
+          );
+          nakitBuGun = nakitTutar > 0;
+        }
+      } else {
+        // Önceki günün satışı: her peşinatın id timestamp'inden tarihi çıkar
+        if (pesinatlarArr.length > 0) {
+          pesinatlarArr.forEach((p: any) => {
+            const pTutar = Number(p.tutar ?? 0);
+            if (pTutar <= 0) return;
+            const pTarih = p.tarih
+              ? toDate(p.tarih)
+              : p.id
+              ? new Date(Number(p.id))
+              : toDate(data.olusturmaTarihi);
+            if (aralikta(pTarih)) {
+              nakitTutar += pTutar;
+              nakitBuGun = true;
+            }
+          });
+        } else {
+          nakitTutar = Number(
+            data.pesinatTutar ?? data.odemeOzeti?.kasayaYansiran ?? data.nakitTutar ?? data.nakit ?? 0
+          );
+          const nakitOdemeTarih: Date | null = nakitTutar > 0
+            ? toDate(data.nakitOdemeTarihi ?? data.guncellemeTarihi ?? data.olusturmaTarihi)
+            : null;
+          nakitBuGun = aralikta(nakitOdemeTarih);
+        }
+      }
 
       const havaleTutar = Number(data.havaleTutar ?? 0);
       const havaleTarih: Date | null = havaleTutar > 0
