@@ -26,7 +26,7 @@ import {
 import { db } from '../firebase/config';
 import {
   collection, addDoc, getDocs, query,
-  where, doc, setDoc, getDoc, Timestamp,
+  where, doc, setDoc, getDoc, Timestamp, runTransaction,
 } from 'firebase/firestore';
 import { getSubeByKod, SUBELER } from '../types/sube';
 import './Kasa.css';
@@ -546,45 +546,63 @@ const Kasa: React.FC = () => {
     if (stokTip === 'CIKAN' && !stokMustaeri.trim()) { setStokHata('Çıkan ürün için müşteri/satış kodu giriniz!'); return; }
     setStokHata('');
 
-    const sube = getSubeByKod(aktifSubeKodu as any);
-    if (!sube) return;
+    const subeKoduAnlik = aktifSubeKodu; // closure'dan kopyala
+    const sube = getSubeByKod(subeKoduAnlik as any);
+    if (!sube) { setStokHata('Şube bulunamadı!'); return; }
+
+    const kod = stokKod.trim().toUpperCase();
+    const adAnlik = stokAd.trim();
+    const adetAnlik = stokAdet;
+    const tipAnlik = stokTip;
+    const musteriAnlik = stokMustaeri.trim();
+    const notAnlik = stokNot.trim();
+    const kullaniciAnlik = `${currentUser.ad} ${currentUser.soyad}`;
 
     try {
-      const kod = stokKod.trim().toUpperCase();
+      const stokRef = doc(db, `subeler/${sube.dbPath}/magazaStok`, kod);
 
-      // 1. Günlük stok hareketi log'a ekle
+      // 1. Günlük stok hareketi log
       await addDoc(collection(db, `subeler/${sube.dbPath}/stokHareketler`), {
-        tip: stokTip,
+        tip: tipAnlik,
         urunKodu: kod,
-        urunAdi: stokAd.trim() || null,
-        adet: stokAdet,
-        musteriVeyaSatisKodu: stokMustaeri.trim() || null,
-        not: stokNot.trim() || null,
+        urunAdi: adAnlik || null,
+        adet: adetAnlik,
+        musteriVeyaSatisKodu: musteriAnlik || null,
+        not: notAnlik || null,
         tarih: Timestamp.fromDate(new Date()),
         gun: bugunStrLocal(),
-        kullanici: `${currentUser.ad} ${currentUser.soyad}`,
-        subeKodu: aktifSubeKodu,
+        kullanici: kullaniciAnlik,
+        subeKodu: subeKoduAnlik,
       });
 
-      // 2. Kalıcı magazaStok'u güncelle (devir daim)
-      const stokRef = doc(db, `subeler/${sube.dbPath}/magazaStok`, kod);
-      const mevcut = await getDoc(stokRef);
-      const mevcutAdet = mevcut.exists() ? (mevcut.data().adet || 0) : 0;
-      const mevcutAd   = mevcut.exists() ? (mevcut.data().urunAdi || '') : '';
-      const yeniAdet = stokTip === 'GELEN' ? mevcutAdet + stokAdet : mevcutAdet - stokAdet;
-      await setDoc(stokRef, {
-        urunKodu: kod,
-        urunAdi: stokAd.trim() || mevcutAd,
-        adet: yeniAdet,
-        sonGuncelleme: Timestamp.fromDate(new Date()),
-        subeKodu: aktifSubeKodu,
+      // 2. Kalıcı stok — runTransaction ile atomic güncelleme
+      await runTransaction(db, async (transaction) => {
+        const mevcut = await transaction.get(stokRef);
+        const mevcutAdet = mevcut.exists() ? (mevcut.data().adet ?? 0) : 0;
+        const mevcutAd   = mevcut.exists() ? (mevcut.data().urunAdi ?? '') : '';
+        const yeniAdet = tipAnlik === 'GELEN' ? mevcutAdet + adetAnlik : mevcutAdet - adetAnlik;
+        transaction.set(stokRef, {
+          urunKodu: kod,
+          urunAdi: adAnlik || mevcutAd,
+          adet: yeniAdet,
+          sonGuncelleme: Timestamp.fromDate(new Date()),
+          subeKodu: subeKoduAnlik,
+        });
       });
 
+      // 3. State sıfırla
       setStokKod(''); setStokAd(''); setStokAdet(1); setStokMustieri(''); setStokNot('');
       setStokEklemeModu(false);
-      await Promise.all([loadStokHareketler(), loadMagazaStok()]);
-      alert(`✅ ${stokTip === 'GELEN' ? 'Gelen' : 'Çıkan'} ürün kaydedildi. Mağaza stoğu güncellendi.`);
-    } catch (err) { setStokHata('Hata: ' + (err as Error).message); }
+
+      // 4. Firestore'dan taze veri çek (sırayla, race condition yok)
+      await loadStokHareketler();
+      await loadMagazaStok();
+
+      alert(`✅ ${tipAnlik === 'GELEN' ? 'Gelen' : 'Çıkan'} ürün kaydedildi. Mağaza stoğu güncellendi.`);
+    } catch (err) {
+      console.error('Stok ekle hatası:', err);
+      setStokHata('Hata: ' + (err as Error).message);
+    }
   };
 
   // ─────────────────────────────────────────────────────────────
