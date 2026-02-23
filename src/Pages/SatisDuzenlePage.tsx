@@ -7,6 +7,7 @@ import { getSubeByKod } from '../types/sube';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import './SatisDuzenle.css';
+import { kasaIptalKaydiOlustur } from '../services/kasaIptalService';
 
 interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: boolean; subeKodu: string; tutar?: number; }
 interface YesilEtiketAdmin { id?: string; urunKodu: string; urunTuru?: string; maliyet: number; aciklama?: string; }
@@ -48,6 +49,7 @@ const SatisDuzenlePage: React.FC = () => {
   const [iptaldenCikarStatusu, setIptaldenCikarStatusu] = useState<'BEKLEMEDE' | 'ONAYLI'>('BEKLEMEDE');
 
   const isIptal = (satis as any)?.satisDurumu === 'IPTAL';
+  const iptalTalebiVar = !isIptal && (satis as any)?.iptalTalebi === true;
 
   const etiketAd = (index: number) => ['Orijinal', '2. Sipariş', '3. Sipariş', '4. Sipariş'][index] || `${index + 1}. Sipariş`;
   const formatPrice = (price: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(price);
@@ -160,7 +162,7 @@ const SatisDuzenlePage: React.FC = () => {
   const urunEkle = () => setUrunler(prev => [...prev, { id: Date.now().toString(), kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }]);
   const urunSil = (index: number) => { if (urunler.length > 1) setUrunler(prev => prev.filter((_, i) => i !== index)); };
 
-  const kampanyaToggle = (id: string) => setSeciliKampanyaIds(prev => prev.includes(id) ? prev.filter(k => k !== id) : [...prev, id]);
+  const kampanyaToggle = (kampanyaId: string) => setSeciliKampanyaIds(prev => prev.includes(kampanyaId) ? prev.filter(k => k !== kampanyaId) : [...prev, kampanyaId]);
   const seciliKampanyalar = kampanyaAdminListesi.filter(k => seciliKampanyaIds.includes(k.id!));
 
   const eslesenYesilEtiketler = () => {
@@ -189,15 +191,15 @@ const SatisDuzenlePage: React.FC = () => {
   };
 
   const pesinatEkle = () => setPesinatlar(prev => [...prev, { id: Date.now().toString(), tutar: 0, aciklama: '' }]);
-  const pesinatSil = (id: string) => setPesinatlar(prev => prev.filter(p => p.id !== id));
-  const handlePesinatChange = (id: string, field: 'tutar' | 'aciklama', value: any) => {
-    setPesinatlar(prev => prev.map(p => p.id === id ? { ...p, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : p));
+  const pesinatSil = (pesinatId: string) => setPesinatlar(prev => prev.filter(p => p.id !== pesinatId));
+  const handlePesinatChange = (pesinatId: string, field: 'tutar' | 'aciklama', value: any) => {
+    setPesinatlar(prev => prev.map(p => p.id === pesinatId ? { ...p, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : p));
   };
 
   const havaleEkle = () => setHavaleler(prev => [...prev, { id: Date.now().toString(), tutar: 0, banka: HAVALE_BANKALARI[0] }]);
-  const havaleSil = (id: string) => setHavaleler(prev => prev.filter(h => h.id !== id));
-  const handleHavaleChange = (id: string, field: 'tutar' | 'banka', value: any) => {
-    setHavaleler(prev => prev.map(h => h.id === id ? { ...h, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : h));
+  const havaleSil = (havaleId: string) => setHavaleler(prev => prev.filter(h => h.id !== havaleId));
+  const handleHavaleChange = (havaleId: string, field: 'tutar' | 'banka', value: any) => {
+    setHavaleler(prev => prev.map(h => h.id === havaleId ? { ...h, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : h));
   };
 
   const marsEkle = () => {
@@ -243,6 +245,27 @@ const SatisDuzenlePage: React.FC = () => {
     const sube = getSubeByKod(subeKodu as any);
     if (!sube) return;
     setIptalIslemYapiliyor(true);
+
+    // Normal kullanıcı → sadece iptal talebi gönderir
+    if (!isAdmin) {
+      try {
+        await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+          iptalTalebi: true,
+          iptalTalepTarihi: new Date(),
+          guncellemeTarihi: new Date()
+        });
+        setSatis(prev => prev ? { ...prev, iptalTalebi: true } as any : prev);
+        setIptalPopup(false);
+        alert('✅ İptal talebiniz gönderildi. Admin onayı bekleniyor.');
+      } catch {
+        alert('❌ İptal talebi gönderilemedi!');
+      } finally {
+        setIptalIslemYapiliyor(false);
+      }
+      return;
+    }
+
+    // Admin → direkt iptal
     try {
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
         satisDurumu: 'IPTAL',
@@ -250,6 +273,15 @@ const SatisDuzenlePage: React.FC = () => {
         iptalTarihi: new Date(),
         guncellemeTarihi: new Date()
       });
+
+      // 7️⃣ İptal kasaya negatif tahsilat olarak işlenir
+      await kasaIptalKaydiOlustur({
+        satis: { ...satis, id: satis.id! } as any,
+        subeKodu: subeKodu!,
+        iptalYapan: `${currentUser?.ad} ${currentUser?.soyad}`,
+        iptalYapanId: currentUser?.uid || '',
+      });
+
       setSatis(prev => prev ? { ...prev, satisDurumu: 'IPTAL' } as any : prev);
       setIptalPopup(false);
       alert('✅ Satış iptal edildi.');
@@ -342,16 +374,21 @@ const SatisDuzenlePage: React.FC = () => {
       {iptalPopup && (
         <div className="duzenle-popup-overlay">
           <div className="duzenle-popup">
-            <div className="duzenle-popup-ikon">🚫</div>
-            <h3 className="duzenle-popup-baslik">Satışı İptal Et</h3>
+            <div className="duzenle-popup-ikon">{isAdmin ? '🚫' : '📨'}</div>
+            <h3 className="duzenle-popup-baslik">{isAdmin ? 'Satışı İptal Et' : 'İptal Talebi Gönder'}</h3>
             <p className="duzenle-popup-mesaj">
-              <strong>{satis.satisKodu}</strong> kodlu satışı iptal etmek istediğinizden emin misiniz?
-              <br /><span className="duzenle-popup-alt-not">Satış silinmeyecek, listede görünmeye devam edecek.</span>
+              <strong>{satis.satisKodu}</strong> kodlu satış için
+              {isAdmin ? ' iptal işlemi yapılsın mı?' : ' admin onayına iptal talebi gönderilsin mi?'}
+              <br /><span className="duzenle-popup-alt-not">
+                {isAdmin
+                  ? 'Satış silinmeyecek, listede görünmeye devam edecek.'
+                  : 'Talebiniz admin tarafından onaylandığında satış iptal edilecek.'}
+              </span>
             </p>
             <div className="duzenle-popup-butonlar">
               <button className="duzenle-popup-hayir" onClick={() => setIptalPopup(false)} disabled={iptalIslemYapiliyor}>Hayır</button>
               <button className="duzenle-popup-evet duzenle-popup-evet--iptal" onClick={satisiIptalEt} disabled={iptalIslemYapiliyor}>
-                {iptalIslemYapiliyor ? 'İptal ediliyor...' : 'Evet, İptal Et'}
+                {iptalIslemYapiliyor ? 'İşleniyor...' : isAdmin ? 'Evet, İptal Et' : 'Evet, Talep Gönder'}
               </button>
             </div>
           </div>
@@ -603,9 +640,13 @@ const SatisDuzenlePage: React.FC = () => {
                   ♻️ İptalden Çıkar
                 </button>
               )
+            ) : iptalTalebiVar ? (
+              <span className="duzenle-iptal-talep-badge">
+                📨 İptal talebi gönderildi — Admin onayı bekleniyor
+              </span>
             ) : (
               <button type="button" className="duzenle-btn-iptal-et" onClick={() => setIptalPopup(true)}>
-                🚫 Bu Satış İptal Olsun
+                {isAdmin ? '🚫 Bu Satışı İptal Et' : '📨 İptal Talebi Gönder'}
               </button>
             )}
           </div>
