@@ -91,8 +91,12 @@ const formatGun = (gun: string) => {
   return `${d}.${m}.${y}`;
 };
 
-const formatSaat = (tarih: Date) =>
-  `${String(tarih.getHours()).padStart(2, '0')}:${String(tarih.getMinutes()).padStart(2, '0')}`;
+const formatSaat = (tarih: Date | any): string => {
+  // Firestore Timestamp veya Date objesi olabilir
+  const d = tarih && typeof tarih.toDate === 'function' ? tarih.toDate() : tarih;
+  if (!d || typeof d.getHours !== 'function') return '—';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
 
 const getTipIcon = (tip: KasaHareketTipi): string =>
   ({
@@ -123,10 +127,11 @@ const kasaPrintPreviewYap = (params: {
   satislar: KasaSatisDetay[];
   tahsilatlar: KasaSatisDetay[];
   magazaStok: MagazaStokKaydi[];
+  stokHareketler: StokHareket[];
   magazaAdi: string;
   subeAdi: string;
 }) => {
-  const { kasaGun, satislar, tahsilatlar, magazaStok, magazaAdi, subeAdi } = params;
+  const { kasaGun, satislar, tahsilatlar, magazaStok, stokHareketler: stokLog, magazaAdi, subeAdi } = params;
   const tarih = formatGun(kasaGun.gun);
 
   const fTL = (n: number) =>
@@ -139,22 +144,44 @@ const kasaPrintPreviewYap = (params: {
   const toplamHavale = satislar.reduce((t, s) => t + (s.havaleTutar || 0), 0)
     + tahsilatlar.reduce((t, s) => t + (s.havaleTutar || 0), 0);
 
+  // Kart ve havale ödeme detayı metni oluştur
+  const odemeDetayi = (s: any): string => {
+    const parcalar: string[] = [];
+    if (s.nakitTutar > 0) parcalar.push(`Nakit: ${fTL(s.nakitTutar)}`);
+    if (s.kartOdemeler?.length > 0) {
+      s.kartOdemeler.forEach((k: any) => {
+        const taksit = k.taksitSayisi === 1 ? 'Tek Çekim' : `${k.taksitSayisi} Taksit`;
+        parcalar.push(`Kart (${k.banka || '?'}, ${taksit}): ${fTL(k.tutar)}`);
+      });
+    } else if (s.kartTutar > 0) {
+      parcalar.push(`Kart: ${fTL(s.kartTutar)}`);
+    }
+    if (s.havaleler?.length > 0) {
+      s.havaleler.forEach((h: any) => {
+        parcalar.push(`Havale (${h.banka || '?'}): ${fTL(h.tutar)}`);
+      });
+    } else if (s.havaleTutar > 0) {
+      parcalar.push(`Havale: ${fTL(s.havaleTutar)}`);
+    }
+    return parcalar.join(' + ');
+  };
+
   const satisRows = satislar.map(s => `
     <tr>
-      <td>${formatSaat(s.tarih)}</td><td>${s.satisKodu}</td><td>${s.musteriIsim}</td>
-      <td>${s.nakitTutar > 0 ? fTL(s.nakitTutar) : '—'}</td>
-      <td>${s.kartTutar > 0 ? fTL(s.kartTutar) : '—'}</td>
-      <td>${s.havaleTutar > 0 ? fTL(s.havaleTutar) : '—'}</td>
-      <td><strong>${fTL(s.tutar)}</strong></td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px">${formatSaat(s.tarih)}</td>
+      <td style="font-weight:600">${s.satisKodu}</td>
+      <td>${s.musteriIsim}</td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-weight:700">${fTL(s.tutar)}</td>
+      <td style="font-size:10px;color:#5f6368;max-width:220px">${odemeDetayi(s as any)}</td>
     </tr>`).join('');
 
   const tahsilatRows = tahsilatlar.map(s => `
     <tr>
-      <td>${s.satisTarihi ? formatGun(s.satisTarihi) : '—'}</td><td>${s.satisKodu}</td><td>${s.musteriIsim}</td>
-      <td>${s.nakitTutar !== 0 ? fTL(s.nakitTutar) : '—'}</td>
-      <td>${s.kartTutar !== 0 ? fTL(s.kartTutar) : '—'}</td>
-      <td>${s.havaleTutar !== 0 ? fTL(s.havaleTutar) : '—'}</td>
-      <td><strong>${fTL(s.nakitTutar + s.kartTutar + s.havaleTutar)}</strong></td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px">${s.satisTarihi ? formatGun(s.satisTarihi) : '—'}</td>
+      <td style="font-weight:600">${s.satisKodu}</td>
+      <td>${s.musteriIsim}</td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-weight:700">${fTL(s.nakitTutar + s.kartTutar + s.havaleTutar)}</td>
+      <td style="font-size:10px;color:#5f6368;max-width:220px">${odemeDetayi(s as any)}</td>
     </tr>`).join('');
 
   const stokRows = magazaStok.map(s => `
@@ -162,6 +189,17 @@ const kasaPrintPreviewYap = (params: {
       <td><strong>${s.urunKodu}</strong></td>
       <td>${s.urunAdi || '—'}</td>
       <td style="font-weight:700; color: ${s.adet > 0 ? '#16a34a' : '#dc2626'}">${s.adet} adet</td>
+    </tr>`).join('');
+
+  const stokLogRows = stokLog.map(h => `
+    <tr>
+      <td>${h.tarih instanceof Date ? formatSaat(h.tarih) : '—'}</td>
+      <td style="font-weight:700; color:${h.tip === 'GELEN' ? '#16a34a' : '#dc2626'}">${h.tip === 'GELEN' ? '📥 Gelen' : '📤 Çıkan'}</td>
+      <td><strong>${h.urunKodu}</strong></td>
+      <td>${h.urunAdi || '—'}</td>
+      <td style="font-weight:700; color:${h.tip === 'GELEN' ? '#16a34a' : '#dc2626'}">${h.tip === 'GELEN' ? '+' : '−'}${h.adet}</td>
+      <td>${h.musteriVeyaSatisKodu || '—'}</td>
+      <td>${h.not || '—'}</td>
     </tr>`).join('');
 
   const html = `<!DOCTYPE html>
@@ -181,6 +219,8 @@ const kasaPrintPreviewYap = (params: {
     .ozet-kart strong{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#202124}
     .ozet-kart.toplam{border-color:#009999}
     .ozet-kart.toplam strong{color:#009999}
+    .ozet-kart.gunsonu{border-color:#7c3aed}
+    .ozet-kart.gunsonu strong{color:#7c3aed}
     h2{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#5f6368;margin:14px 0 6px;border-bottom:1px solid #e0e0e0;padding-bottom:5px}
     table{width:100%;border-collapse:collapse;font-size:11px}
     th{background:#f5f5f5;padding:5px 7px;text-align:left;font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid #e0e0e0}
@@ -202,15 +242,39 @@ const kasaPrintPreviewYap = (params: {
     <div class="ozet-kart"><label>💸 Giderler</label><strong style="color:#dc2626">${fTL(kasaGun.toplamGider || 0)}</strong></div>
     <div class="ozet-kart"><label>📤 Çıkış</label><strong style="color:#d97706">${fTL((kasaGun.cikisYapilanPara || 0) + (kasaGun.adminAlimlar || 0))}</strong></div>
     <div class="ozet-kart toplam"><label>Toplam Tahsilat</label><strong>${fTL(toplamNakit + toplamKart + toplamHavale)}</strong></div>
+    <div class="ozet-kart gunsonu"><label>Gün Sonu Bakiyesi</label><strong>${fTL(kasaGun.gunSonuBakiyesi || 0)}</strong></div>
   </div>
 
+  <h2>💸 Günlük Giderler</h2>
+  ${(() => {
+    const giderler = (kasaGun.hareketler || []).filter(h => 
+      h.tip === KasaHareketTipi.GIDER || h.tip === KasaHareketTipi.DIGER
+    );
+    if (giderler.length === 0) return '<p style="color:#aaa;padding:8px 0">Bu gün gider kaydı yok.</p>';
+    const rows = giderler.map(h => {
+      const isGider = h.tip === KasaHareketTipi.GIDER;
+      return '<tr>' +
+        '<td style="font-family:IBM Plex Mono,monospace;font-size:11px">' + (h.saat || '—') + '</td>' +
+        '<td><span style="font-weight:700;color:' + (isGider ? '#dc2626' : '#5f6368') + '">' + (isGider ? '💸 Gider' : '📝 Diğer') + '</span></td>' +
+        '<td>' + (h.aciklama || '—') + '</td>' +
+        '<td style="font-size:10px;color:#888">' + (h.belgeNo || '—') + '</td>' +
+        '<td style="font-size:10px;color:#5f6368;font-style:italic">' + (h.not || '—') + '</td>' +
+        '<td style="font-family:IBM Plex Mono,monospace;font-weight:700;color:#dc2626">−' + fTL(h.tutar) + '</td>' +
+        '</tr>';
+    }).join('');
+    return '<table><thead><tr><th>Saat</th><th>Tip</th><th>Açıklama</th><th>Belge No</th><th>Not</th><th>Tutar</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  })()}
+
   <h2>🛒 Satışlar</h2>
-  ${satislar.length > 0 ? `<table><thead><tr><th>Saat</th><th>Satış Kodu</th><th>Müşteri</th><th>Nakit</th><th>Kart</th><th>Havale</th><th>Toplam</th></tr></thead><tbody>${satisRows}</tbody></table>` : '<p style="color:#aaa;padding:8px 0">Bu gün satış bulunamadı.</p>'}
+  ${satislar.length > 0 ? `<table><thead><tr><th>Saat</th><th>Satış Kodu</th><th>Müşteri</th><th>Toplam</th><th>Ödeme Detayı</th></tr></thead><tbody>${satisRows}</tbody></table>` : '<p style="color:#aaa;padding:8px 0">Bu gün satış bulunamadı.</p>'}
 
   <h2>💰 Tahsilatlar</h2>
-  ${tahsilatlar.length > 0 ? `<table><thead><tr><th>Satış Tarihi</th><th>Satış Kodu</th><th>Müşteri</th><th>Nakit</th><th>Kart</th><th>Havale</th><th>Toplam</th></tr></thead><tbody>${tahsilatRows}</tbody></table>` : '<p style="color:#aaa;padding:8px 0">Bu gün tahsilat bulunamadı.</p>'}
+  ${tahsilatlar.length > 0 ? `<table><thead><tr><th>Satış Tarihi</th><th>Satış Kodu</th><th>Müşteri</th><th>Toplam</th><th>Ödeme Detayı</th></tr></thead><tbody>${tahsilatRows}</tbody></table>` : '<p style="color:#aaa;padding:8px 0">Bu gün tahsilat bulunamadı.</p>'}
 
-  <h2>📦 Mağaza Stoğu</h2>
+  <h2>📦 Bugünkü Stok Hareketleri</h2>
+  ${stokLog.length > 0 ? `<table><thead><tr><th>Saat</th><th>Tip</th><th>Ürün Kodu</th><th>Ürün Adı</th><th>Adet</th><th>Müşteri/Satış</th><th>Not</th></tr></thead><tbody>${stokLogRows}</tbody></table>` : '<p style="color:#aaa;padding:8px 0">Bugün stok hareketi yapılmadı.</p>'}
+
+  <h2>🏪 Mağaza Stoğu (Güncel)</h2>
   ${magazaStok.length > 0 ? `<table><thead><tr><th>Ürün Kodu</th><th>Ürün Adı</th><th>Stok</th></tr></thead><tbody>${stokRows}</tbody></table>` : '<p style="color:#aaa;padding:8px 0">Stok kaydı bulunamadı.</p>'}
 
   <div class="footer">Rapor: ${new Date().toLocaleString('tr-TR')}</div>
@@ -432,15 +496,32 @@ const Kasa: React.FC = () => {
     setPrintYukleniyor(gun.gun);
     try {
       const sube = getSubeByKod(aktifSubeKodu as any);
-      const stokSnap = await getDocs(collection(db, `subeler/${sube?.dbPath}/magazaStok`));
-      const stokListe: MagazaStokKaydi[] = stokSnap.docs.map(d => ({ urunKodu: d.id, ...d.data() } as MagazaStokKaydi));
-      const [sat, tah] = await Promise.all([
+      const [stokSnap, sat, tah, stokHareketSnap] = await Promise.all([
+        getDocs(collection(db, `subeler/${sube?.dbPath}/magazaStok`)),
         getSatislar(aktifSubeKodu, 'bugun', gun.gun),
         getTahsilatlar(aktifSubeKodu, gun.gun),
+        getDocs(query(collection(db, `subeler/${sube?.dbPath}/stokHareketler`), where('gun', '==', gun.gun))),
       ]);
+      const stokListe: MagazaStokKaydi[] = stokSnap.docs.map(d => ({ urunKodu: d.id, ...d.data() } as MagazaStokKaydi));
+      const stokHareketListe: StokHareket[] = stokHareketSnap.docs.map(d => ({
+        id: d.id, ...d.data(), tarih: d.data().tarih?.toDate?.() ?? new Date(),
+      } as StokHareket));
+
+      // Satış ve tahsilatların kartOdemeler/havaleler detaylarını Firestore'dan çek
+      const tumSatisIds = [...sat.satislar, ...tah.tahsilatlar].map((s: any) => s.id).filter(Boolean);
+      const satisDetayMap: Record<string, any> = {};
+      await Promise.all(tumSatisIds.map(async (id: string) => {
+        const d = await getDoc(doc(db, `subeler/${sube?.dbPath}/satislar`, id));
+        if (d.exists()) satisDetayMap[id] = d.data();
+      }));
+
+      const satislarDetayli = sat.satislar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) }));
+      const tahsilatlarDetayli = tah.tahsilatlar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) }));
+
       kasaPrintPreviewYap({
-        kasaGun: gun, satislar: sat.satislar, tahsilatlar: tah.tahsilatlar,
-        magazaStok: stokListe, magazaAdi: 'Tüfekçi Home', subeAdi: sube?.ad || aktifSubeKodu,
+        kasaGun: gun, satislar: satislarDetayli, tahsilatlar: tahsilatlarDetayli,
+        magazaStok: stokListe, stokHareketler: stokHareketListe,
+        magazaAdi: 'Tüfekçi Home', subeAdi: sube?.ad || aktifSubeKodu,
       });
     } catch (err) {
       alert('❌ Çıktı hazırlanamadı: ' + (err as Error).message);
@@ -452,13 +533,33 @@ const Kasa: React.FC = () => {
     setPrintYukleniyor(kasaGun.gun);
     try {
       const sube = getSubeByKod(aktifSubeKodu as any);
-      const stokSnap = await getDocs(collection(db, `subeler/${sube?.dbPath}/magazaStok`));
+      const [stokSnap, sat, tah] = await Promise.all([
+        getDocs(collection(db, `subeler/${sube?.dbPath}/magazaStok`)),
+        satisOzet ?? getSatislar(aktifSubeKodu, 'bugun', kasaGun.gun),
+        tahsilatOzet ?? getTahsilatlar(aktifSubeKodu, kasaGun.gun),
+      ]);
       const stokListe: MagazaStokKaydi[] = stokSnap.docs.map(d => ({ urunKodu: d.id, ...d.data() } as MagazaStokKaydi));
-      const sat = satisOzet ?? await getSatislar(aktifSubeKodu, 'bugun', kasaGun.gun);
-      const tah = tahsilatOzet ?? await getTahsilatlar(aktifSubeKodu, kasaGun.gun);
+
+      // Satış ve tahsilatların kartOdemeler/havaleler detaylarını Firestore'dan çek
+      const tumSatisIds = [...sat.satislar, ...tah.tahsilatlar].map((s: any) => s.id).filter(Boolean);
+      const satisDetayMap: Record<string, any> = {};
+      await Promise.all(tumSatisIds.map(async (id: string) => {
+        const d = await getDoc(doc(db, `subeler/${sube?.dbPath}/satislar`, id));
+        if (d.exists()) satisDetayMap[id] = d.data();
+      }));
+
+      // Satışlara detay bilgilerini ekle
+      const satislarDetayli = sat.satislar.map((s: any) => ({
+        ...s, ...(satisDetayMap[s.id] || {}),
+      }));
+      const tahsilatlarDetayli = tah.tahsilatlar.map((s: any) => ({
+        ...s, ...(satisDetayMap[s.id] || {}),
+      }));
+
       kasaPrintPreviewYap({
-        kasaGun, satislar: sat.satislar, tahsilatlar: tah.tahsilatlar,
-        magazaStok: stokListe, magazaAdi: 'Tüfekçi Home', subeAdi: sube?.ad || aktifSubeKodu,
+        kasaGun, satislar: satislarDetayli, tahsilatlar: tahsilatlarDetayli,
+        magazaStok: stokListe, stokHareketler: stokHareketler,
+        magazaAdi: 'Tüfekçi Home', subeAdi: sube?.ad || aktifSubeKodu,
       });
     } catch (err) { alert('❌ Hata: ' + (err as Error).message); }
     finally { setPrintYukleniyor(null); }
@@ -546,9 +647,22 @@ const Kasa: React.FC = () => {
     if (stokTip === 'CIKAN' && !stokMustaeri.trim()) { setStokHata('Çıkan ürün için müşteri/satış kodu giriniz!'); return; }
     setStokHata('');
 
+<<<<<<< HEAD
     const subeKoduAnlik = aktifSubeKodu; // closure'dan kopyala
     const sube = getSubeByKod(subeKoduAnlik as any);
     if (!sube) { setStokHata('Şube bulunamadı!'); return; }
+=======
+    const subeKoduAnlik = aktifSubeKodu;
+    const sube = getSubeByKod(subeKoduAnlik as any);
+
+    // DEBUG — bunu görürsen hangi path kullanıldığını anlarsın
+    console.log('🔍 STOK DEBUG:', { subeKoduAnlik, sube, dbPath: sube?.dbPath });
+
+    if (!sube) {
+      setStokHata(`Şube bulunamadı! (kod: ${subeKoduAnlik})`);
+      return;
+    }
+>>>>>>> 95ed0f4640b50b20366f4ca2f294978926842c0a
 
     const kod = stokKod.trim().toUpperCase();
     const adAnlik = stokAd.trim();
@@ -576,11 +690,21 @@ const Kasa: React.FC = () => {
       });
 
       // 2. Kalıcı stok — runTransaction ile atomic güncelleme
+<<<<<<< HEAD
+=======
+      const magazaStokPath = `subeler/${sube.dbPath}/magazaStok`;
+      console.log('📦 magazaStok path:', magazaStokPath, '| kod:', kod);
+
+>>>>>>> 95ed0f4640b50b20366f4ca2f294978926842c0a
       await runTransaction(db, async (transaction) => {
         const mevcut = await transaction.get(stokRef);
         const mevcutAdet = mevcut.exists() ? (mevcut.data().adet ?? 0) : 0;
         const mevcutAd   = mevcut.exists() ? (mevcut.data().urunAdi ?? '') : '';
         const yeniAdet = tipAnlik === 'GELEN' ? mevcutAdet + adetAnlik : mevcutAdet - adetAnlik;
+<<<<<<< HEAD
+=======
+        console.log('💾 Transaction:', { mevcutAdet, yeniAdet, tipAnlik, adetAnlik });
+>>>>>>> 95ed0f4640b50b20366f4ca2f294978926842c0a
         transaction.set(stokRef, {
           urunKodu: kod,
           urunAdi: adAnlik || mevcutAd,

@@ -60,7 +60,7 @@ const Dashboard: React.FC = () => {
           } catch (err) { console.error(`${sube.ad} yüklenemedi:`, err); }
         }
       } else {
-        const sube = getSubeByKod(currentUser!.subeKodu);
+        const sube = getSubeByKod(currentUser!.subeKodu as SubeKodu);
         if (sube) {
           const snapshot = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`));
           snapshot.forEach(d => {
@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
 
   const iptalTalebiGonder = async (satis: SatisTeklifFormu) => {
     if (!satis.id) return;
-    const sube = getSubeByKod(satis.subeKodu);
+    const sube = getSubeByKod(satis.subeKodu as SubeKodu);
     if (!sube) return;
     setGuncellemeyorum(satis.id);
     try {
@@ -181,7 +181,7 @@ const Dashboard: React.FC = () => {
   const excelExport = () => {
     const data = filtreliSatislar.map(s => ({
       'Satış Kodu': s.satisKodu,
-      'Şube': getSubeByKod(s.subeKodu)?.ad || '',
+      'Şube': getSubeByKod(s.subeKodu as SubeKodu)?.ad || '',
       'Müşteri': s.musteriBilgileri?.isim || '',
       'Toplam Tutar': s.toplamTutar,
       'Kar/Zarar': s.zarar ?? 0,
@@ -234,7 +234,7 @@ const Dashboard: React.FC = () => {
 
   const onayDurumuToggle = async (satis: SatisTeklifFormu) => {
     if (!isAdmin || !satis.id) return;
-    const sube = getSubeByKod(satis.subeKodu);
+    const sube = getSubeByKod(satis.subeKodu as SubeKodu);
     if (!sube) return;
     setGuncellemeyorum(satis.id);
     try {
@@ -299,7 +299,7 @@ const Dashboard: React.FC = () => {
                       <div className="alarm-satir-sol">
                         <span className="alarm-satis-kodu">{s.satisKodu}</span>
                         <span className="alarm-musteri">{s.musteriBilgileri?.isim || '-'}</span>
-                        <span className="alarm-sube">{getSubeByKod(s.subeKodu)?.ad}</span>
+                        <span className="alarm-sube">{getSubeByKod(s.subeKodu as SubeKodu)?.ad}</span>
                       </div>
                       <div className="alarm-satir-sag">
                         <span className="alarm-tutar">{formatPrice(s.toplamTutar)}</span>
@@ -328,7 +328,7 @@ const Dashboard: React.FC = () => {
                       <div className="alarm-satir-sol">
                         <span className="alarm-satis-kodu">{s.satisKodu}</span>
                         <span className="alarm-musteri">{s.musteriBilgileri?.isim || '-'}</span>
-                        <span className="alarm-sube">{getSubeByKod(s.subeKodu)?.ad}</span>
+                        <span className="alarm-sube">{getSubeByKod(s.subeKodu as SubeKodu)?.ad}</span>
                       </div>
                       <div className="alarm-satir-sag">
                         <span className="alarm-tutar">{formatPrice(s.toplamTutar)}</span>
@@ -497,7 +497,7 @@ const Dashboard: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td>{getSubeByKod(satis.subeKodu)?.ad}</td>
+                      <td>{getSubeByKod(satis.subeKodu as SubeKodu)?.ad}</td>
                       <td>{satis.musteriBilgileri?.isim || '-'}</td>
                       <td><strong>{formatPrice(satis.toplamTutar)}</strong></td>
                       <td>
