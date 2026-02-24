@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { UserRole } from '../types/user';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, OdemeDurumu } from '../types/satis';
@@ -15,13 +14,18 @@ const BekleyenUrunlerPage: React.FC = () => {
   const [bekleyenSatislar, setBekleyenSatislar] = useState<SatisTeklifFormu[]>([]);
   const [loading, setLoading] = useState(true);
   const [islemYapiliyor, setIslemYapiliyor] = useState<string | null>(null);
+
+  // Admin: 'TUMU' veya şube kodu. Normal kullanıcı: kendi şubesi (değişmez)
   const [secilenSube, setSecilenSube] = useState<string>('TUMU');
-  
+
   // Modal state
   const [modalAcik, setModalAcik] = useState(false);
   const [seciliSatis, setSeciliSatis] = useState<SatisTeklifFormu | null>(null);
 
-  const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
+
+  // Normal kullanıcı için şube sabit — admin değiştirebilir
+  const aktifSubeFiltre = isAdmin ? secilenSube : (currentUser?.subeKodu ?? 'TUMU');
 
   useEffect(() => {
     if (!currentUser) { navigate('/login'); return; }
@@ -32,7 +36,10 @@ const BekleyenUrunlerPage: React.FC = () => {
     setLoading(true);
     try {
       const liste: SatisTeklifFormu[] = [];
-      const subelerToFetch = isAdmin
+
+      // Admin → tüm şubeler; normal kullanıcı → sadece kendi şubesi
+      const kullanicıAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
+      const subelerToFetch = kullanicıAdmin
         ? SUBELER
         : SUBELER.filter(s => s.kod === currentUser!.subeKodu);
 
@@ -45,10 +52,10 @@ const BekleyenUrunlerPage: React.FC = () => {
           const status = (data as any).satisStatusu;
           if (status === 'TESLIM_EDILDI' || status === 'ILERI_TESLIM_IPTAL') return;
 
-          // Onay bekleyenler (SADECE onayDurumu false olanlar)
+          // SADECE onayı bekleyenler
           if (data.onayDurumu !== false) return;
 
-          // SADECE M.A. teslim tarihi girilmişse listeye al
+          // SADECE M.A. teslim tarihi girilmişse
           if (!(data as any).ileriTeslimTarihi) return;
 
           liste.push({ id: d.id, ...data, subeKodu: sube.kod } as any);
@@ -69,197 +76,80 @@ const BekleyenUrunlerPage: React.FC = () => {
     }
   };
 
-  // ── Modal açma ──────────────────────────────────────────
+  // ── Filtrelenmiş liste (admin dropdown + normal kullanıcı sabit) ──────────
+  const filtreliSatislar = aktifSubeFiltre === 'TUMU'
+    ? bekleyenSatislar
+    : bekleyenSatislar.filter(s => s.subeKodu === aktifSubeFiltre);
+
+  // ── Modal ─────────────────────────────────────────────────────────────────
   const onayModalAc = (satis: SatisTeklifFormu) => {
     setSeciliSatis(satis);
     setModalAcik(true);
   };
 
-// ── Onayla işlemi (Evet) ────────────────────────────────
-const handleOnayla = async () => {
-  if (!isAdmin) {
+  // ── Onayla ───────────────────────────────────────────────────────────────
+  const handleOnayla = async () => {
+    if (!isAdmin || !seciliSatis) { setModalAcik(false); setSeciliSatis(null); return; }
+    const satis = seciliSatis;
+    if (!satis.id || !satis.subeKodu) { alert('❌ Satış veya şube bilgisi eksik!'); setModalAcik(false); setSeciliSatis(null); return; }
+    const sube = getSubeByKod(satis.subeKodu);
+    if (!sube?.dbPath) { alert('❌ Şube bulunamadı!'); setModalAcik(false); setSeciliSatis(null); return; }
+
+    const satisId: string = satis.id;
+    setIslemYapiliyor(satisId);
     setModalAcik(false);
-    setSeciliSatis(null);
-    return;
-  }
+    try {
+      await updateDoc(doc(db, 'subeler', sube.dbPath, 'satislar', satisId), {
+        onayDurumu: true,
+        satisStatusu: 'ONAYLANDI',
+        guncellemeTarihi: new Date()
+      });
+      setBekleyenSatislar(prev => prev.filter(s => s.id !== satisId));
+      alert('✅ Satış onaylandı!');
+    } catch { alert('❌ Onaylama başarısız!'); }
+    finally { setIslemYapiliyor(null); setSeciliSatis(null); }
+  };
 
-  if (!seciliSatis) {
-    setModalAcik(false);
-    setSeciliSatis(null);
-    return;
-  }
+  // ── İleri Teslimden Çıkar ─────────────────────────────────────────────────
+  const handleIleriTeslimdenCikar = async (satis: SatisTeklifFormu) => {
+    if (!isAdmin || !satis.id || !satis.subeKodu) return;
+    const sube = getSubeByKod(satis.subeKodu);
+    if (!sube?.dbPath) { alert('❌ Şube bulunamadı!'); return; }
+    if (!window.confirm(`"${satis.satisKodu}" ileri teslim listesinden çıkarılsın mı?`)) return;
 
-  const satis = seciliSatis;
-  
-  // ID kontrolü - KESİN ÇÖZÜM
-  if (!satis.id) {
-    alert('❌ Satış ID bulunamadı!');
-    setModalAcik(false);
-    setSeciliSatis(null);
-    return;
-  }
+    const satisId: string = satis.id;
+    setIslemYapiliyor(satisId);
+    try {
+      await updateDoc(doc(db, 'subeler', sube.dbPath, 'satislar', satisId), {
+        satisStatusu: 'ILERI_TESLIM_IPTAL',
+        ileriTeslimTarihi: null,
+        guncellemeTarihi: new Date()
+      });
+      setBekleyenSatislar(prev => prev.filter(s => s.id !== satisId));
+    } catch { alert('❌ İşlem başarısız!'); }
+    finally { setIslemYapiliyor(null); }
+  };
 
-  // subeKodu kontrolü
-  if (!satis.subeKodu) {
-    alert('❌ Şube kodu bulunamadı!');
-    setModalAcik(false);
-    setSeciliSatis(null);
-    return;
-  }
+  // ── Teslim Edildi ─────────────────────────────────────────────────────────
+  const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
+    if (!isAdmin || !satis.id || !satis.subeKodu) return;
+    const sube = getSubeByKod(satis.subeKodu);
+    if (!sube?.dbPath) { alert('❌ Şube bulunamadı!'); return; }
 
-  const sube = getSubeByKod(satis.subeKodu);
-  
-  // sube ve dbPath kontrolü - KESİN ÇÖZÜM
-  if (!sube) {
-    alert('❌ Şube bulunamadı!');
-    setModalAcik(false);
-    setSeciliSatis(null);
-    return;
-  }
+    const satisId: string = satis.id;
+    setIslemYapiliyor(satisId);
+    try {
+      await updateDoc(doc(db, 'subeler', sube.dbPath, 'satislar', satisId), {
+        satisStatusu: 'TESLIM_EDILDI',
+        teslimEdildiMi: true,
+        guncellemeTarihi: new Date()
+      });
+      setBekleyenSatislar(prev => prev.filter(s => s.id !== satisId));
+    } catch { alert('❌ İşlem başarısız!'); }
+    finally { setIslemYapiliyor(null); }
+  };
 
-  if (!sube.dbPath) {
-    alert('❌ Şube dbPath bulunamadı!');
-    setModalAcik(false);
-    setSeciliSatis(null);
-    return;
-  }
-
-  // Artık KESİN olarak string olduğunu biliyoruz
-  const satisId: string = satis.id;
-  const dbPath: string = sube.dbPath;
-
-  setIslemYapiliyor(satisId);
-  setModalAcik(false);
-
-  try {
-    // Firestore path'i güvenli bir şekilde oluştur
-    const docRef = doc(db, 'subeler', dbPath, 'satislar', satisId);
-    
-    await updateDoc(docRef, {
-      onayDurumu: true,
-      satisStatusu: 'ONAYLANDI',
-      guncellemeTarihi: new Date()
-    });
-
-    // Satışı listeden kaldır
-    setBekleyenSatislar(prev => prev.filter(s => s.id !== satisId));
-
-    // Bildirim göster
-    alert('✅ Satış onaylandı ve ileri teslimden çıkarıldı!');
-  } catch (error) {
-    console.error('Onaylama hatası:', error);
-    alert('❌ Onaylama başarısız!');
-  } finally {
-    setIslemYapiliyor(null);
-    setSeciliSatis(null);
-  }
-};
-
-// ── İleri Teslimden Çıkar ────────────────────────────────────────
-const handleIleriTeslimdenCikar = async (satis: SatisTeklifFormu) => {
-  if (!isAdmin) return;
-  
-  // ID kontrolü
-  if (!satis.id) {
-    alert('❌ Satış ID bulunamadı!');
-    return;
-  }
-
-  // subeKodu kontrolü
-  if (!satis.subeKodu) {
-    alert('❌ Şube kodu bulunamadı!');
-    return;
-  }
-
-  const sube = getSubeByKod(satis.subeKodu);
-  
-  // sube ve dbPath kontrolü
-  if (!sube) {
-    alert('❌ Şube bulunamadı!');
-    return;
-  }
-
-  if (!sube.dbPath) {
-    alert('❌ Şube dbPath bulunamadı!');
-    return;
-  }
-
-  if (!window.confirm(`"${satis.satisKodu}" satışını İleri Teslim listesinden çıkarmak istiyor musunuz?`)) return;
-
-  // Artık KESİN olarak string olduğunu biliyoruz
-  const satisId: string = satis.id;
-  const dbPath: string = sube.dbPath;
-
-  setIslemYapiliyor(satisId);
-  try {
-    const docRef = doc(db, 'subeler', dbPath, 'satislar', satisId);
-    
-    await updateDoc(docRef, {
-      satisStatusu: 'ILERI_TESLIM_IPTAL',
-      ileriTeslimTarihi: null,
-      guncellemeTarihi: new Date()
-    });
-    setBekleyenSatislar(prev => prev.filter(s => s.id !== satisId));
-  } catch (error) {
-    console.error('Çıkarma hatası:', error);
-    alert('❌ İşlem başarısız!');
-  } finally {
-    setIslemYapiliyor(null);
-  }
-};
-
-// ── Teslim Edildi ────────────────────────────────────────────────
-const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
-  if (!isAdmin) return;
-  
-  // ID kontrolü
-  if (!satis.id) {
-    alert('❌ Satış ID bulunamadı!');
-    return;
-  }
-
-  // subeKodu kontrolü
-  if (!satis.subeKodu) {
-    alert('❌ Şube kodu bulunamadı!');
-    return;
-  }
-
-  const sube = getSubeByKod(satis.subeKodu);
-  
-  // sube ve dbPath kontrolü
-  if (!sube) {
-    alert('❌ Şube bulunamadı!');
-    return;
-  }
-
-  if (!sube.dbPath) {
-    alert('❌ Şube dbPath bulunamadı!');
-    return;
-  }
-
-  // Artık KESİN olarak string olduğunu biliyoruz
-  const satisId: string = satis.id;
-  const dbPath: string = sube.dbPath;
-
-  setIslemYapiliyor(satisId);
-  try {
-    const docRef = doc(db, 'subeler', dbPath, 'satislar', satisId);
-    
-    await updateDoc(docRef, {
-      satisStatusu: 'TESLIM_EDILDI',
-      teslimEdildiMi: true,
-      guncellemeTarihi: new Date()
-    });
-    setBekleyenSatislar(prev => prev.filter(s => s.id !== satisId));
-  } catch (error) {
-    console.error('Teslim hatası:', error);
-    alert('❌ İşlem başarısız!');
-  } finally {
-    setIslemYapiliyor(null);
-  }
-};
-
-  // ── Yardımcılar ──────────────────────────────────────────────────
+  // ── Yardımcılar ───────────────────────────────────────────────────────────
   const toDate = (d: any): Date => d?.toDate ? d.toDate() : new Date(d || 0);
 
   const formatDate = (date: any) => {
@@ -270,9 +160,7 @@ const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
 
   const formatPrice = (n: number | undefined) => {
     if (!n) return '₺0';
-    return new Intl.NumberFormat('tr-TR', {
-      style: 'currency', currency: 'TRY', maximumFractionDigits: 0
-    }).format(n);
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n);
   };
 
   const getSubeAdi = (kod: string) => SUBELER.find(s => s.kod === kod)?.ad || kod;
@@ -286,9 +174,11 @@ const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
     return 'normal';
   };
 
-  const filtreliSatislar = secilenSube === 'TUMU'
-    ? bekleyenSatislar
-    : bekleyenSatislar.filter(s => s.subeKodu === secilenSube);
+  // Şube sayaçları (admin için dropdown badge'leri)
+  const subeSayac = (kod: string) =>
+    kod === 'TUMU'
+      ? bekleyenSatislar.length
+      : bekleyenSatislar.filter(s => s.subeKodu === kod).length;
 
   const yenileBtn = (
     <button onClick={fetchIleriTeslimler} className="bu-btn-yenile" title="Yenile">
@@ -299,28 +189,51 @@ const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
   return (
     <Layout pageTitle={`İleri Teslim (${filtreliSatislar.length})`} headerExtra={yenileBtn}>
 
-      {/* FİLTRE — sadece admin */}
+      {/* ── ŞUBe FİLTRE BARI — sadece admin ─────────────────────────────── */}
       {isAdmin && (
-        <div className="bu-filtre-bar">
-          <button
-            className={`filter-btn ${secilenSube === 'TUMU' ? 'active' : ''}`}
-            onClick={() => setSecilenSube('TUMU')}
-          >
-            Tümü ({bekleyenSatislar.length})
-          </button>
-          {SUBELER.map(s => (
-            <button
-              key={s.kod}
-              className={`filter-btn ${secilenSube === s.kod ? 'active' : ''}`}
-              onClick={() => setSecilenSube(s.kod)}
+        <div className="bu-filtre-bar" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0 8px', flexWrap: 'wrap' }}>
+
+          {/* Dropdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#5f6368', whiteSpace: 'nowrap' }}>
+              🏪 Şube:
+            </label>
+            <select
+              value={secilenSube}
+              onChange={e => setSecilenSube(e.target.value)}
+              style={{
+                fontSize: 13, fontWeight: 600, padding: '6px 12px',
+                border: '1.5px solid #e0e0e0', borderRadius: 8,
+                background: '#fff', color: '#1a1a1a', cursor: 'pointer',
+                minWidth: 180,
+              }}
             >
-              {s.ad} ({bekleyenSatislar.filter(x => x.subeKodu === s.kod).length})
-            </button>
-          ))}
+              <option value="TUMU">Tüm Şubeler ({subeSayac('TUMU')})</option>
+              {SUBELER.map(s => (
+                <option key={s.kod} value={s.kod}>
+                  {s.ad} ({subeSayac(s.kod)})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Özet sayaçlar */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {bekleyenSatislar.filter(s => getTeslimDurum(s) === 'gecmis').length > 0 && (
+              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: '#fee2e2', color: '#dc2626', fontWeight: 700 }}>
+                ⚠ {bekleyenSatislar.filter(s => getTeslimDurum(s) === 'gecmis').length} gecikmiş
+              </span>
+            )}
+            {bekleyenSatislar.filter(s => getTeslimDurum(s) === 'yakin').length > 0 && (
+              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: '#fffbeb', color: '#d97706', fontWeight: 700 }}>
+                🔔 {bekleyenSatislar.filter(s => getTeslimDurum(s) === 'yakin').length} yaklaşıyor
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ONAY MODAL */}
+      {/* ── ONAY MODAL ────────────────────────────────────────────────────── */}
       {modalAcik && (
         <div className="modal-overlay" onClick={() => setModalAcik(false)}>
           <div className="modal-container" onClick={e => e.stopPropagation()}>
@@ -331,37 +244,32 @@ const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
             <div className="modal-body">
               <p>İşlemi gerçekleştirmek istediğinize emin misiniz?</p>
               {seciliSatis && (
-                <div style={{
-                  background: '#f8f9fa',
-                  padding: 12,
-                  borderRadius: 8,
-                  marginTop: 8,
-                  fontSize: 13
-                }}>
+                <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, marginTop: 8, fontSize: 13 }}>
                   <div><strong>Satış Kodu:</strong> {seciliSatis.satisKodu}</div>
                   <div><strong>Müşteri:</strong> {seciliSatis.musteriBilgileri?.isim || '-'}</div>
+                  <div><strong>Şube:</strong> {getSubeAdi(seciliSatis.subeKodu)}</div>
                 </div>
               )}
             </div>
             <div className="modal-footer">
-              <button className="modal-btn modal-btn-hayir" onClick={() => setModalAcik(false)}>
-                Hayır
-              </button>
-              <button className="modal-btn modal-btn-evet" onClick={handleOnayla}>
-                Evet
-              </button>
+              <button className="modal-btn modal-btn-hayir" onClick={() => setModalAcik(false)}>Hayır</button>
+              <button className="modal-btn modal-btn-evet" onClick={handleOnayla}>Evet</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* İÇERİK */}
+      {/* ── İÇERİK ────────────────────────────────────────────────────────── */}
       {loading ? (
         <div className="loading">Yükleniyor...</div>
       ) : filtreliSatislar.length === 0 ? (
         <div className="empty-state">
           <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-          <p>İleri teslim bekleyen satış bulunmuyor!</p>
+          <p>
+            {aktifSubeFiltre === 'TUMU'
+              ? 'İleri teslim bekleyen satış bulunmuyor!'
+              : `${getSubeAdi(aktifSubeFiltre)} şubesinde ileri teslim yok.`}
+          </p>
           <small style={{ color: '#80868b' }}>Tüm ileri teslimler tamamlandı.</small>
         </div>
       ) : (
@@ -378,7 +286,19 @@ const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
                     <h3 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 14 }}>
                       {satis.satisKodu}
                     </h3>
-                    <p className="urun-kod">{getSubeAdi(satis.subeKodu)}</p>
+                    {/* Şube adı — admin "Tümü" seçince hangi şube olduğu belli olsun */}
+                    <p className="urun-kod" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {getSubeAdi(satis.subeKodu)}
+                      {isAdmin && aktifSubeFiltre === 'TUMU' && (
+                        <span style={{
+                          fontSize: 9, padding: '1px 7px', borderRadius: 10,
+                          background: '#e8f4fd', color: '#1565c0',
+                          fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase'
+                        }}>
+                          {satis.subeKodu}
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     {teslimDurum === 'gecmis' && <span className="durum-badge orange">⚠ TESLİM GEÇTİ</span>}
@@ -463,14 +383,10 @@ const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
                   )}
                 </div>
 
-                {/* BUTONLAR - Admin için Onayla butonu eklendi */}
-                <div className="card-actions" style={{ 
-                  display: 'flex', 
-                  justifyContent: 'flex-end', 
-                  gap: 8, 
-                  marginTop: 16,
-                  borderTop: '1px solid #f0f0f0',
-                  paddingTop: 16
+                {/* BUTONLAR */}
+                <div className="card-actions" style={{
+                  display: 'flex', justifyContent: 'flex-end', gap: 8,
+                  marginTop: 16, borderTop: '1px solid #f0f0f0', paddingTop: 16
                 }}>
                   <button
                     className="btn-durum hazir"
@@ -481,25 +397,13 @@ const handleTeslimEdildi = async (satis: SatisTeklifFormu) => {
                   </button>
                   {isAdmin && (
                     <>
-                      <button
-                        className="btn-durum teslim"
-                        onClick={() => handleTeslimEdildi(satis)}
-                        disabled={yukleniyor}
-                      >
+                      <button className="btn-durum teslim" onClick={() => handleTeslimEdildi(satis)} disabled={yukleniyor}>
                         {yukleniyor ? '...' : '✓ Teslim Edildi'}
                       </button>
-                      <button
-                        className="btn-durum onayla"
-                        onClick={() => onayModalAc(satis)}
-                        disabled={yukleniyor}
-                      >
+                      <button className="btn-durum onayla" onClick={() => onayModalAc(satis)} disabled={yukleniyor}>
                         {yukleniyor ? '...' : '✓ Onayla'}
                       </button>
-                      <button
-                        className="btn-durum cikar"
-                        onClick={() => handleIleriTeslimdenCikar(satis)}
-                        disabled={yukleniyor}
-                      >
+                      <button className="btn-durum cikar" onClick={() => handleIleriTeslimdenCikar(satis)} disabled={yukleniyor}>
                         {yukleniyor ? '...' : '✕ Listeden Çıkar'}
                       </button>
                     </>

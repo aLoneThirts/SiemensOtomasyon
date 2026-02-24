@@ -54,23 +54,49 @@ const SatisDetayPage: React.FC = () => {
     return satis.kampanyalar.reduce((sum: number, k: any) => sum + (k.tutar || 0), 0);
   };
 
+  // ✅ Snapshot'tan oku — yoksa alisFiyati/bip'e düş (geriye dönük uyumlu)
+  const urunAlis = (u: any): number => u.alisFiyatSnapshot ?? u.alisFiyati ?? 0;
+  const urunBip  = (u: any): number => u.bipSnapshot    ?? u.bip         ?? 0;
+
   const alisToplamHesapla = () => {
     if (!satis?.urunler) return 0;
-    return satis.urunler.reduce((sum, u) => sum + (u.adet * u.alisFiyati), 0);
+    return satis.urunler.reduce((sum, u) => sum + (u.adet * urunAlis(u)), 0);
   };
 
   const bipToplamHesapla = () => {
     if (!satis?.urunler) return 0;
-    return satis.urunler.reduce((sum, u) => sum + ((u.bip || 0) * u.adet), 0);
+    return satis.urunler.reduce((sum, u) => sum + (urunBip(u) * u.adet), 0);
   };
 
   const yesilEtiketToplamHesapla = () =>
     satis?.yesilEtiketler?.reduce((sum, e) => sum + (e.tutar || 0), 0) || 0;
 
-  // Toplam Maliyet = Alış − BİP − Kampanya (yeşil etiketin etkisi yok)
+  // ✅ Normal Toplam Maliyet: SADECE alış × adet kullanılır.
+  // Yeşil etiket özel fiyatı bu hesaba HİÇ girmez.
+  // Formül: Σ(tüm ürün alış × adet) − Σ(tüm ürün BİP × adet) − kampanya
   const toplamMaliyetHesapla = () => {
     if (!satis) return 0;
     return Math.max(0, alisToplamHesapla() - bipToplamHesapla() - kampanyaToplamiHesapla());
+  };
+
+  // ✅ Yeşil Etiket Kontrol Maliyeti: SADECE bilgi amaçlı, ayrı alan.
+  // Yeşil ürünlerde alış yerine özel fiyat kullanılır.
+  // Bu değer kâr/zarar hesabına KARIŞMAZ.
+  const yesilEtiketKontrolMaliyeti = () => {
+    if (!satis) return 0;
+    const yesilEtiketler: YesilEtiket[] = satis.yesilEtiketler || [];
+    if (yesilEtiketler.length === 0) return 0;
+    const yesilKodlar = new Set(
+      yesilEtiketler.map(e => (e.urunKodu || '').trim().toLowerCase())
+    );
+    // Yeşil olmayan ürünlerin alış toplamı
+    const normalAlis = (satis.urunler || [])
+      .filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase()))
+      .reduce((s: number, u: any) => s + urunAlis(u) * u.adet, 0);
+    // Yeşil ürünlerin özel fiyat toplamı
+    const yesilOzel = yesilEtiketler.reduce((s, e) => s + (e.tutar || 0), 0);
+    // Kontrol maliyeti = yeşil özel + normal alış − BİP − kampanya
+    return Math.max(0, yesilOzel + normalAlis - bipToplamHesapla() - kampanyaToplamiHesapla());
   };
 
   const satisTutariHesapla = () => {
@@ -167,7 +193,6 @@ const SatisDetayPage: React.FC = () => {
               <div className="etiket">SATIŞ BİLGİLERİ</div>
               <div className="bilgi">MÜŞTERİ TEMSİLCİSİ: {satis.musteriTemsilcisi}</div>
               {satis.musteriTemsilcisiTel && <div className="bilgi">TEL: {satis.musteriTemsilcisiTel}</div>}
-              {/* ✅ İleri Teslim tarihi görüntüleme */}
               {(satis as any).ileriTeslim && (satis as any).ileriTeslimTarihi && (
                 <div className="bilgi" style={{ marginTop: 4, color: '#0369a1', fontWeight: 600 }}>
                   M.A. TESLİM TARİHİ: {formatDate((satis as any).ileriTeslimTarihi)}
@@ -190,32 +215,17 @@ const SatisDetayPage: React.FC = () => {
               <div className="satir-item">ADRES: {satis.musteriBilgileri?.adres}</div>
             </div>
             <div className="sag-kolon">
-              {/* ✅ MARS NO - tüm formatları destekler */}
               {(() => {
-                // Tüm mars girişlerini topla (marsGirisleri array, yeniMarsNo, marsNo)
                 const marsGirisleri: any[] = (satis as any).marsGirisleri;
-
                 let tumMarslar: { marsNo: string; tarih: any }[] = [];
-
                 if (marsGirisleri && marsGirisleri.length > 0) {
-                  // Yeni format: marsGirisleri array'i var
-                  tumMarslar = marsGirisleri
-                    .filter((g: any) => g.marsNo)
-                    .map((g: any) => ({ marsNo: g.marsNo, tarih: g.teslimatTarihi }));
+                  tumMarslar = marsGirisleri.filter((g: any) => g.marsNo).map((g: any) => ({ marsNo: g.marsNo, tarih: g.teslimatTarihi }));
                 } else {
-                  // Eski format: marsNo + yeniMarsNo ayrı field'lar
                   if (satis.marsNo) tumMarslar.push({ marsNo: satis.marsNo, tarih: satis.teslimatTarihi });
                   if ((satis as any).yeniMarsNo) tumMarslar.push({ marsNo: (satis as any).yeniMarsNo, tarih: (satis as any).yeniTeslimatTarihi });
                 }
-
-                const marsNoStr = tumMarslar.length > 0
-                  ? tumMarslar.map(m => m.marsNo).join(' - ')
-                  : '-';
-
-                const tarihStr = tumMarslar.length > 0
-                  ? tumMarslar.map(m => m.tarih ? formatDate(m.tarih) : '-').join(' - ')
-                  : '-';
-
+                const marsNoStr = tumMarslar.length > 0 ? tumMarslar.map(m => m.marsNo).join(' - ') : '-';
+                const tarihStr = tumMarslar.length > 0 ? tumMarslar.map(m => m.tarih ? formatDate(m.tarih) : '-').join(' - ') : '-';
                 return (
                   <>
                     <div className="satir-item">MARS NO: {marsNoStr}</div>
@@ -242,12 +252,17 @@ const SatisDetayPage: React.FC = () => {
               </thead>
               <tbody>
                 {satis.urunler && satis.urunler.length > 0 ? (
-                  satis.urunler.map((urun, index) => (
+                  satis.urunler.map((urun: any, index) => (
                     <tr key={index}>
                       <td>{urun.kod}</td>
                       <td>{urun.adet}</td>
-                      <td>{formatPrice(urun.alisFiyati)}</td>
-                      <td>{urun.bip ? formatPrice(urun.bip) : '-'}</td>
+                      <td>
+                        {formatPrice(urunAlis(urun))}
+                        {urun.alisFiyatSnapshot !== undefined && urun.alisFiyatSnapshot !== urun.alisFiyati && (
+                          <span style={{ fontSize: 9, color: '#9ca3af', marginLeft: 4 }}>📷</span>
+                        )}
+                      </td>
+                      <td>{urunBip(urun) ? formatPrice(urunBip(urun)) : '-'}</td>
                     </tr>
                   ))
                 ) : (
@@ -261,7 +276,6 @@ const SatisDetayPage: React.FC = () => {
               </tbody>
             </table>
 
-            {/* Satış tutarı ve maliyet özeti */}
             <div className="toplam-alan" style={{ borderTop: '2px solid #e5e7eb', marginTop: 4 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
                 <span>SATIŞ TUTARI:</span>
@@ -277,14 +291,12 @@ const SatisDetayPage: React.FC = () => {
                   <span>−{formatPrice(kampanyaToplamiHesapla())}</span>
                 </div>
               )}
-
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontWeight: 700, borderTop: '1px solid #e5e7eb', marginTop: 4 }}>
                 <span>TOPLAM MALİYET:</span>
                 <span>{formatPrice(toplamMaliyetHesapla())}</span>
               </div>
             </div>
 
-            {/* Kâr/zarar */}
             <div style={{
               margin: '8px 0', padding: '8px 12px', borderRadius: 6, fontWeight: 700,
               background: karZararHesapla() >= 0 ? '#dcfce7' : '#fee2e2',
@@ -336,7 +348,7 @@ const SatisDetayPage: React.FC = () => {
                 <>
                   <table className="etiket-tablo">
                     <thead>
-                      <tr><th>ÜRÜN KODU</th><th>TUTAR</th></tr>
+                      <tr><th>ÜRÜN KODU</th><th>ÖZEL FİYAT</th></tr>
                     </thead>
                     <tbody>
                       {satis.yesilEtiketler.map((etiket: YesilEtiket, i: number) => (
@@ -345,16 +357,27 @@ const SatisDetayPage: React.FC = () => {
                     </tbody>
                   </table>
                   {(() => {
-                    const yesilKodlar = new Set(satis.yesilEtiketler!.map(e => e.urunKodu?.trim().toLowerCase()));
-                    const normalMaliyet = (satis.urunler || [])
-                      .filter(u => !yesilKodlar.has(u.kod?.trim().toLowerCase()))
-                      .reduce((s, u) => s + u.alisFiyati * u.adet, 0);
-                    const genelToplam = normalMaliyet + yesilEtiketToplamHesapla();
+                    // ✅ Yeşil Etiket Kontrol Maliyeti (bilgi amaçlı, kâr/zarara karışmaz)
+                    const yesilKodlar2 = new Set(
+                      satis.yesilEtiketler!.map(e => (e.urunKodu || '').trim().toLowerCase())
+                    );
+                    const normalAlis2 = (satis.urunler || [])
+                      .filter(u => !yesilKodlar2.has((u.kod || '').trim().toLowerCase()))
+                      .reduce((s: number, u: any) => s + urunAlis(u) * u.adet, 0);
+                    const yesilOzel2 = satis.yesilEtiketler!.reduce((s, e) => s + (e.tutar || 0), 0);
+                    const kontrolMaliyet = Math.max(0, yesilOzel2 + normalAlis2 - bipToplamHesapla() - kampanyaToplamiHesapla());
+
                     return (
                       <div className="etiket-toplam">
-                        TOPLAM: {formatPrice(genelToplam)}
-                        <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 400, marginTop: 2 }}>
-                          Normal: {formatPrice(normalMaliyet)} + Yeşil: {formatPrice(yesilEtiketToplamHesapla())}
+                        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4, fontWeight: 400 }}>
+                          ℹ️ Bilgi amaçlı — Kâr/zarar hesabını etkilemez
+                        </div>
+                        YEŞİL ETİKET MALİYETİ: {formatPrice(kontrolMaliyet)}
+                        <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 400, marginTop: 4, lineHeight: 1.5 }}>
+                          Yeşil özel: {formatPrice(yesilOzel2)}
+                          {normalAlis2 > 0 && <> + Normal alış: {formatPrice(normalAlis2)}</>}
+                          {bipToplamHesapla() > 0 && <> − BİP: {formatPrice(bipToplamHesapla())}</>}
+                          {kampanyaToplamiHesapla() > 0 && <> − Kampanya: {formatPrice(kampanyaToplamiHesapla())}</>}
                         </div>
                       </div>
                     );
@@ -432,9 +455,8 @@ const SatisDetayPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Notlar + Onay yan yana */}
+        {/* Notlar + Onay */}
         <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
-          {/* Notlar kutusu */}
           <div className="mavi-cerceve" style={{ flex: 1, minHeight: 80 }}>
             <div style={{ fontWeight: 700, fontSize: 13, letterSpacing: 1, color: '#1e40af', marginBottom: 8, textTransform: 'uppercase' }}>
               📝 NOTLAR
@@ -448,7 +470,6 @@ const SatisDetayPage: React.FC = () => {
             )}
           </div>
 
-          {/* Onay kutusu */}
           <div className="mavi-cerceve" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div className="onay-metin" style={{ fontSize: 13 }}>ONAY: {satis.onayDurumu ? 'ONAYLANDI' : 'ONAY BEKLİYOR'}</div>
             <div className="imza-metin" style={{ fontSize: 12 }}>İMZA: __________________</div>

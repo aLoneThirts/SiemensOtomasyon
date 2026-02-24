@@ -7,7 +7,8 @@ import { getSubeByKod } from '../types/sube';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import './SatisDuzenle.css';
-import { kasaIptalKaydiOlustur } from '../services/kasaIptalService';
+// ✅ v6: kasaTahsilatEkle + kasaIadeEkle (kasaIptalService artık kullanılmıyor)
+import { kasaTahsilatEkle, kasaIadeEkle } from '../services/kasaService';
 
 interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: boolean; subeKodu: string; tutar?: number; }
 interface YesilEtiketAdmin { id?: string; urunKodu: string; urunTuru?: string; maliyet: number; aciklama?: string; }
@@ -15,6 +16,12 @@ interface MarsGirisi { marsNo: string; teslimatTarihi: string; etiket: string; }
 
 const MAX_MARS = 4;
 const HAVALE_BANKALARI = ['Ziraat Bankası','Halkbank','Vakıfbank','İş Bankası','Garanti BBVA','Yapı Kredi','Akbank','QNB Finansbank','Denizbank','TEB','ING Bank','HSBC','Şekerbank','Fibabanka','Alternatifbank'];
+
+// ─── Tarih yardımcıları ───────────────────────────────────────────────────────
+const bugunStr = (): string => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+};
 
 const SatisDuzenlePage: React.FC = () => {
   const { subeKodu, id } = useParams<{ subeKodu: string; id: string }>();
@@ -32,6 +39,11 @@ const SatisDuzenlePage: React.FC = () => {
   const [kesintiCache, setKesintiCache] = useState<Record<string, Record<string, number>>>({});
   const [manuelSatisTutari, setManuelSatisTutari] = useState<number | null>(null);
 
+  // ✅ Orijinal ödeme değerlerini sakla (diff için)
+  const [orijinalPesinatlar, setOrijinalPesinatlar] = useState<{ id: string; tutar: number; aciklama: string }[]>([]);
+  const [orijinalHavaleler, setOrijinalHavaleler] = useState<{ id: string; tutar: number; banka: string }[]>([]);
+  const [orijinalKartOdemeler, setOrijinalKartOdemeler] = useState<KartOdeme[]>([]);
+
   const [faturaNo, setFaturaNo] = useState('');
   const [servisNotu, setServisNotu] = useState('');
   const [marsListesi, setMarsListesi] = useState<MarsGirisi[]>([]);
@@ -48,26 +60,66 @@ const SatisDuzenlePage: React.FC = () => {
   const [iptalIslemYapiliyor, setIptalIslemYapiliyor] = useState(false);
   const [iptaldenCikarStatusu, setIptaldenCikarStatusu] = useState<'BEKLEMEDE' | 'ONAYLI'>('BEKLEMEDE');
 
+  // ✅ İade popup state'i
+  const [iadePopup, setIadePopup] = useState(false);
+
   const isIptal = (satis as any)?.satisDurumu === 'IPTAL';
   const iptalTalebiVar = !isIptal && (satis as any)?.iptalTalebi === true;
+  const iadeDurumu: string | undefined = (satis as any)?.iadeDurumu;
 
   const etiketAd = (index: number) => ['Orijinal', '2. Sipariş', '3. Sipariş', '4. Sipariş'][index] || `${index + 1}. Sipariş`;
   const formatPrice = (price: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(price);
 
+  // ─── Banka adı normalize (Türkçe karakter + boşluk) ──────────────────────
+  const normalizeBanka = (s: string): string =>
+    s.toLowerCase()
+      .replace(/i̇/g, 'i').replace(/ı/g, 'i').replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c')
+      .replace(/\s+/g, '').trim();
+
   const kesintiCacheYukle = async () => {
     try {
       const snap = await getDocs(collection(db, 'bankaKesintiler'));
-      const cache: Record<string, Record<string, number>> = {};
+      // Admin panel yeni format: her doküman id=bankaAdı, data={ taksitler: { 1: oran, 2: oran, ... } }
+      // Eski format fallback: { tek, t2, t3, ... }
+      const cache: Record<string, Record<number, number>> = {};
       snap.docs.forEach(d => {
-        cache[d.id] = { tek: d.data().tek || 0, t2: d.data().t2 || 0, t3: d.data().t3 || 0, t4: d.data().t4 || 0, t5: d.data().t5 || 0, t6: d.data().t6 || 0, t7: d.data().t7 || 0, t8: d.data().t8 || 0, t9: d.data().t9 || 0 };
+        const data = d.data();
+        const taksitMap: Record<number, number> = {};
+        if (data.taksitler) {
+          // Yeni format (Admin panel Excel upload)
+          Object.entries(data.taksitler).forEach(([key, val]) => {
+            taksitMap[Number(key)] = Number(val);
+          });
+        } else {
+          // Eski format fallback
+          if (data.tek) taksitMap[1] = data.tek;
+          if (data.t2)  taksitMap[2] = data.t2;
+          if (data.t3)  taksitMap[3] = data.t3;
+          if (data.t4)  taksitMap[4] = data.t4;
+          if (data.t5)  taksitMap[5] = data.t5;
+          if (data.t6)  taksitMap[6] = data.t6;
+          if (data.t7)  taksitMap[7] = data.t7;
+          if (data.t8)  taksitMap[8] = data.t8;
+          if (data.t9)  taksitMap[9] = data.t9;
+        }
+        cache[d.id] = taksitMap;
       });
-      setKesintiCache(cache);
+      setKesintiCache(cache as any);
     } catch (err) { console.error('Kesinti cache:', err); }
   };
 
+  // SatisTeklifPage ile aynı normalize lookup — banka adı uyuşmazlığını çözer
   const getKesintiOrani = (banka: string, taksit: number): number => {
-    const key = taksit === 1 ? 'tek' : `t${taksit}`;
-    return kesintiCache[banka]?.[key] || 0;
+    const cache = kesintiCache as Record<string, Record<number, number>>;
+    // Önce tam eşleşme
+    if (cache[banka]?.[taksit] !== undefined) return cache[banka][taksit];
+    // Normalize ederek ara (Garanti Bankası → garanti, Garanti → garanti)
+    const normalBanka = normalizeBanka(banka);
+    const eslesen = Object.keys(cache).find(k => normalizeBanka(k) === normalBanka ||
+      normalizeBanka(k).includes(normalBanka) || normalBanka.includes(normalizeBanka(k)));
+    if (eslesen) return cache[eslesen][taksit] ?? 0;
+    return 0;
   };
 
   const urunCacheYukle = async () => {
@@ -114,9 +166,20 @@ const SatisDuzenlePage: React.FC = () => {
         setManuelSatisTutari((data as any).toplamTutar || null);
         const loadedPesinatlar: any[] = (data as any).pesinatlar || [];
         const loadedHavaleler: any[] = (data as any).havaleler || [];
-        setPesinatlar(loadedPesinatlar.length > 0 ? loadedPesinatlar : (data.pesinatTutar ? [{ id: '1', tutar: data.pesinatTutar, aciklama: '' }] : []));
-        setHavaleler(loadedHavaleler.length > 0 ? loadedHavaleler : (data.havaleTutar ? [{ id: '1', tutar: data.havaleTutar, banka: (data as any).havaleBanka || HAVALE_BANKALARI[0] }] : []));
-        setKartOdemeler(data.kartOdemeler || []);
+        const loadedKartlar: KartOdeme[] = data.kartOdemeler || [];
+
+        const pList = loadedPesinatlar.length > 0 ? loadedPesinatlar : (data.pesinatTutar ? [{ id: '1', tutar: data.pesinatTutar, aciklama: '' }] : []);
+        const hList = loadedHavaleler.length > 0 ? loadedHavaleler : (data.havaleTutar ? [{ id: '1', tutar: data.havaleTutar, banka: (data as any).havaleBanka || HAVALE_BANKALARI[0] }] : []);
+
+        setPesinatlar(pList);
+        setHavaleler(hList);
+        setKartOdemeler(loadedKartlar);
+
+        // ✅ Orijinalleri kaydet — diff için
+        setOrijinalPesinatlar(JSON.parse(JSON.stringify(pList)));
+        setOrijinalHavaleler(JSON.parse(JSON.stringify(hList)));
+        setOrijinalKartOdemeler(JSON.parse(JSON.stringify(loadedKartlar)));
+
         setFaturaNo(data.faturaNo || '');
         setServisNotu(data.servisNotu || '');
         setNotlar((data as any).notlar || '');
@@ -239,6 +302,98 @@ const SatisDuzenlePage: React.FC = () => {
   const acikHesap = () => { const a = toplamTutar() - toplamOdenen(); return a > 0 ? a : 0; };
   const karZarar = () => hesabaGecenToplam() - toplamMaliyet();
 
+  // ═══════════════════════════════════════════════════════════════════════
+  //  ✅ kasaTahsilatEkle — ödeme farkını kasaya yansıt
+  //
+  //  Sadece YENİ eklenen veya tutar değişen peşinatlar/ödemeler kasaya gider.
+  //  Zaten kaydedilmiş ödemelere (orijinalPesinatlar) dokunulmaz.
+  // ═══════════════════════════════════════════════════════════════════════
+  const odemeDeğisiklikleriniKasayaYansit = async () => {
+    if (!satis || !subeKodu || !currentUser) return;
+
+    const musteriIsim = (satis as any).musteriBilgileri?.isim ?? (satis as any).musteriIsim ?? '—';
+    const satisKodu = satis.satisKodu ?? id ?? '';
+    const satisId = satis.id ?? id ?? '';
+    const gun = bugunStr();
+    const yapan = `${currentUser.ad} ${currentUser.soyad}`;
+    const yapanId = currentUser.uid || '';
+
+    // ── Nakit diff (peşinat) ──────────────────────────────────────────
+    const eskiNakit = orijinalPesinatlar.reduce((t, p) => t + (p.tutar || 0), 0);
+    const yeniNakit = pesinatToplam();
+    const nakitFark = yeniNakit - eskiNakit;
+
+    // ── Havale diff ───────────────────────────────────────────────────
+    const eskiHavale = orijinalHavaleler.reduce((t, h) => t + (h.tutar || 0), 0);
+    const yeniHavale = havaleToplam();
+    const havaleFark = yeniHavale - eskiHavale;
+
+    // ── Kart diff ─────────────────────────────────────────────────────
+    const eskiKart = orijinalKartOdemeler.reduce((t, k) => t + (k.tutar || 0), 0);
+    const yeniKart = kartBrutToplam();
+    const kartFark = yeniKart - eskiKart;
+
+    // Hiç değişiklik yoksa kasaya dokunma
+    if (nakitFark === 0 && havaleFark === 0 && kartFark === 0) return;
+
+    // Sadece pozitif farkları kasaya ekle (tahsilat artışı)
+    // Negatif fark = ödeme azaldı → bu durumda iade mantığı devreye girer
+    // Şimdilik sadece pozitif farklar kasaya ekleniyor
+    const kasaNakit  = Math.max(0, nakitFark);
+    const kasaHavale = Math.max(0, havaleFark);
+    const kasaKart   = Math.max(0, kartFark);
+
+    if (kasaNakit > 0 || kasaHavale > 0 || kasaKart > 0) {
+      // Satış tarihini bul (orijinal satış günü)
+      const satisTarihiRaw = (satis as any).olusturmaTarihi ?? (satis as any).tarih;
+      const satisTarihiStr = satisTarihiRaw
+        ? (() => { try { const d = typeof satisTarihiRaw.toDate === 'function' ? satisTarihiRaw.toDate() : new Date(satisTarihiRaw); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; } catch { return undefined; } })()
+        : undefined;
+
+      // Banka adları
+      const ilkKart   = kartOdemeler.find(k => k.tutar > 0);
+      const ilkHavale = havaleler.find(h => h.tutar > 0);
+
+      await kasaTahsilatEkle({
+        subeKodu,
+        gun,
+        satisId,
+        satisKodu,
+        musteriIsim,
+        nakitTutar:  kasaNakit,
+        kartTutar:   kasaKart,
+        havaleTutar: kasaHavale,
+        yapan,
+        yapanId,
+        aciklama: `Satış güncelleme — ödeme eklendi`,
+        satisTarihi: satisTarihiStr,  // farklı günse Tahsilatlarda görünsün
+        kartBanka:   ilkKart?.banka   ?? undefined,
+        havaleBanka: ilkHavale?.banka ?? undefined,
+      });
+    }
+
+    // Negatif fark varsa (ödeme azaltıldı) iade kaydı oluştur
+    const iadeNakit  = nakitFark  < 0 ? Math.abs(nakitFark)  : 0;
+    const iadeHavale = havaleFark < 0 ? Math.abs(havaleFark) : 0;
+    const iadeKart   = kartFark   < 0 ? Math.abs(kartFark)   : 0;
+
+    if (iadeNakit > 0 || iadeHavale > 0 || iadeKart > 0) {
+      await kasaIadeEkle({
+        subeKodu,
+        gun,
+        satisId,
+        satisKodu,
+        musteriIsim,
+        nakitTutar:  iadeNakit,
+        kartTutar:   iadeKart,
+        havaleTutar: iadeHavale,
+        yapan,
+        yapanId,
+        iadeSebebi: 'Satış düzenleme — ödeme azaltıldı',
+      });
+    }
+  };
+
   /* ── İPTAL İŞLEMLERİ ── */
   const satisiIptalEt = async () => {
     if (!satis?.id) return;
@@ -265,28 +420,96 @@ const SatisDuzenlePage: React.FC = () => {
       return;
     }
 
-    // Admin → direkt iptal
+    // ── Admin → Satışı iptal et + iade statüsü belirle ────────────────
     try {
+      const toplamOdenenTutar = pesinatToplam() + havaleToplam() + kartBrutToplam();
+
+      // İade durumunu belirle: ödeme varsa IADE_GEREKIYOR, yoksa direkt iptal
+      const yeniIadeDurumu = toplamOdenenTutar > 0 ? 'IADE_GEREKIYOR' : undefined;
+
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
         satisDurumu: 'IPTAL',
         onayDurumu: false,
         iptalTarihi: new Date(),
-        guncellemeTarihi: new Date()
+        guncellemeTarihi: new Date(),
+        ...(yeniIadeDurumu ? { iadeDurumu: yeniIadeDurumu } : {}),
       });
 
-      // 7️⃣ İptal kasaya negatif tahsilat olarak işlenir
-      await kasaIptalKaydiOlustur({
-        satis: { ...satis, id: satis.id! } as any,
-        subeKodu: subeKodu!,
-        iptalYapan: `${currentUser?.ad} ${currentUser?.soyad}`,
-        iptalYapanId: currentUser?.uid || '',
-      });
+      // ✅ v6: kasaIptalKaydiOlustur yerine artık kasaIadeEkle kullanılıyor
+      // Ama iade HENÜZ yapılmadı — sadece statü IADE_GEREKIYOR oldu.
+      // Gerçek iade hareketi → admin "İadeyi Onayla" butonuna bastığında oluşacak.
+      // (kasaTahsilatHareketleri'ne bu aşamada yazılmaz)
 
-      setSatis(prev => prev ? { ...prev, satisDurumu: 'IPTAL' } as any : prev);
+      setSatis(prev => prev ? { ...prev, satisDurumu: 'IPTAL', iadeDurumu: yeniIadeDurumu } as any : prev);
       setIptalPopup(false);
-      alert('✅ Satış iptal edildi.');
+
+      if (yeniIadeDurumu) {
+        alert(`✅ Satış iptal edildi.\n⚠️ ${formatPrice(toplamOdenenTutar)} tutarında ödeme var — İade Gerekiyor olarak işaretlendi.\n\nİade ödendiğinde "İadeyi Onayla" butonunu kullanın.`);
+      } else {
+        alert('✅ Satış iptal edildi. Ödemesiz satış, kasa hareketi oluşturulmadı.');
+      }
     } catch {
       alert('❌ İptal işlemi başarısız!');
+    } finally {
+      setIptalIslemYapiliyor(false);
+    }
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  ✅ İADE ONAYLA — gerçek kasa hareketi burada oluşur
+  //  Admin "İadeyi Onayla" butonuna basınca:
+  //  - kasaTahsilatHareketleri'ne IADE kaydı eklenir (o günün kasasından düşer)
+  //  - Satışın iadeDurumu → IADE_ODENDI olur
+  // ═══════════════════════════════════════════════════════════════════════
+  const iadeOnayla = async () => {
+    if (!satis?.id || !subeKodu || !currentUser) return;
+    const sube = getSubeByKod(subeKodu as any);
+    if (!sube) return;
+    setIptalIslemYapiliyor(true);
+
+    try {
+      const musteriIsim = (satis as any).musteriBilgileri?.isim ?? '—';
+      const satisKodu = satis.satisKodu ?? id ?? '';
+      const satisId = satis.id!;
+      const gun = bugunStr();
+      const yapan = `${currentUser.ad} ${currentUser.soyad}`;
+      const yapanId = currentUser.uid || '';
+
+      // İade tutarları = satışta kayıtlı ödemeler (ne kadar tahsil edildiyse o kadar iade)
+      const nakitTutar  = pesinatToplam();
+      const havaleTutar = havaleToplam();
+      const kartTutar   = kartBrutToplam();
+
+      // ✅ Kasadan düş (bugünün kasasına IADE hareketi)
+      await kasaIadeEkle({
+        subeKodu,
+        gun,
+        satisId,
+        satisKodu,
+        musteriIsim,
+        nakitTutar,
+        kartTutar,
+        havaleTutar,
+        yapan,
+        yapanId,
+        iadeSebebi: 'Satış iptali iadesi',
+      });
+
+      // Satışı IADE_ODENDI yap
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        iadeDurumu: 'IADE_ODENDI',
+        iadeOnayTarihi: new Date(),
+        iadeOnaylayan: yapan,
+        guncellemeTarihi: new Date(),
+      });
+
+      setSatis(prev => prev ? { ...prev, iadeDurumu: 'IADE_ODENDI' } as any : prev);
+      setIadePopup(false);
+
+      const toplam = nakitTutar + havaleTutar + kartTutar;
+      alert(`✅ İade onaylandı!\n💵 ${formatPrice(toplam)} bugünün (${gun}) kasasından düşüldü.`);
+    } catch (err) {
+      alert('❌ İade işlemi başarısız: ' + (err as Error).message);
     } finally {
       setIptalIslemYapiliyor(false);
     }
@@ -299,17 +522,50 @@ const SatisDuzenlePage: React.FC = () => {
     setIptalIslemYapiliyor(true);
     try {
       const yeniOnay = iptaldenCikarStatusu === 'ONAYLI';
+      const mevcutIadeDurumu: string | undefined = (satis as any).iadeDurumu;
+
+      // ✅ İade yapılmışsa (IADE_ODENDI) → iptalden çıkarınca ödemeyi kasaya geri ekle
+      // Çünkü iade anında kasadan düşülmüştü, şimdi satış geri alındı → para kasaya geri girmeli
+      const nakitTutar  = pesinatToplam();
+      const havaleTutar = havaleToplam();
+      const kartTutar   = kartBrutToplam();
+      const toplamOdenen = nakitTutar + havaleTutar + kartTutar;
+
+      if (mevcutIadeDurumu === 'IADE_ODENDI' && toplamOdenen > 0 && currentUser && subeKodu) {
+        await kasaTahsilatEkle({
+          subeKodu,
+          gun: bugunStr(),
+          satisId: satis.id!,
+          satisKodu: satis.satisKodu ?? id ?? '',
+          musteriIsim: (satis as any).musteriBilgileri?.isim ?? '—',
+          nakitTutar,
+          kartTutar,
+          havaleTutar,
+          yapan: `${currentUser.ad} ${currentUser.soyad}`,
+          yapanId: currentUser.uid || '',
+          aciklama: 'İptalden çıkarma — iade geri alındı, ödeme kasaya eklendi',
+          satisTarihi: undefined,  // farklı gün — Tahsilatlarda görünsün
+        });
+      }
+
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
         satisDurumu: iptaldenCikarStatusu,
         onayDurumu: yeniOnay,
         iptalTarihi: null,
+        iadeDurumu: null,
         guncellemeTarihi: new Date()
       });
-      setSatis(prev => prev ? { ...prev, satisDurumu: iptaldenCikarStatusu, onayDurumu: yeniOnay } as any : prev);
+
+      setSatis(prev => prev ? { ...prev, satisDurumu: iptaldenCikarStatusu, onayDurumu: yeniOnay, iadeDurumu: null } as any : prev);
       setIptaldenCikarPopup(false);
-      alert(`✅ Satış "${iptaldenCikarStatusu === 'ONAYLI' ? 'Onaylı' : 'Beklemede'}" statüsüne alındı.`);
-    } catch {
-      alert('❌ İşlem başarısız!');
+
+      if (mevcutIadeDurumu === 'IADE_ODENDI' && toplamOdenen > 0) {
+        alert(`✅ Satış "${iptaldenCikarStatusu === 'ONAYLI' ? 'Onaylı' : 'Beklemede'}" statüsüne alındı.\n💵 ${formatPrice(toplamOdenen)} bugünün kasasına geri eklendi.`);
+      } else {
+        alert(`✅ Satış "${iptaldenCikarStatusu === 'ONAYLI' ? 'Onaylı' : 'Beklemede'}" statüsüne alındı.`);
+      }
+    } catch (err) {
+      alert('❌ İşlem başarısız: ' + (err as Error).message);
     } finally {
       setIptalIslemYapiliyor(false);
     }
@@ -321,23 +577,50 @@ const SatisDuzenlePage: React.FC = () => {
       alert('❌ İptal edilmiş satışı düzenleyemezsiniz.');
       return;
     }
+
+    // ✅ Fazla ödeme kontrolü — toplam ödeme satış tutarını aşamaz
+    const _odenen = toplamOdenen();
+    const _tutar  = toplamTutar();
+    if (_odenen > _tutar && _tutar > 0) {
+      alert(`❌ Toplam ödeme (${formatPrice(_odenen)}) satış tutarını (${formatPrice(_tutar)}) aşıyor!\n\nFazla: ${formatPrice(_odenen - _tutar)}\n\nLütfen ödeme kalemlerini düzeltin.`);
+      return;
+    }
     try {
       const sube = getSubeByKod(subeKodu as any);
       if (!sube || !satis) return;
+
+      // ✅ Önce ödeme farkını kasaya yansıt
+      await odemeDeğisiklikleriniKasayaYansit();
 
       const orijinal = marsListesi[0];
       const sonGiris = [...marsListesi].reverse().find(m => m.marsNo || m.teslimatTarihi) || orijinal;
       const etiketler = eslesenYesilEtiketler();
 
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!), {
-        urunler,
+        urunler: urunler.map(u => ({
+          ...u,
+          // ✅ Edit anında snapshot — mevcut varsa koru, yoksa şimdiki değeri yaz
+          alisFiyatSnapshot: (u as any).alisFiyatSnapshot ?? u.alisFiyati,
+          bipSnapshot: (u as any).bipSnapshot ?? (u.bip || 0),
+          greenPriceSnapshot: (u as any).greenPriceSnapshot ?? null,
+          snapshotTarihi: (u as any).snapshotTarihi || new Date().toISOString(),
+        })),
         kampanyalar: seciliKampanyalar.map(k => ({ id: k.id!, ad: k.ad, tutar: k.tutar || 0 })),
         kampanyaToplami: kampanyaToplamiHesapla(),
         yesilEtiketler: etiketler.map(e => ({
           id: Date.now().toString(), urunKodu: e.urunKodu,
           ad: e.urunAdi, alisFiyati: e.maliyet, tutar: e.maliyet * e.adet
         })),
-        pesinatlar, havaleler, kartOdemeler,
+        pesinatlar,
+        havaleler,
+        kartOdemeler: kartOdemeler.map(k => ({
+          ...k,
+          // ✅ Komisyon snapshot — edit anındaki tarife
+          commissionRateSnapshot: k.kesintiOrani || 0,
+          commissionAmountSnapshot: (k.tutar * (k.kesintiOrani || 0)) / 100,
+          netAmountSnapshot: k.tutar - (k.tutar * (k.kesintiOrani || 0)) / 100,
+          snapshotTarihi: (k as any).snapshotTarihi || new Date().toISOString(), // mevcut snapshot'u koru
+        })),
         pesinatToplam: pesinatToplam(), havaleToplam: havaleToplam(),
         kartBrutToplam: kartBrutToplam(), kartKesintiToplam: kartKesintiToplam(),
         kartNetToplam: kartNetToplam(), toplamOdenen: toplamOdenen(),
@@ -367,6 +650,21 @@ const SatisDuzenlePage: React.FC = () => {
 
   const marsEklenebilir = marsListesi.length < MAX_MARS;
 
+  // İade durumu badge renkleri
+  const iadeBadgeStyle = (durum: string) => {
+    if (durum === 'IADE_ODENDI')    return { background: '#dcfce7', color: '#16a34a', border: '1px solid #86efac' };
+    if (durum === 'IADE_ONAYLANDI') return { background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd' };
+    if (durum === 'IADE_BEKLIYOR')  return { background: '#fef9c3', color: '#92400e', border: '1px solid #fde68a' };
+    return { background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }; // IADE_GEREKIYOR
+  };
+
+  const iadeBadgeMetin = (durum: string) => ({
+    'IADE_GEREKIYOR': '⚠️ İade Gerekiyor',
+    'IADE_BEKLIYOR':  '🔄 İade Bekliyor',
+    'IADE_ONAYLANDI': '✅ İade Onaylandı',
+    'IADE_ODENDI':    '💚 İade Ödendi',
+  }[durum] ?? durum);
+
   return (
     <Layout pageTitle={`Düzenle: ${satis.satisKodu}`}>
 
@@ -379,6 +677,12 @@ const SatisDuzenlePage: React.FC = () => {
             <p className="duzenle-popup-mesaj">
               <strong>{satis.satisKodu}</strong> kodlu satış için
               {isAdmin ? ' iptal işlemi yapılsın mı?' : ' admin onayına iptal talebi gönderilsin mi?'}
+              <br />
+              {isAdmin && pesinatToplam() + havaleToplam() + kartBrutToplam() > 0 && (
+                <span style={{ color: '#dc2626', fontWeight: 600 }}>
+                  ⚠️ {formatPrice(pesinatToplam() + havaleToplam() + kartBrutToplam())} tahsilat var. İptal sonrası iade gerekecek.
+                </span>
+              )}
               <br /><span className="duzenle-popup-alt-not">
                 {isAdmin
                   ? 'Satış silinmeyecek, listede görünmeye devam edecek.'
@@ -389,6 +693,42 @@ const SatisDuzenlePage: React.FC = () => {
               <button className="duzenle-popup-hayir" onClick={() => setIptalPopup(false)} disabled={iptalIslemYapiliyor}>Hayır</button>
               <button className="duzenle-popup-evet duzenle-popup-evet--iptal" onClick={satisiIptalEt} disabled={iptalIslemYapiliyor}>
                 {iptalIslemYapiliyor ? 'İşleniyor...' : isAdmin ? 'Evet, İptal Et' : 'Evet, Talep Gönder'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ İADE ONAYLA POPUP ══════ */}
+      {iadePopup && (
+        <div className="duzenle-popup-overlay">
+          <div className="duzenle-popup">
+            <div className="duzenle-popup-ikon">💰</div>
+            <h3 className="duzenle-popup-baslik">İadeyi Onayla</h3>
+            <p className="duzenle-popup-mesaj">
+              <strong>{satis.satisKodu}</strong> — müşteriye iade yapıldı mı?
+              <br />
+              <span style={{ fontWeight: 700, color: '#dc2626', fontSize: 18 }}>
+                {formatPrice(pesinatToplam() + havaleToplam() + kartBrutToplam())}
+              </span>
+              <br />
+              <span className="duzenle-popup-alt-not">
+                Bu tutar <strong>bugünün ({bugunStr()}) kasasından</strong> düşülecek.
+                <br />Geçmiş güne dokunulmaz.
+              </span>
+            </p>
+            {pesinatToplam() > 0 && <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>💵 Nakit: {formatPrice(pesinatToplam())}</div>}
+            {havaleToplam() > 0 && <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>🏦 Havale: {formatPrice(havaleToplam())}</div>}
+            {kartBrutToplam() > 0 && <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>💳 Kart: {formatPrice(kartBrutToplam())}</div>}
+            <div className="duzenle-popup-butonlar">
+              <button className="duzenle-popup-hayir" onClick={() => setIadePopup(false)} disabled={iptalIslemYapiliyor}>Vazgeç</button>
+              <button
+                className="duzenle-popup-evet"
+                style={{ background: '#16a34a' }}
+                onClick={iadeOnayla}
+                disabled={iptalIslemYapiliyor}
+              >
+                {iptalIslemYapiliyor ? 'İşleniyor...' : '✅ Evet, İade Yapıldı'}
               </button>
             </div>
           </div>
@@ -431,6 +771,25 @@ const SatisDuzenlePage: React.FC = () => {
       {isIptal && (
         <div className="duzenle-iptal-banner">
           🚫 Bu satış <strong>İPTAL</strong> statüsündedir.{!isAdmin && ' Düzenleme yapılamaz.'}
+          {/* ✅ İade durumu göstergesi */}
+          {iadeDurumu && (
+            <span style={{ marginLeft: 16, padding: '3px 10px', borderRadius: 6, fontSize: 13, fontWeight: 700, ...iadeBadgeStyle(iadeDurumu) }}>
+              {iadeBadgeMetin(iadeDurumu)}
+            </span>
+          )}
+          {/* ✅ İadeyi Onayla butonu — sadece admin + iade bekliyorsa */}
+          {isAdmin && iadeDurumu && iadeDurumu !== 'IADE_ODENDI' && (
+            <button
+              type="button"
+              onClick={() => setIadePopup(true)}
+              style={{
+                marginLeft: 16, padding: '6px 16px', background: '#16a34a', color: '#fff',
+                border: 'none', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              💰 İadeyi Onayla
+            </button>
+          )}
         </div>
       )}
 
@@ -577,6 +936,36 @@ const SatisDuzenlePage: React.FC = () => {
             {karZarar() >= 0 ? `📈 KÂR: ${formatPrice(karZarar())}` : `📉 ZARAR: ${formatPrice(Math.abs(karZarar()))}`}
             <span style={{ fontSize: 12, marginLeft: 12, opacity: 0.8 }}>(Hesaba Geçen: {formatPrice(hesabaGecenToplam())} — Maliyet: {formatPrice(toplamMaliyet())})</span>
           </div>
+
+          {/* ✅ Canlı fazla ödeme uyarısı */}
+          {(() => {
+            const odenen = toplamOdenen();
+            const tutar  = toplamTutar();
+            const fark   = odenen - tutar;
+            if (tutar > 0 && fark > 0) {
+              return (
+                <div style={{
+                  marginTop: 8, padding: '10px 14px', borderRadius: 8,
+                  background: '#fef2f2', border: '2px solid #dc2626',
+                  color: '#dc2626', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  🚫 Toplam ödeme ({formatPrice(odenen)}) satış tutarını ({formatPrice(tutar)}) <strong>{formatPrice(fark)}</strong> aşıyor! Güncelleme engellenmiştir.
+                </div>
+              );
+            }
+            if (tutar > 0 && odenen > 0 && fark === 0) {
+              return (
+                <div style={{
+                  marginTop: 8, padding: '8px 14px', borderRadius: 8,
+                  background: '#f0fdf4', border: '1px solid #86efac',
+                  color: '#15803d', fontWeight: 600, fontSize: 13,
+                }}>
+                  ✅ Ödeme tam — satış tutarı karşılandı.
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
 
         {/* NOTLAR */}
@@ -632,13 +1021,28 @@ const SatisDuzenlePage: React.FC = () => {
             ))}
           </div>
 
-          {/* ══════ İPTAL / İPTALDEN ÇIKAR BUTONU ══════ */}
+          {/* ══════ İPTAL / İPTALDEN ÇIKAR / İADE BUTONU ══════ */}
           <div className="duzenle-iptal-buton-alani">
             {isIptal ? (
               isAdmin && (
-                <button type="button" className="duzenle-btn-iptalden-cikar" onClick={() => setIptaldenCikarPopup(true)}>
-                  ♻️ İptalden Çıkar
-                </button>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button type="button" className="duzenle-btn-iptalden-cikar" onClick={() => setIptaldenCikarPopup(true)}>
+                    ♻️ İptalden Çıkar
+                  </button>
+                  {/* ✅ İadeyi Onayla butonu — iade tamamlanmadıysa göster */}
+                  {iadeDurumu && iadeDurumu !== 'IADE_ODENDI' && (
+                    <button
+                      type="button"
+                      onClick={() => setIadePopup(true)}
+                      style={{
+                        padding: '8px 18px', background: '#16a34a', color: '#fff',
+                        border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                      }}
+                    >
+                      💰 İadeyi Onayla
+                    </button>
+                  )}
+                </div>
               )
             ) : iptalTalebiVar ? (
               <span className="duzenle-iptal-talep-badge">
@@ -656,7 +1060,14 @@ const SatisDuzenlePage: React.FC = () => {
         <div className="duzenle-actions">
           <button type="button" onClick={() => navigate('/dashboard')} className="duzenle-btn-cancel">İptal</button>
           {(!isIptal || isAdmin) && (
-            <button type="submit" className="duzenle-btn-submit">Güncelle</button>
+            <button
+              type="submit"
+              className="duzenle-btn-submit"
+              disabled={toplamOdenen() > toplamTutar() && toplamTutar() > 0}
+              title={toplamOdenen() > toplamTutar() ? 'Toplam ödeme satış tutarını aşıyor' : ''}
+            >
+              Güncelle
+            </button>
           )}
         </div>
       </form>

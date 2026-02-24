@@ -22,7 +22,7 @@
 // ===================================================
 
 import {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc,
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc,
   query, orderBy, limit, serverTimestamp, Timestamp,
   where,
 } from 'firebase/firestore';
@@ -180,20 +180,14 @@ export const recalcNakitSatis = async (
     const buGununSatisi = tarihGunEsit(satisTarih, gun);
 
     if (buGununSatisi) {
-      // Nakit (peşinat) — pesinatlar array'i varsa toplamını al, yoksa pesinatTutar
-      const pesinatlarA: any[] = data.pesinatlar ?? [];
-      let nakit = 0;
-      if (pesinatlarA.length > 0) {
-        pesinatlarA.forEach((p: any) => { nakit += Number(p.tutar ?? 0); });
-      } else {
-        nakit = Number(
-          data.pesinatTutar ??
-          data.odemeOzeti?.kasayaYansiran ??
-          data.nakitTutar ??
-          data.nakit ??
-          0
-        );
-      }
+      // Nakit (peşinat)
+      const nakit = Number(
+        data.pesinatTutar ??
+        data.odemeOzeti?.kasayaYansiran ??
+        data.nakitTutar ??
+        data.nakit ??
+        0
+      );
       // Kart ödemeleri
       let kart = 0;
       (data.kartOdemeler ?? []).forEach((k: any) => {
@@ -209,37 +203,21 @@ export const recalcNakitSatis = async (
     }
 
     // ── B) Önceki günlerin SATIŞLARININ bu güne gelen tahsilatı ───────
-    // pesinatlar array'i varsa her peşinatın id'si Unix ms timestamp — tarih oradan çıkar
-    const pesinatlar: any[] = data.pesinatlar ?? [];
-    if (pesinatlar.length > 0) {
-      pesinatlar.forEach((p: any) => {
-        const pTutar = Number(p.tutar ?? 0);
-        if (pTutar <= 0) return;
-        const pTarih = p.tarih
-          ? toDate(p.tarih)
-          : p.id
-          ? new Date(Number(p.id))
-          : toDate(data.olusturmaTarihi);
-        if (tarihGunEsit(pTarih, gun)) {
-          nakitSatis += pTutar;
-        }
-      });
-    } else {
-      // Peşinat array'i yoksa eski yöntem
-      const nakit = Number(
-        data.pesinatTutar ??
-        data.odemeOzeti?.kasayaYansiran ??
-        data.nakitTutar ??
-        data.nakit ??
-        0
+    // Nakit ödeme tarihi bu güne denk geliyorsa sayıyoruz
+
+    const nakit = Number(
+      data.pesinatTutar ??
+      data.odemeOzeti?.kasayaYansiran ??
+      data.nakitTutar ??
+      data.nakit ??
+      0
+    );
+    if (nakit > 0) {
+      const nakitOdemeTarih = toDate(
+        data.nakitOdemeTarihi ?? data.guncellemeTarihi ?? data.olusturmaTarihi
       );
-      if (nakit > 0) {
-        const nakitOdemeTarih = toDate(
-          data.nakitOdemeTarihi ?? data.guncellemeTarihi ?? data.olusturmaTarihi
-        );
-        if (tarihGunEsit(nakitOdemeTarih, gun)) {
-          nakitSatis += nakit;
-        }
+      if (tarihGunEsit(nakitOdemeTarih, gun)) {
+        nakitSatis += nakit;
       }
     }
 
@@ -375,11 +353,13 @@ export const getBugununKasaGunu = async (
     acilisBakiyesi = bugunSnap.data().acilisBakiyesi ?? 0;
   }
 
-  // ✅ BUG FIX: Satış ve tahsilat nakit toplamlarını canlı hesapla
-  const { nakitSatis, kartSatis, havaleSatis } = await recalcNakitSatis(subeKodu, today);
-
-  // Manuel hareketlerin gider/çıkış toplamlarını koru
+  // ✅ v6 MİMARİ: recalcNakitSatis() ÇAĞRILMAZ.
+  // nakitSatis/kartSatis/havaleSatis değerleri kasaTahsilatEkle() tarafından
+  // her tahsilatta atomik olarak güncellenir. Burada sadece Firestore'dan okuruz.
   const mevcut = bugunSnap.exists() ? bugunSnap.data() : {};
+  const nakitSatis       = mevcut.nakitSatis       ?? 0;
+  const kartSatis        = mevcut.kartSatis        ?? 0;
+  const havaleSatis      = mevcut.havaleSatis      ?? 0;
   const toplamGider      = mevcut.toplamGider      ?? 0;
   const cikisYapilanPara = mevcut.cikisYapilanPara ?? 0;
   const adminAlimlar     = mevcut.adminAlimlar     ?? 0;
@@ -387,41 +367,27 @@ export const getBugununKasaGunu = async (
   const hareketler       = mevcut.hareketler       ?? [];
 
   const gunSonuBakiyesi = hesaplaGunSonu({
-    acilisBakiyesi,
-    nakitSatis,
-    toplamGider,
-    cikisYapilanPara,
-    adminAlimlar,
+    acilisBakiyesi, nakitSatis, toplamGider, cikisYapilanPara, adminAlimlar,
   });
 
-  const kasaGunData: any = {
-    gun: today,
-    subeKodu,
-    durum: mevcut.durum ?? 'ACIK',
-    acilisBakiyesi,
-    gunSonuBakiyesi,    // ✅ artık doğru hesaplanıyor
-    nakitSatis,         // ✅ satış + tahsilat nakitleri dahil
-    kartSatis,
-    havaleSatis,
-    toplamGider,
-    cikisYapilanPara,
-    adminAlimlar,
-    adminOzet,
-    hareketler,
-    acilisYapan: mevcut.acilisYapan ?? acilisYapan,
-    guncellemeTarihi: serverTimestamp(),
-  };
-
+  // Sadece yeni gün oluşturulurken setDoc yap, mevcut günün üzerine YAZMA
   if (!bugunSnap.exists()) {
-    kasaGunData.olusturmaTarihi = serverTimestamp();
-    await setDoc(bugunRef, kasaGunData);
-  } else {
-    // Sadece nakit alanlarını ve gün sonunu güncelle, diğerlerine dokunma
-    await updateDoc(bugunRef, {
-      nakitSatis,
-      kartSatis,
-      havaleSatis,
-      gunSonuBakiyesi,
+    await setDoc(bugunRef, {
+      gun: today,
+      subeKodu,
+      durum: 'ACIK',
+      acilisBakiyesi,
+      gunSonuBakiyesi: acilisBakiyesi, // yeni gün açılışta nakitSatis=0
+      nakitSatis: 0,
+      kartSatis: 0,
+      havaleSatis: 0,
+      toplamGider: 0,
+      cikisYapilanPara: 0,
+      adminAlimlar: 0,
+      adminOzet: {},
+      hareketler: [],
+      acilisYapan: acilisYapan,
+      olusturmaTarihi: serverTimestamp(),
       guncellemeTarihi: serverTimestamp(),
     });
   }
@@ -513,48 +479,13 @@ export const getSatislar = async (
       const olusturmaTarih = toDate(data.olusturmaTarihi);
       const buGununSatisi = aralikta(olusturmaTarih);
 
-      // Peşinatlı satışlarda nakit hesaplama
-      const pesinatlarArr: any[] = data.pesinatlar ?? [];
-      let nakitTutar = 0;
-      let nakitBuGun = false;
-
-      if (buGununSatisi) {
-        // Bugünün satışı: tüm peşinat toplamını al, tarih filtresi yok
-        if (pesinatlarArr.length > 0) {
-          pesinatlarArr.forEach((p: any) => { nakitTutar += Number(p.tutar ?? 0); });
-          nakitBuGun = nakitTutar > 0;
-        } else {
-          nakitTutar = Number(
-            data.pesinatTutar ?? data.odemeOzeti?.kasayaYansiran ?? data.nakitTutar ?? data.nakit ?? 0
-          );
-          nakitBuGun = nakitTutar > 0;
-        }
-      } else {
-        // Önceki günün satışı: her peşinatın id timestamp'inden tarihi çıkar
-        if (pesinatlarArr.length > 0) {
-          pesinatlarArr.forEach((p: any) => {
-            const pTutar = Number(p.tutar ?? 0);
-            if (pTutar <= 0) return;
-            const pTarih = p.tarih
-              ? toDate(p.tarih)
-              : p.id
-              ? new Date(Number(p.id))
-              : toDate(data.olusturmaTarihi);
-            if (aralikta(pTarih)) {
-              nakitTutar += pTutar;
-              nakitBuGun = true;
-            }
-          });
-        } else {
-          nakitTutar = Number(
-            data.pesinatTutar ?? data.odemeOzeti?.kasayaYansiran ?? data.nakitTutar ?? data.nakit ?? 0
-          );
-          const nakitOdemeTarih: Date | null = nakitTutar > 0
-            ? toDate(data.nakitOdemeTarihi ?? data.guncellemeTarihi ?? data.olusturmaTarihi)
-            : null;
-          nakitBuGun = aralikta(nakitOdemeTarih);
-        }
-      }
+      const nakitTutar = Number(
+        data.pesinatTutar ?? data.odemeOzeti?.kasayaYansiran ?? data.nakitTutar ?? data.nakit ?? 0
+      );
+      const nakitOdemeTarih: Date | null = nakitTutar > 0
+        ? toDate(data.nakitOdemeTarihi ?? data.guncellemeTarihi ?? data.olusturmaTarihi)
+        : null;
+      const nakitBuGun = aralikta(nakitOdemeTarih);
 
       const havaleTutar = Number(data.havaleTutar ?? 0);
       const havaleTarih: Date | null = havaleTutar > 0
@@ -789,5 +720,189 @@ export const testGunGecisi = async (
     };
   } catch (err) {
     return { basarili: false, mesaj: `❌ Hata: ${(err as Error).message}` };
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  KasaTahsilatHareket — audit trail için tip
+// ═══════════════════════════════════════════════════════════════════════════
+export interface KasaTahsilatHareket {
+  tip: 'TAHSILAT' | 'IADE';
+  satisId: string;
+  satisKodu: string;
+  musteriIsim: string;
+  nakitTutar: number;
+  kartTutar: number;
+  havaleTutar: number;
+  toplamTutar: number;
+  gun: string;
+  subeKodu: string;
+  yapan: string;
+  yapanId: string;
+  aciklama: string;
+  satisTarihi?: string | null;
+  kartBanka?: string | null;
+  havaleBanka?: string | null;
+  iadeSebebi?: string;
+  iadeTarih?: string;
+  created_at: any;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  kasaTahsilatEkle — Satıştan tahsilat alındığında kasayı günceller
+// ═══════════════════════════════════════════════════════════════════════════
+export const kasaTahsilatEkle = async (params: {
+  subeKodu: string;
+  gun: string;
+  satisId: string;
+  satisKodu: string;
+  musteriIsim: string;
+  nakitTutar: number;
+  kartTutar: number;
+  havaleTutar: number;
+  yapan: string;
+  yapanId: string;
+  aciklama?: string;
+  satisTarihi?: string;
+  kartBanka?: string;
+  havaleBanka?: string;
+}): Promise<boolean> => {
+  const {
+    subeKodu, gun, satisId, satisKodu, musteriIsim,
+    nakitTutar, kartTutar, havaleTutar, yapan, yapanId, aciklama,
+    satisTarihi, kartBanka, havaleBanka,
+  } = params;
+
+  const sube = getSubeByKod(subeKodu as SubeKodu);
+  if (!sube) return false;
+
+  try {
+    // 1. Audit trail
+    await addDoc(
+      collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
+      {
+        tip: 'TAHSILAT',
+        satisId, satisKodu, musteriIsim,
+        nakitTutar, kartTutar, havaleTutar,
+        toplamTutar: nakitTutar + kartTutar + havaleTutar,
+        gun, subeKodu, yapan, yapanId,
+        aciklama: aciklama ?? '',
+        satisTarihi: satisTarihi ?? null,
+        kartBanka: kartBanka ?? null,
+        havaleBanka: havaleBanka ?? null,
+        created_at: Timestamp.fromDate(new Date()),
+      }
+    );
+
+    // 2. Kasa gününü güncelle (atomik increment)
+    const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', gun);
+    const gunSnap = await getDoc(gunRef);
+    const mevcut = gunSnap.exists() ? gunSnap.data() : {};
+
+    const yeniNakit  = (mevcut.nakitSatis  ?? 0) + nakitTutar;
+    const yeniKart   = (mevcut.kartSatis   ?? 0) + kartTutar;
+    const yeniHavale = (mevcut.havaleSatis ?? 0) + havaleTutar;
+    const gunSonuBakiyesi = hesaplaGunSonu({
+      acilisBakiyesi:   mevcut.acilisBakiyesi   ?? 0,
+      nakitSatis:       yeniNakit,
+      toplamGider:      mevcut.toplamGider      ?? 0,
+      cikisYapilanPara: mevcut.cikisYapilanPara ?? 0,
+      adminAlimlar:     mevcut.adminAlimlar     ?? 0,
+    });
+
+    if (gunSnap.exists()) {
+      await updateDoc(gunRef, {
+        nakitSatis: yeniNakit, kartSatis: yeniKart, havaleSatis: yeniHavale,
+        gunSonuBakiyesi, guncellemeTarihi: serverTimestamp(),
+      });
+    } else {
+      await setDoc(gunRef, {
+        gun, subeKodu, durum: 'ACIK',
+        acilisBakiyesi: 0,
+        nakitSatis: yeniNakit, kartSatis: yeniKart, havaleSatis: yeniHavale,
+        toplamGider: 0, cikisYapilanPara: 0, adminAlimlar: 0,
+        adminOzet: {}, hareketler: [], gunSonuBakiyesi,
+        acilisYapan: yapan,
+        olusturmaTarihi: serverTimestamp(), guncellemeTarihi: serverTimestamp(),
+      });
+    }
+
+    return true;
+  } catch (err) {
+    console.error('kasaTahsilatEkle hata:', err);
+    return false;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  kasaIadeEkle — İade onaylandığında o günün kasasından düşer
+// ═══════════════════════════════════════════════════════════════════════════
+export const kasaIadeEkle = async (params: {
+  subeKodu: string;
+  gun: string;
+  satisId: string;
+  satisKodu: string;
+  musteriIsim: string;
+  nakitTutar: number;
+  kartTutar: number;
+  havaleTutar: number;
+  yapan: string;
+  yapanId: string;
+  iadeSebebi?: string;
+}): Promise<boolean> => {
+  const {
+    subeKodu, gun, satisId, satisKodu, musteriIsim,
+    nakitTutar, kartTutar, havaleTutar, yapan, yapanId, iadeSebebi,
+  } = params;
+
+  const sube = getSubeByKod(subeKodu as SubeKodu);
+  if (!sube) return false;
+
+  try {
+    // 1. Audit trail (negatif tutarlar)
+    await addDoc(
+      collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
+      {
+        tip: 'IADE',
+        satisId, satisKodu, musteriIsim,
+        nakitTutar:  -Math.abs(nakitTutar),
+        kartTutar:   -Math.abs(kartTutar),
+        havaleTutar: -Math.abs(havaleTutar),
+        toplamTutar: -(Math.abs(nakitTutar) + Math.abs(kartTutar) + Math.abs(havaleTutar)),
+        gun, subeKodu, yapan, yapanId,
+        aciklama: iadeSebebi ?? 'İade',
+        iadeSebebi: iadeSebebi ?? '',
+        iadeTarih: gun,
+        created_at: Timestamp.fromDate(new Date()),
+      }
+    );
+
+    // 2. Kasadan düş
+    const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', gun);
+    const gunSnap = await getDoc(gunRef);
+    const mevcut = gunSnap.exists() ? gunSnap.data() : {};
+
+    const yeniNakit  = (mevcut.nakitSatis  ?? 0) - Math.abs(nakitTutar);
+    const yeniKart   = (mevcut.kartSatis   ?? 0) - Math.abs(kartTutar);
+    const yeniHavale = (mevcut.havaleSatis ?? 0) - Math.abs(havaleTutar);
+    const gunSonuBakiyesi = hesaplaGunSonu({
+      acilisBakiyesi:   mevcut.acilisBakiyesi   ?? 0,
+      nakitSatis:       yeniNakit,
+      toplamGider:      mevcut.toplamGider      ?? 0,
+      cikisYapilanPara: mevcut.cikisYapilanPara ?? 0,
+      adminAlimlar:     mevcut.adminAlimlar     ?? 0,
+    });
+
+    if (gunSnap.exists()) {
+      await updateDoc(gunRef, {
+        nakitSatis: yeniNakit, kartSatis: yeniKart, havaleSatis: yeniHavale,
+        gunSonuBakiyesi, guncellemeTarihi: serverTimestamp(),
+      });
+    }
+
+    return true;
+  } catch (err) {
+    console.error('kasaIadeEkle hata:', err);
+    return false;
   }
 };

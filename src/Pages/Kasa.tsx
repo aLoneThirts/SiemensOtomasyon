@@ -5,7 +5,6 @@
 //  2) Kasa çıktısı → print preview (stok dahil)
 //  3) Geçmiş kayıtlar: tarih aralığı + pagination
 //  4) Font sadeleşti
-
 //  5) Gelen/Çıkan Ürün + Mağaza Stoğu paneli (devir daim)
 //  6) Tahsilatlar → created_at = today
 //  7) Satış iptali → negatif tahsilat
@@ -21,7 +20,7 @@ import {
 } from '../types/kasa';
 import {
   getBugununKasaGunu, kasaHareketEkle, getKasaGecmisi,
-  getSatislar, getTahsilatlar, recalculateTumGunler,
+  getSatislar, getTahsilatlar,
   KasaSatisOzet, KasaTahsilatOzet, KasaSatisDetay,
 } from '../services/kasaService';
 import { db } from '../firebase/config';
@@ -149,20 +148,24 @@ const kasaPrintPreviewYap = (params: {
   const odemeDetayi = (s: any): string => {
     const parcalar: string[] = [];
     if (s.nakitTutar > 0) parcalar.push(`Nakit: ${fTL(s.nakitTutar)}`);
+    // Kart — önce kartOdemeler array'i dene, yoksa kartBanka field'ına bak
     if (s.kartOdemeler?.length > 0) {
       s.kartOdemeler.forEach((k: any) => {
         const taksit = k.taksitSayisi === 1 ? 'Tek Çekim' : `${k.taksitSayisi} Taksit`;
         parcalar.push(`Kart (${k.banka || '?'}, ${taksit}): ${fTL(k.tutar)}`);
       });
-    } else if (s.kartTutar > 0) {
-      parcalar.push(`Kart: ${fTL(s.kartTutar)}`);
+    } else if (s.kartTutar && s.kartTutar !== 0) {
+      const bankaAdi = s.kartBanka ? ` — ${s.kartBanka}` : '';
+      parcalar.push(`Kart${bankaAdi}: ${fTL(Math.abs(s.kartTutar))}`);
     }
+    // Havale — önce havaleler array'i dene, yoksa havaleBanka field'ına bak
     if (s.havaleler?.length > 0) {
       s.havaleler.forEach((h: any) => {
         parcalar.push(`Havale (${h.banka || '?'}): ${fTL(h.tutar)}`);
       });
-    } else if (s.havaleTutar > 0) {
-      parcalar.push(`Havale: ${fTL(s.havaleTutar)}`);
+    } else if (s.havaleTutar && s.havaleTutar !== 0) {
+      const bankaAdi = s.havaleBanka ? ` — ${s.havaleBanka}` : '';
+      parcalar.push(`Havale${bankaAdi}: ${fTL(Math.abs(s.havaleTutar))}`);
     }
     return parcalar.join(' + ');
   };
@@ -176,14 +179,39 @@ const kasaPrintPreviewYap = (params: {
       <td style="font-size:10px;color:#5f6368;max-width:220px">${odemeDetayi(s as any)}</td>
     </tr>`).join('');
 
-  const tahsilatRows = tahsilatlar.map(s => `
-    <tr>
-      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px">${s.satisTarihi ? formatGun(s.satisTarihi) : '—'}</td>
-      <td style="font-weight:600">${s.satisKodu}</td>
+  const tahsilatRows = (tahsilatlar as any[]).map(s => {
+    const isIade = s.iptalIadesi === true || s.odemeDurumu === 'IADE';
+    const rowBg  = isIade ? 'background:#fff5f5' : '';
+    const tutar  = (s.nakitTutar || 0) + (s.kartTutar || 0) + (s.havaleTutar || 0);
+
+    // İade ise detayı elle oluştur (banka bilgisiyle)
+    let detay = '';
+    if (isIade) {
+      const parcalar: string[] = ['🔴 İPTAL / İADE'];
+      if (s.nakitTutar && s.nakitTutar !== 0) parcalar.push(`Nakit iadesi: ${fTL(Math.abs(s.nakitTutar))}`);
+      if (s.kartTutar  && s.kartTutar  !== 0) {
+        const banka = s.kartBanka ? ` (${s.kartBanka})` : '';
+        parcalar.push(`Kart iadesi${banka}: ${fTL(Math.abs(s.kartTutar))}`);
+      }
+      if (s.havaleTutar && s.havaleTutar !== 0) {
+        const banka = s.havaleBanka ? ` (${s.havaleBanka})` : '';
+        parcalar.push(`Havale iadesi${banka}: ${fTL(Math.abs(s.havaleTutar))}`);
+      }
+      if (s.aciklama) parcalar.push(s.aciklama);
+      detay = parcalar.join(' · ');
+    } else {
+      detay = odemeDetayi(s);
+    }
+
+    return `
+    <tr style="${rowBg}">
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;${isIade ? 'color:#dc2626' : ''}">${s.satisTarihi ? formatGun(s.satisTarihi) : '—'}</td>
+      <td style="font-weight:600;${isIade ? 'color:#dc2626' : ''}">${s.satisKodu}${isIade ? ' <span style="font-size:9px;background:#dc2626;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">İPTAL</span>' : ''}</td>
       <td>${s.musteriIsim}</td>
-      <td style="font-family:'IBM Plex Mono',monospace;font-weight:700">${fTL(s.nakitTutar + s.kartTutar + s.havaleTutar)}</td>
-      <td style="font-size:10px;color:#5f6368;max-width:220px">${odemeDetayi(s as any)}</td>
-    </tr>`).join('');
+      <td style="font-family:'IBM Plex Mono',monospace;font-weight:700;${isIade ? 'color:#dc2626' : ''}">${fTL(tutar)}</td>
+      <td style="font-size:10px;max-width:240px;${isIade ? 'color:#dc2626;font-weight:600' : 'color:#5f6368'}">${detay}</td>
+    </tr>`;
+  }).join('');
 
   const stokRows = magazaStok.map(s => `
     <tr>
@@ -275,8 +303,43 @@ const kasaPrintPreviewYap = (params: {
   <h2>📦 Bugünkü Stok Hareketleri</h2>
   ${stokLog.length > 0 ? `<table><thead><tr><th>Saat</th><th>Tip</th><th>Ürün Kodu</th><th>Ürün Adı</th><th>Adet</th><th>Müşteri/Satış</th><th>Not</th></tr></thead><tbody>${stokLogRows}</tbody></table>` : '<p style="color:#aaa;padding:8px 0">Bugün stok hareketi yapılmadı.</p>'}
 
-  <h2>🏪 Mağaza Stoğu (Güncel)</h2>
-  ${magazaStok.length > 0 ? `<table><thead><tr><th>Ürün Kodu</th><th>Ürün Adı</th><th>Stok</th></tr></thead><tbody>${stokRows}</tbody></table>` : '<p style="color:#aaa;padding:8px 0">Stok kaydı bulunamadı.</p>'}
+  <!-- Mağaza stoğu çıktıda gösterilmiyor -->
+
+  <div style="margin-top:32px;padding:18px 24px;background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;page-break-inside:avoid">
+    <div style="font-size:13px;font-weight:700;color:#15803d;letter-spacing:.05em;margin-bottom:10px">📊 GÜN SONU ÖZET — ${tarih}</div>
+    <table style="width:100%;border:none">
+      <tbody>
+        <tr>
+          <td style="padding:4px 0;color:#374151;font-size:13px">Bugünkü Toplam Ciro (Satışlar)</td>
+          <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:800;font-size:16px;color:#15803d">${fTL(satislar.reduce((t, s) => t + (s.tutar || 0), 0))}</td>
+        </tr>
+        <tr><td colspan="2" style="border-top:1px solid #d1fae5;padding:0;height:6px"></td></tr>
+        <tr>
+          <td style="padding:4px 0;color:#374151;font-size:12px">↳ Nakit</td>
+          <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#374151">${fTL(satislar.reduce((t, s) => t + (s.nakitTutar || 0), 0))}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;color:#374151;font-size:12px">↳ Kart</td>
+          <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#374151">${fTL(satislar.reduce((t, s) => t + (s.kartTutar || 0), 0))}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;color:#374151;font-size:12px">↳ Havale</td>
+          <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#374151">${fTL(satislar.reduce((t, s) => t + (s.havaleTutar || 0), 0))}</td>
+        </tr>
+        ${tahsilatlar.length > 0 ? `
+        <tr><td colspan="2" style="border-top:1px solid #d1fae5;padding:0;height:8px"></td></tr>
+        <tr>
+          <td style="padding:4px 0;color:#374151;font-size:13px">Tahsilatlar (Geçmiş Günler)</td>
+          <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:14px;color:#0369a1">${fTL(tahsilatlar.filter(s => !s.iptalIadesi).reduce((t, s) => t + (s.nakitTutar || 0) + (s.kartTutar || 0) + (s.havaleTutar || 0), 0))}</td>
+        </tr>` : ''}
+        <tr><td colspan="2" style="border-top:2px solid #16a34a;padding:0;height:8px"></td></tr>
+        <tr>
+          <td style="padding:4px 0;font-weight:800;font-size:14px;color:#111">TOPLAM GÜNLÜK TAHSİLAT (Kasa)</td>
+          <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:900;font-size:18px;color:#111">${fTL(kasaGun.nakitSatis + (kasaGun.kartSatis || 0) + (kasaGun.havaleSatis || 0))}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
   <div class="footer">Rapor: ${new Date().toLocaleString('tr-TR')}</div>
   <script>window.onload=()=>{window.print()}</script>
@@ -348,12 +411,6 @@ const Kasa: React.FC = () => {
   const [adminTutar, setAdminTutar] = useState<number>(0);
   const [adminNot, setAdminNot]     = useState('');
   const [adminHata, setAdminHata]   = useState('');
-
-  // ── ✅ Backfill state'leri ────────────────────────────────────
-  const [recalcYukleniyor, setRecalcYukleniyor] = useState(false);
-  const [recalcLog, setRecalcLog]               = useState<string[]>([]);
-  const [recalcSonuc, setRecalcSonuc]           = useState<{ guncellenen: number; hatali: number } | null>(null);
-  const [recalcPanelAcik, setRecalcPanelAcik]   = useState(false);
 
   // 5️⃣ Stok Hareketleri (günlük log)
   const [stokHareketler, setStokHareketler] = useState<StokHareket[]>([]);
@@ -464,8 +521,6 @@ const Kasa: React.FC = () => {
     setMagazaStok([]);
     setKasaGun(null);
     setGecmis([]);
-    setRecalcLog([]);
-    setRecalcSonuc(null);
     loadKasa();
   }, [aktifSubeKodu, currentUser]);
 
@@ -638,33 +693,6 @@ const Kasa: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────
-  //  ✅ BACKFILL HANDLER
-  // ─────────────────────────────────────────────────────────────
-
-  const handleRecalcKasa = async () => {
-    if (!isAdmin || !aktifSubeKodu) return;
-    if (!window.confirm(
-      `⚠️ "${aktifSube?.ad ?? aktifSubeKodu}" şubesinin tüm geçmiş kasa günleri yeniden hesaplanacak.\n\nBu işlem:\n• Satış ve tahsilat nakit toplamlarını kasaya yansıtır\n• Gün sonu bakiyelerini zincirleme günceller\n• Geri alınamaz\n\nDevam edilsin mi?`
-    )) return;
-    setRecalcYukleniyor(true);
-    setRecalcLog([]);
-    setRecalcSonuc(null);
-    setRecalcPanelAcik(true);
-    try {
-      const sonuc = await recalculateTumGunler(
-        aktifSubeKodu,
-        (mesaj) => setRecalcLog(prev => [...prev, mesaj]),
-      );
-      setRecalcSonuc(sonuc);
-      await loadKasa();
-    } catch (err) {
-      alert('❌ Backfill hatası: ' + (err as Error).message);
-    } finally {
-      setRecalcYukleniyor(false);
-    }
-  };
-
-  // ─────────────────────────────────────────────────────────────
   //  5️⃣ STOK HAREKETİ EKLE + MAĞAZA STOĞU GÜNCELLE
   // ─────────────────────────────────────────────────────────────
 
@@ -827,62 +855,6 @@ const Kasa: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {/* ═══════════════════════════════════════════════════════ */}
-      {/* ✅ ADMİN RECALC PANELİ — sadece admin görür */}
-      {isAdmin && (
-        <div style={{
-          margin: '0 0 16px 0',
-          border: '1.5px solid #f59e0b',
-          borderRadius: 10,
-          background: '#fffbeb',
-          overflow: 'hidden',
-        }}>
-          <div
-            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', cursor: 'pointer', flexWrap: 'wrap' }}
-            onClick={() => setRecalcPanelAcik(p => !p)}
-          >
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>🔧 Kasa Yeniden Hesaplama</span>
-            <span style={{ fontSize: 12, color: '#b45309' }}>Satış/tahsilat nakitlerini kasaya yansıtır ve geçmiş gün sonlarını düzeltir</span>
-            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#92400e' }}>{recalcPanelAcik ? '▲ Gizle' : '▼ Göster'}</span>
-          </div>
-          {recalcPanelAcik && (
-            <div style={{ padding: '0 18px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
-                <button
-                  onClick={handleRecalcKasa}
-                  disabled={recalcYukleniyor}
-                  style={{
-                    padding: '8px 20px',
-                    background: recalcYukleniyor ? '#d1d5db' : '#f59e0b',
-                    color: 'white', border: 'none', borderRadius: 8,
-                    fontWeight: 700, fontSize: 13,
-                    cursor: recalcYukleniyor ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {recalcYukleniyor ? '⏳ Hesaplanıyor...' : '🔄 Tüm Geçmiş Günleri Yeniden Hesapla'}
-                </button>
-                {recalcSonuc && !recalcYukleniyor && (
-                  <span style={{ fontSize: 13, fontWeight: 700, color: recalcSonuc.hatali > 0 ? '#dc2626' : '#16a34a' }}>
-                    ✅ {recalcSonuc.guncellenen} gün güncellendi
-                    {recalcSonuc.hatali > 0 && ` · ❌ ${recalcSonuc.hatali} hata`}
-                  </span>
-                )}
-              </div>
-              {recalcLog.length > 0 && (
-                <div style={{
-                  maxHeight: 220, overflowY: 'auto',
-                  background: '#1e1e1e', borderRadius: 8,
-                  padding: '10px 14px', fontFamily: 'monospace',
-                  fontSize: 11, color: '#a3e635', lineHeight: 1.8,
-                }}>
-                  {recalcLog.map((log, i) => <div key={i}>{log}</div>)}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ═══════════════════════════════════════════════════════ */}
       {!gecmisGorunuyor ? (
@@ -1086,7 +1058,21 @@ const Kasa: React.FC = () => {
                                   <td style={{ color: '#0066cc', fontFamily: 'var(--font-mono)' }}>{s.kartTutar > 0 ? formatPrice(s.kartTutar) : '—'}</td>
                                   <td style={{ color: '#666', fontFamily: 'var(--font-mono)' }}>{s.havaleTutar > 0 ? formatPrice(s.havaleTutar) : '—'}</td>
                                   <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{formatPrice(s.tutar)}</td>
-                                  <td><span className={`tip-badge ${s.onayDurumu ? 'nakit' : 'gider'}`}>{s.onayDurumu ? '✅ Onaylı' : '⏳ Bekliyor'}</span></td>
+                                  <td>
+                                    <span className={`tip-badge ${s.onayDurumu ? 'nakit' : 'gider'}`}>{s.onayDurumu ? '✅ Onaylı' : '⏳ Bekliyor'}</span>
+                                    {(s as any).iadeDurumu && (
+                                      <span style={{
+                                        marginLeft: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                                        background: (s as any).iadeDurumu === 'IADE_ODENDI' ? '#dcfce7' : '#fef9c3',
+                                        color: (s as any).iadeDurumu === 'IADE_ODENDI' ? '#16a34a' : '#92400e',
+                                      }}>
+                                        {(s as any).iadeDurumu === 'IADE_GEREKIYOR' ? '⚠️ İade Gerekiyor' :
+                                         (s as any).iadeDurumu === 'IADE_BEKLIYOR'  ? '🔄 İade Bekliyor'  :
+                                         (s as any).iadeDurumu === 'IADE_ONAYLANDI' ? '✅ İade Onaylandı' :
+                                         (s as any).iadeDurumu === 'IADE_ODENDI'    ? '💚 İade Ödendi'    : ''}
+                                      </span>
+                                    )}
+                                  </td>
                                   <td>{s.kullanici}</td>
                                 </tr>
                               ))}
@@ -1142,8 +1128,16 @@ const Kasa: React.FC = () => {
                                   <td><span className={`tip-badge ${isIptal ? 'gider' : 'nakit'}`}>{s.satisKodu}</span></td>
                                   <td>{s.musteriIsim}</td>
                                   <td className={`tutar ${s.nakitTutar < 0 ? 'cikis' : s.nakitTutar > 0 ? 'giris' : ''}`}>{s.nakitTutar !== 0 ? formatPrice(s.nakitTutar) : '—'}</td>
-                                  <td style={{ color: s.kartTutar < 0 ? 'var(--red)' : '#0066cc', fontFamily: 'var(--font-mono)' }}>{s.kartTutar !== 0 ? formatPrice(s.kartTutar) : '—'}</td>
-                                  <td style={{ color: '#666', fontFamily: 'var(--font-mono)' }}>{s.havaleTutar !== 0 ? formatPrice(s.havaleTutar) : '—'}</td>
+                                  <td style={{ color: s.kartTutar < 0 ? 'var(--red)' : '#0066cc', fontFamily: 'var(--font-mono)' }}>
+                                    {s.kartTutar !== 0 ? (
+                                      <>{formatPrice(s.kartTutar)}{(s as any).kartBanka && <><br/><span style={{fontSize:10,color:'#6b7280'}}>{(s as any).kartBanka}</span></>}</>
+                                    ) : '—'}
+                                  </td>
+                                  <td style={{ color: '#666', fontFamily: 'var(--font-mono)' }}>
+                                    {s.havaleTutar !== 0 ? (
+                                      <>{formatPrice(s.havaleTutar)}{(s as any).havaleBanka && <><br/><span style={{fontSize:10,color:'#6b7280'}}>{(s as any).havaleBanka}</span></>}</>
+                                    ) : '—'}
+                                  </td>
                                   <td className={`tutar ${(s.nakitTutar + s.kartTutar + s.havaleTutar) < 0 ? 'cikis' : 'giris'}`} style={{ fontWeight: 700 }}>{formatPrice(s.nakitTutar + s.kartTutar + s.havaleTutar)}</td>
                                   <td style={{ fontSize: 11, color: isIptal ? 'var(--red)' : 'var(--gray-500)' }}>{(s as any).aciklama || (isIptal ? 'Satış iptali iadesi' : '—')}</td>
                                 </tr>
@@ -1521,7 +1515,19 @@ const Kasa: React.FC = () => {
                           <td style={{ color: '#0066cc', fontFamily: 'var(--font-mono)' }}>{s.kartTutar > 0 ? formatPrice(s.kartTutar) : '—'}</td>
                           <td style={{ color: '#666', fontFamily: 'var(--font-mono)' }}>{s.havaleTutar > 0 ? formatPrice(s.havaleTutar) : '—'}</td>
                           <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{formatPrice(s.tutar)}</td>
-                          <td><span className={`tip-badge ${s.onayDurumu ? 'nakit' : 'gider'}`}>{s.onayDurumu ? '✅ Onaylı' : '⏳ Bekliyor'}</span></td>
+                          <td>
+                            <span className={`tip-badge ${s.onayDurumu ? 'nakit' : 'gider'}`}>{s.onayDurumu ? '✅ Onaylı' : '⏳ Bekliyor'}</span>
+                            {(s as any).iadeDurumu && (
+                              <span style={{ marginLeft: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                                background: (s as any).iadeDurumu === 'IADE_ODENDI' ? '#dcfce7' : '#fef9c3',
+                                color: (s as any).iadeDurumu === 'IADE_ODENDI' ? '#16a34a' : '#92400e' }}>
+                                {(s as any).iadeDurumu === 'IADE_GEREKIYOR' ? '⚠️ İade Gerekiyor' :
+                                 (s as any).iadeDurumu === 'IADE_BEKLIYOR'  ? '🔄 İade Bekliyor'  :
+                                 (s as any).iadeDurumu === 'IADE_ONAYLANDI' ? '✅ İade Onaylandı' :
+                                 (s as any).iadeDurumu === 'IADE_ODENDI'    ? '💚 İade Ödendi'    : ''}
+                              </span>
+                            )}
+                          </td>
                           <td>{s.kullanici}</td>
                         </tr>
                       ))}
