@@ -4,7 +4,7 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import {
   collection, query, where, orderBy, onSnapshot, Timestamp,
-  doc, setDoc, getDocs, limit, writeBatch, deleteDoc
+  doc, setDoc, getDocs, writeBatch, deleteDoc, limit // 👈 limit burada import edildi
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
@@ -128,6 +128,7 @@ const grupla = (list: Bildirim[]): [string, Bildirim[]][] => {
     if (!m.has(k)) m.set(k, []);
     m.get(k)!.push(b);
   });
+  // Set'i diziye çevirmek için Array.from kullanıyoruz (downlevelIteration hatası çözümü)
   return Array.from(m.entries());
 };
 
@@ -137,9 +138,11 @@ const sortList = (
   pins: Set<string>,
 ): Bildirim[] =>
   [...list].sort((a, b) => {
-    // Pin her zaman üstte
-    const pd = (pins.has(b.id) ? 1 : 0) - (pins.has(a.id) ? 1 : 0);
-    if (pd !== 0) return pd;
+    // Pin her zaman üstte - Set.has ile kontrol
+    const aPinli = pins.has(a.id) ? 1 : 0;
+    const bPinli = pins.has(b.id) ? 1 : 0;
+    if (aPinli !== bPinli) return bPinli - aPinli;
+    
     switch (mod) {
       case 'oncelik':
         return (
@@ -357,7 +360,7 @@ const NotificationBell: React.FC = () => {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────
-  //  PANEL AÇILINCE ARAMA ODAKLAN
+  //  PANEL AÇILINCA ARAMA ODAKLAN
   // ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (acik) setTimeout(() => aramaRef.current?.focus(), 180);
@@ -393,7 +396,7 @@ const NotificationBell: React.FC = () => {
       setTimeout(() => setYeniSayac(0), 4000);
     }
     oncekiOkunmamis.current = okunsuz;
-  }, [bildirimler]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bildirimler, okunmuslar]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────────────────────────────
   //  FIRESTORE: Log bildirimler (realtime)
@@ -411,7 +414,7 @@ const NotificationBell: React.FC = () => {
         collection(db, `subeler/${sube.dbPath}/loglar`),
         where('tarih', '>=', Timestamp.fromDate(birHaftaOnce)),
         orderBy('tarih', 'desc'),
-        limit(60),
+        limit(60) // 👈 limit artık import edildi
       ),
       { includeMetadataChanges: false },
       snap => {
@@ -441,7 +444,7 @@ const NotificationBell: React.FC = () => {
       }
     );
     return unsub;
-  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUser, pinliler]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────────────────────────────
   //  FIRESTORE: Satış bildirimler (realtime)
@@ -459,7 +462,7 @@ const NotificationBell: React.FC = () => {
         collection(db, `subeler/${sube.dbPath}/satislar`),
         where('olusturmaTarihi', '>=', Timestamp.fromDate(ucGunOnce)),
         orderBy('olusturmaTarihi', 'desc'),
-        limit(35),
+        limit(35) // 👈 limit artık import edildi
       ),
       { includeMetadataChanges: false },
       snap => {
@@ -540,7 +543,7 @@ const NotificationBell: React.FC = () => {
       }
     );
     return unsub;
-  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUser, pinliler]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────────────────────────────
   //  TÜREMİŞ VERİ (useMemo)
@@ -620,18 +623,22 @@ const NotificationBell: React.FC = () => {
   }, [currentUser?.uid, pinliler]);
 
   const okunduYap = useCallback((id: string) => {
-    const s = new Set(okunmuslar); s.add(id);
+    const s = new Set(okunmuslar);
+    s.add(id);
     setOkunmuslar(s);
     okunduYaz([id]);
   }, [okunmuslar, okunduYaz]);
 
   const tumunuOku = useCallback(() => {
     const ids = bildirimler.filter(b => !okunmuslar.has(b.id)).map(b => b.id);
-    setOkunmuslar(new Set(bildirimler.map(b => b.id)));
+    // Set'i diziye çevirmek için spread operatörü yerine Array.from kullanıyoruz
+    const yeniOkunmuslar = new Set(bildirimler.map(b => b.id));
+    setOkunmuslar(yeniOkunmuslar);
     okunduYaz(ids);
   }, [bildirimler, okunmuslar, okunduYaz]);
 
   const seciliOku = useCallback(() => {
+    // Set'i diziye çevirmek için Array.from kullanıyoruz
     const ids = Array.from(seciliIdler);
     const s   = new Set(okunmuslar);
     ids.forEach(id => s.add(id));
@@ -647,7 +654,11 @@ const NotificationBell: React.FC = () => {
   const handleTikla = useCallback((b: Bildirim) => {
     if (secimModu) {
       const s = new Set(seciliIdler);
-      s.has(b.id) ? s.delete(b.id) : s.add(b.id);
+      if (s.has(b.id)) {
+        s.delete(b.id);
+      } else {
+        s.add(b.id);
+      }
       setSeciliIdler(s);
       return;
     }
@@ -667,7 +678,8 @@ const NotificationBell: React.FC = () => {
           setBildirimler(cur => {
             const ids = cur.filter(b => !okunmuslar.has(b.id)).map(b => b.id);
             if (ids.length) {
-              setOkunmuslar(new Set(cur.map(b => b.id)));
+              const yeniOkunmuslar = new Set(cur.map(b => b.id));
+              setOkunmuslar(yeniOkunmuslar);
               okunduYaz(ids);
             }
             return cur;
@@ -947,7 +959,11 @@ const NotificationBell: React.FC = () => {
                     : 'Bildirim seçin'}
                 </span>
                 <button className="nb-secim-btn"
-                  onClick={() => setSeciliIdler(new Set(gosterilecek.map(b => b.id)))}>
+                  onClick={() => {
+                    // Set'e dönüştürürken Array.from kullanıyoruz
+                    const yeniSecili = new Set(gosterilecek.map(b => b.id));
+                    setSeciliIdler(yeniSecili);
+                  }}>
                   Tümünü Seç
                 </button>
                 <button className="nb-secim-btn"
