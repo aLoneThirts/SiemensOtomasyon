@@ -982,39 +982,7 @@ const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } =
 
         {/* 5. 4'LÜ ALT GRID */}
         <div className="cp-bottom-4grid">
-{/* EN ÇOK SATAN ÜRÜNLER - BÜYÜK TL GÖSTERİMİ */}
-<div className="cp-card">
-  <div className="cp-card-header">
-    <h3>
-      <span className="cp-card-icon">🏆</span>
-      En Çok Satan Ürünler
-    </h3>
-    <span className="cp-card-badge">Top 5</span>
-  </div>
-  <div className="cp-card-content">
-    {urunAnalizi.enCokSatanlar.length === 0 ? (
-      <div className="cp-empty-state">Satış verisi yok</div>
-    ) : (
-      <div className="cp-urun-listesi">
-        {urunAnalizi.enCokSatanlar.map((urun, index) => (
-          <div key={index} className="cp-urun-item">
-            <div className="cp-urun-sira">
-              <span className="cp-urun-sira-num">#{urun.sira || index + 1}</span>
-            </div>
-            <div className="cp-urun-bilgi">
-              <div className="cp-urun-ad">{urun.ad}</div>
-              <div className="cp-urun-detay">
-                <span className="cp-urun-adet">{urun.adet} adet</span>
-                {urun.subeAd && <span className="cp-urun-sube"> • {urun.subeAd}</span>}
-              </div>
-            </div>
-            <div className="cp-urun-ciro buyuk">{formatTL(urun.ciro)}</div>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-</div>
+
           
           {/* GÜNLÜK SATIŞ GRAFİĞİ */}
           <div className="cp-card">
@@ -1051,51 +1019,7 @@ const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } =
             </div>
           </div>
           
-          {/* AZALAN STOKLAR - TÜM ŞUBELER */}
-          <div className="cp-card">
-            <div className="cp-card-header">
-              <h3>
-                <span className="cp-card-icon">⚠️</span>
-                Azalan Stoklar
-              </h3>
-              <span className="cp-card-badge">
-                {urunAnalizi.azalanStoklar.length} ürün kritik
-              </span>
-            </div>
-            <div className="cp-card-content">
-              {urunAnalizi.azalanStoklar.length === 0 ? (
-                <div className="cp-empty-state">Kritik stok yok ✅</div>
-              ) : (
-                <div className="cp-stok-listesi">
-                  {urunAnalizi.azalanStoklar.map((stok, index) => (
-                    <div key={index} className="cp-stok-item">
-                      <div className="cp-stok-sube" style={{ background: `${stok.renk}15`, color: stok.renk }}>
-                        {stok.sube}
-                      </div>
-                      <div className="cp-stok-bilgi">
-                        <div className="cp-stok-ust">
-                          <span className="cp-stok-kod">{stok.urunKodu}</span>
-                          <span className="cp-stok-adet" style={{ color: stok.adet < 5 ? '#b34a5c' : '#c28f2e' }}>
-                            {stok.adet} / {stok.kritikSeviye}
-                          </span>
-                        </div>
-                        <div className="cp-stok-ad">{stok.urunAdi}</div>
-                        <div className="cp-stok-progress">
-                          <div 
-                            className="cp-stok-progress-fill" 
-                            style={{ 
-                              width: `${(stok.adet / stok.kritikSeviye) * 100}%`,
-                              background: stok.adet < 5 ? '#b34a5c' : '#c28f2e'
-                            }} 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+         
           
           {/* MAĞAZA HEDEFLERİ (Özet) */}
           <div className="cp-card">

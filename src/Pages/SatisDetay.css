@@ -1,5 +1,6 @@
 /* =============================================
-   SATIŞ DETAY CSS - A4'Ü BÜYÜT, İÇERİK SABİT
+   SATIŞ DETAY CSS - A4 TEK SAYFA + MOBİL UYUMLU
+   Tüfekçi Home | Siemens Otomasyon
    ============================================= */
 
 * {
@@ -8,79 +9,143 @@
   box-sizing: border-box;
 }
 
-.detay-container {
-  min-height: 100vh;
-  background: #f5f5f5;
-  padding: 20px;
+:root {
+  --teal: #009999;
+  --teal-dark: #007575;
+  --green: #10b981;
+  --green-light: #f0fdf4;
+  --red: #ef4444;
+  --red-light: #fef2f2;
+  --blue: #3b82f6;
+  --blue-light: #eff6ff;
+  --yellow: #ffc107;
+  --yellow-light: #fff3cd;
+  --gray-50: #f8f9fa;
+  --gray-100: #f1f3f4;
+  --gray-200: #e8eaed;
+  --gray-300: #dadce0;
+  --gray-400: #bdc1c6;
+  --gray-500: #80868b;
+  --gray-600: #5f6368;
+  --gray-700: #3c4043;
+  --gray-800: #202124;
+  --gray-900: #111213;
+  
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 }
 
+/* ===== ANA KAPSAM ===== */
+.detay-container {
+  min-height: 100vh;
+  background: var(--gray-50);
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ===== HEADER ===== */
 .detay-header {
   max-width: 1200px;
   margin: 0 auto 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .detay-header h1 {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--gray-900);
+  letter-spacing: -0.3px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .btn-back, .btn-print {
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
   cursor: pointer;
   border: none;
-  font-size: 14px;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .btn-back {
   background: white;
-  border: 2px solid #009999;
-  color: #009999;
+  border: 2px solid var(--teal);
+  color: var(--teal);
+}
+
+.btn-back:hover {
+  background: var(--teal);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .btn-print {
-  background: #28a745;
+  background: var(--green);
   color: white;
 }
 
+.btn-print:hover {
+  background: #059669;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ===== ANA İÇERİK ===== */
 .detay-icerik {
   max-width: 1200px;
   margin: 0 auto;
   background: white;
   padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--gray-200);
 }
 
+/* ===== BAŞLIK BÖLÜMÜ ===== */
 .baslik-bolumu {
   text-align: center;
   margin-bottom: 25px;
   padding-bottom: 15px;
-  border-bottom: 3px solid #009999;
+  border-bottom: 3px solid var(--teal);
 }
 
 .firma-adi {
   font-size: 28px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--gray-900);
+  letter-spacing: -0.5px;
 }
 
 .sayfa-basligi {
   font-size: 20px;
   font-weight: 600;
-  color: #009999;
+  color: var(--teal);
   margin-top: 5px;
 }
 
+/* ===== YEŞİL ÇERÇEVE (MÜŞTERİ BİLGİLERİ) ===== */
 .yesil-cerceve {
-  border: 3px solid #10b981;
-  border-radius: 12px;
-  background: #f0fdf4;
+  border: 3px solid var(--green);
+  border-radius: var(--radius-lg);
+  background: var(--green-light);
   padding: 20px 25px;
   margin-bottom: 25px;
 }
@@ -91,7 +156,7 @@
   gap: 20px;
   padding-bottom: 15px;
   margin-bottom: 15px;
-  border-bottom: 2px solid #10b981;
+  border-bottom: 2px solid var(--green);
 }
 
 .sutun {
@@ -99,32 +164,33 @@
 }
 
 .orta-sutun {
-  border-left: 2px solid #10b981;
-  border-right: 2px solid #10b981;
+  border-left: 2px solid var(--green);
+  border-right: 2px solid var(--green);
   padding: 0 20px;
 }
 
 .etiket {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  color: #666;
+  color: var(--gray-600);
   text-transform: uppercase;
   margin-bottom: 5px;
+  letter-spacing: 0.5px;
 }
 
 .deger {
   font-size: 18px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--gray-900);
   word-break: break-word;
 }
 
 .bilgi {
   font-size: 13px;
-  color: #333;
-  margin-bottom: 3px;
+  color: var(--gray-700);
+  margin-bottom: 4px;
   word-break: break-word;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .alt-satir {
@@ -135,7 +201,7 @@
 
 .sol-kolon {
   padding-right: 20px;
-  border-right: 2px solid #10b981;
+  border-right: 2px solid var(--green);
 }
 
 .sag-kolon {
@@ -143,21 +209,25 @@
 }
 
 .baslik-alt {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--gray-800);
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
 }
 
 .satir-item {
   font-size: 13px;
-  color: #333;
+  color: var(--gray-700);
   margin-bottom: 5px;
-  line-height: 1.4;
+  line-height: 1.5;
   word-break: break-word;
+  display: flex;
+  gap: 5px;
 }
 
+/* ===== ANA BÖLÜM (ÜRÜNLER + YAN PANEL) ===== */
 .ana-bolum {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
@@ -165,10 +235,11 @@
   margin-bottom: 25px;
 }
 
+/* ===== KIRMIZI ÇERÇEVE (ÜRÜNLER) ===== */
 .kirmizi-cerceve {
-  border: 3px solid #ef4444;
-  border-radius: 12px;
-  background: #fef2f2;
+  border: 3px solid var(--red);
+  border-radius: var(--radius-lg);
+  background: var(--red-light);
   padding: 20px;
 }
 
@@ -180,36 +251,45 @@
 }
 
 .urun-tablo th {
-  background: #f8f9fa;
+  background: rgba(239, 68, 68, 0.1);
   padding: 10px 8px;
   text-align: left;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  border-bottom: 2px solid #ef4444;
+  border-bottom: 2px solid var(--red);
+  color: var(--gray-800);
 }
 
 .urun-tablo td {
   padding: 8px;
-  font-size: 14px;
-  border-bottom: 1px solid #fee2e2;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .urun-tablo .bos-satir td {
-  color: #999;
+  color: var(--gray-500);
   font-style: italic;
-  font-size: 13px;
+  font-size: 12px;
+  text-align: center;
+  padding: 20px;
+}
+
+.urun-tablo tbody tr:hover {
+  background: rgba(239, 68, 68, 0.05);
 }
 
 .toplam-alan {
   padding: 12px;
   background: white;
-  border: 2px solid #ef4444;
-  border-radius: 8px;
+  border: 2px solid var(--red);
+  border-radius: var(--radius-md);
   text-align: center;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
+  color: var(--gray-800);
 }
 
+/* ===== YAN PANEL ===== */
 .yan-panel {
   display: flex;
   flex-direction: column;
@@ -217,30 +297,32 @@
 }
 
 .sari-kutu {
-  border: 2px solid #ffc107;
-  border-radius: 10px;
-  background: #fff3cd;
+  border: 2px solid var(--yellow);
+  border-radius: var(--radius-lg);
+  background: var(--yellow-light);
   padding: 15px;
 }
 
 .kutu-baslik {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--gray-800);
   text-transform: uppercase;
   margin-bottom: 8px;
+  letter-spacing: 0.5px;
 }
 
 .kutu-satir {
-  font-size: 14px;
-  color: #333;
-  margin-bottom: 4px;
-  line-height: 1.4;
+  font-size: 13px;
+  color: var(--gray-700);
+  margin-bottom: 5px;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .yesil-kutu {
-  border: 2px solid #10b981;
-  border-radius: 10px;
+  border: 2px solid var(--green);
+  border-radius: var(--radius-lg);
   background: #d1fae5;
   padding: 15px;
 }
@@ -254,83 +336,129 @@
 
 .etiket-tablo th,
 .etiket-tablo td {
-  padding: 5px;
+  padding: 6px 5px;
   text-align: left;
-  font-size: 13px;
-  border-bottom: 1px solid #10b981;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.etiket-tablo th {
+  font-weight: 700;
+  color: var(--gray-700);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.etiket-tablo td {
+  color: var(--gray-700);
 }
 
 .etiket-toplam {
   padding: 8px;
   background: white;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
+  border: 1px solid var(--green);
 }
 
+/* ===== ÖDEME BÖLÜMÜ ===== */
 .odeme-bolumu {
   margin-bottom: 20px;
 }
 
 .odeme-satir {
-  font-size: 14px;
-  color: #333;
-  margin-bottom: 5px;
-  padding: 3px 0;
-  line-height: 1.4;
+  font-size: 13px;
+  color: var(--gray-700);
+  margin-bottom: 6px;
+  padding: 4px 0;
+  line-height: 1.5;
   word-break: break-word;
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed rgba(239, 68, 68, 0.2);
+}
+
+.odeme-satir:last-child {
+  border-bottom: none;
 }
 
 .hesaba-alan {
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 10px;
   background: white;
-  border: 2px solid #ef4444;
-  border-radius: 8px;
+  border: 2px solid var(--red);
+  border-radius: var(--radius-md);
   text-align: center;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
+  color: var(--gray-800);
 }
 
+/* ===== MAVİ ÇERÇEVE (NOTLAR + ONAY) ===== */
 .mavi-cerceve {
-  border: 3px solid #3b82f6;
-  border-radius: 12px;
-  background: #eff6ff;
+  border: 3px solid var(--blue);
+  border-radius: var(--radius-lg);
+  background: var(--blue-light);
   padding: 25px;
   margin-bottom: 20px;
 }
 
 .onay-metin {
   text-align: center;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   margin-bottom: 20px;
   padding-bottom: 15px;
-  border-bottom: 2px solid #3b82f6;
+  border-bottom: 2px solid var(--blue);
+  color: var(--gray-800);
 }
 
-.imza-metin {
-  text-align: center;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 1px;
+.imza-satirlari {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 15px;
 }
 
+.imza-satir {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-700);
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.imza-cizgi {
+  flex: 1;
+  height: 2px;
+  background: var(--gray-300);
+  margin-top: 5px;
+}
+
+/* ===== ALT BİLGİ ===== */
 .alt-bilgi {
   display: flex;
   justify-content: space-between;
   padding-top: 15px;
-  border-top: 2px solid #e5e7eb;
-  font-size: 12px;
-  color: #999;
+  margin-top: 15px;
+  border-top: 2px solid var(--gray-200);
+  font-size: 11px;
+  color: var(--gray-500);
 }
 
+/* ===== YÜKLEME & HATA DURUMLARI ===== */
 .loading {
   text-align: center;
-  padding: 60px 20px;
-  font-size: 18px;
-  color: #666;
+  padding: 80px 20px;
+  font-size: 16px;
+  color: var(--gray-500);
+  background: white;
+  border-radius: var(--radius-lg);
+  max-width: 1200px;
+  margin: 20px auto;
 }
 
 .not-found {
@@ -339,134 +467,89 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 30px;
+  gap: 20px;
+  background: var(--gray-50);
 }
 
-/* ========== A4 PRINT CSS - 1 SAYFAYA SIĞDIR ========== */
-@media print {
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
+.not-found h2 {
+  font-size: 24px;
+  color: var(--gray-700);
+}
 
-  .no-print {
-    display: none !important;
-  }
+/* =============================================
+   RESPONSIVE TASARIM (MOBİL/TABLET)
+   ============================================= */
 
-  body {
-    background: white;
-    margin: 0;
-    padding: 0;
-  }
-
+/* Küçük telefonlar (480px ve altı) */
+@media screen and (max-width: 480px) {
   .detay-container {
-    background: white;
-    padding: 0;
-    min-height: auto;
+    padding: 10px;
   }
-
+  
+  .detay-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .detay-header h1 {
+    font-size: 18px;
+    text-align: center;
+  }
+  
+  .header-actions {
+    justify-content: center;
+  }
+  
+  .btn-back, .btn-print {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  
   .detay-icerik {
-    max-width: 100%;
-    padding: 12px 16px;
-    box-shadow: none;
-    border-radius: 0;
-    margin: 0;
-    width: 100%;
-    background: white;
+    padding: 12px;
   }
-
-  .bos-satir {
-    display: none !important;
+  
+  .firma-adi {
+    font-size: 20px;
   }
-
-  @page {
-    size: A4;
-    margin: 0.4cm;
+  
+  .sayfa-basligi {
+    font-size: 16px;
   }
-
-  /* Başlık küçült */
-  .firma-adi { font-size: 20px !important; }
-  .sayfa-basligi { font-size: 15px !important; }
-  .baslik-bolumu { margin-bottom: 8px !important; padding-bottom: 8px !important; }
-
-  /* Yeşil çerçeve sıkıştır */
-  .yesil-cerceve { padding: 8px 12px !important; margin-bottom: 8px !important; border-width: 2px !important; border-radius: 6px !important; }
-  .ust-satir { gap: 10px !important; padding-bottom: 6px !important; margin-bottom: 6px !important; }
-  .alt-satir { gap: 10px !important; }
-  .deger { font-size: 13px !important; }
-  .etiket { font-size: 10px !important; }
-  .bilgi { font-size: 10px !important; margin-bottom: 1px !important; }
-  .satir-item { font-size: 10px !important; margin-bottom: 2px !important; }
-  .baslik-alt { font-size: 11px !important; margin-bottom: 4px !important; }
-  .orta-sutun { padding: 0 8px !important; }
-  .sol-kolon { padding-right: 10px !important; }
-  .sag-kolon { padding-left: 10px !important; }
-
-  /* Ana bölüm */
-  .ana-bolum { gap: 10px !important; margin-bottom: 8px !important; }
-  .kirmizi-cerceve { padding: 8px 10px !important; border-width: 2px !important; border-radius: 6px !important; }
-
-  /* Ürün tablosu */
-  .urun-tablo { font-size: 11px !important; margin-bottom: 6px !important; }
-  .urun-tablo th { font-size: 11px !important; padding: 4px 5px !important; }
-  .urun-tablo td { font-size: 11px !important; padding: 3px 5px !important; }
-
-  /* Toplam alan */
-  .toplam-alan { font-size: 12px !important; padding: 5px 8px !important; }
-
-  /* Yan panel */
-  .yan-panel { gap: 8px !important; }
-  .sari-kutu { padding: 8px 10px !important; border-width: 2px !important; border-radius: 6px !important; }
-  .yesil-kutu { padding: 8px 10px !important; border-width: 2px !important; border-radius: 6px !important; }
-  .kutu-baslik { font-size: 11px !important; margin-bottom: 4px !important; }
-  .kutu-satir { font-size: 11px !important; margin-bottom: 2px !important; }
-  .etiket-tablo th, .etiket-tablo td { font-size: 10px !important; padding: 2px 4px !important; }
-  .etiket-toplam { font-size: 11px !important; padding: 4px !important; }
-
-  /* Ödeme bölümü */
-  .odeme-bolumu { margin-bottom: 8px !important; }
-  .kirmizi-cerceve.odeme-bolumu { padding: 8px 10px !important; }
-  .odeme-satir { font-size: 11px !important; margin-bottom: 2px !important; padding: 1px 0 !important; }
-  .hesaba-alan { font-size: 12px !important; padding: 5px 8px !important; margin-top: 5px !important; }
-
-  /* Mavi çerçeve (notlar + onay) */
-  .mavi-cerceve { padding: 8px 12px !important; margin-bottom: 8px !important; border-width: 2px !important; border-radius: 6px !important; }
-  .onay-metin { font-size: 13px !important; margin-bottom: 8px !important; padding-bottom: 6px !important; }
-  .imza-metin { font-size: 12px !important; }
-
-  /* Alt bilgi */
-  .alt-bilgi { font-size: 9px !important; padding-top: 6px !important; }
-}
-
-/* Küçük ekranlar için responsive */
-@media screen and (max-width: 768px) {
-  .detay-icerik {
-    padding: 15px;
+  
+  .yesil-cerceve {
+    padding: 12px;
   }
   
   .ust-satir {
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: 12px;
   }
   
   .orta-sutun {
     border-left: none;
     border-right: none;
-    border-top: 2px solid #10b981;
-    border-bottom: 2px solid #10b981;
-    padding: 15px 0;
+    border-top: 2px solid var(--green);
+    border-bottom: 2px solid var(--green);
+    padding: 12px 0;
+  }
+  
+  .deger {
+    font-size: 15px;
   }
   
   .alt-satir {
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: 12px;
   }
   
   .sol-kolon {
     border-right: none;
-    border-bottom: 2px solid #10b981;
+    border-bottom: 2px solid var(--green);
     padding-right: 0;
-    padding-bottom: 15px;
+    padding-bottom: 12px;
   }
   
   .sag-kolon {
@@ -475,6 +558,469 @@
   
   .ana-bolum {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 15px;
+  }
+  
+  .kirmizi-cerceve {
+    padding: 12px;
+  }
+  
+  .urun-tablo {
+    font-size: 12px;
+  }
+  
+  .urun-tablo th {
+    font-size: 11px;
+    padding: 6px 4px;
+  }
+  
+  .urun-tablo td {
+    font-size: 11px;
+    padding: 6px 4px;
+  }
+  
+  .toplam-alan {
+    font-size: 13px;
+    padding: 8px;
+  }
+  
+  .sari-kutu, .yesil-kutu {
+    padding: 12px;
+  }
+  
+  .kutu-baslik {
+    font-size: 13px;
+  }
+  
+  .etiket-tablo th,
+  .etiket-tablo td {
+    font-size: 11px;
+    padding: 4px;
+  }
+  
+  .odeme-satir {
+    font-size: 12px;
+  }
+  
+  .hesaba-alan {
+    font-size: 13px;
+    padding: 8px;
+  }
+  
+  .mavi-cerceve {
+    padding: 15px;
+  }
+  
+  .onay-metin {
+    font-size: 14px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+  }
+  
+  .imza-satirlari {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  
+  .imza-satir {
+    font-size: 13px;
+  }
+  
+  .alt-bilgi {
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    font-size: 9px;
+  }
+}
+
+/* Telefonlar (481px - 640px) */
+@media screen and (min-width: 481px) and (max-width: 640px) {
+  .detay-icerik {
+    padding: 18px;
+  }
+  
+  .ust-satir {
+    grid-template-columns: 1fr;
+  }
+  
+  .orta-sutun {
+    border-left: none;
+    border-right: none;
+    border-top: 2px solid var(--green);
+    border-bottom: 2px solid var(--green);
+    padding: 12px 0;
+  }
+  
+  .alt-satir {
+    grid-template-columns: 1fr;
+  }
+  
+  .sol-kolon {
+    border-right: none;
+    border-bottom: 2px solid var(--green);
+    padding-right: 0;
+    padding-bottom: 12px;
+  }
+  
+  .sag-kolon {
+    padding-left: 0;
+  }
+  
+  .ana-bolum {
+    grid-template-columns: 1fr;
+  }
+  
+  .imza-satirlari {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+}
+
+/* Tabletler (641px - 900px) */
+@media screen and (min-width: 641px) and (max-width: 900px) {
+  .detay-icerik {
+    padding: 20px;
+  }
+  
+  .ust-satir {
+    grid-template-columns: 1fr 1.5fr 1fr;
+    gap: 10px;
+  }
+  
+  .deger {
+    font-size: 15px;
+  }
+  
+  .ana-bolum {
+    grid-template-columns: 1.2fr 1fr;
+    gap: 15px;
+  }
+  
+  .urun-tablo th,
+  .urun-tablo td {
+    font-size: 12px;
+    padding: 6px;
+  }
+}
+
+/* Tablet yatay (901px - 1024px) */
+@media screen and (min-width: 901px) and (max-width: 1024px) {
+  .detay-icerik {
+    padding: 25px;
+  }
+}
+
+/* Büyük ekranlar (1920px ve üzeri) */
+@media screen and (min-width: 1920px) {
+  .detay-icerik {
+    max-width: 1400px;
+    padding: 40px;
+  }
+  
+  .firma-adi {
+    font-size: 32px;
+  }
+  
+  .sayfa-basligi {
+    font-size: 24px;
+  }
+  
+  .deger {
+    font-size: 20px;
+  }
+  
+  .urun-tablo {
+    font-size: 15px;
+  }
+  
+  .urun-tablo th {
+    font-size: 14px;
+    padding: 12px 10px;
+  }
+  
+  .urun-tablo td {
+    font-size: 14px;
+    padding: 10px;
+  }
+}
+
+/* =============================================
+   A4 PRINT CSS - TEK SAYFAYA SIĞDIRMA
+   ============================================= */
+
+@media print {
+  /* Renklerin baskıda korunması */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+  }
+
+  /* Header ve butonları gizle */
+  .no-print,
+  .detay-header {
+    display: none !important;
+  }
+
+  /* Sayfa ayarları */
+  @page {
+    size: A4;
+    margin: 0.5cm;
+  }
+
+  body {
+    background: white;
+    margin: 0;
+    padding: 0;
+    font-size: 11pt;
+  }
+
+  /* Ana container düzenlemeleri */
+  .detay-container {
+    background: white;
+    padding: 0;
+    min-height: auto;
+  }
+
+  .detay-icerik {
+    max-width: 100%;
+    padding: 0.3cm;
+    box-shadow: none;
+    border-radius: 0;
+    margin: 0;
+    background: white;
+    border: none;
+  }
+
+  /* Boş satırları gizle */
+  .bos-satir {
+    display: none !important;
+  }
+
+  /* Başlık bölümü küçült */
+  .baslik-bolumu {
+    margin-bottom: 0.2cm;
+    padding-bottom: 0.2cm;
+    border-bottom-width: 2px;
+  }
+
+  .firma-adi {
+    font-size: 18pt !important;
+  }
+
+  .sayfa-basligi {
+    font-size: 14pt !important;
+    margin-top: 2px;
+  }
+
+  /* Yeşil çerçeve - Müşteri bilgileri */
+  .yesil-cerceve {
+    padding: 0.2cm 0.3cm;
+    margin-bottom: 0.3cm;
+    border-width: 1.5px;
+    border-radius: 4px;
+  }
+
+  .ust-satir {
+    gap: 0.2cm;
+    padding-bottom: 0.15cm;
+    margin-bottom: 0.15cm;
+    border-bottom-width: 1px;
+  }
+
+  .etiket {
+    font-size: 8pt !important;
+    margin-bottom: 1px;
+  }
+
+  .deger {
+    font-size: 10pt !important;
+  }
+
+  .bilgi {
+    font-size: 8pt !important;
+    line-height: 1.2;
+    margin-bottom: 1px;
+  }
+
+  .baslik-alt {
+    font-size: 9pt !important;
+    margin-bottom: 0.1cm;
+  }
+
+  .satir-item {
+    font-size: 8pt !important;
+    line-height: 1.2;
+    margin-bottom: 1px;
+  }
+
+  .orta-sutun {
+    border-left-width: 1px;
+    border-right-width: 1px;
+    padding: 0 0.2cm;
+  }
+
+  .sol-kolon {
+    padding-right: 0.2cm;
+    border-right-width: 1px;
+  }
+
+  .sag-kolon {
+    padding-left: 0.2cm;
+  }
+
+  /* Ana bölüm */
+  .ana-bolum {
+    gap: 0.3cm;
+    margin-bottom: 0.3cm;
+  }
+
+  /* Kırmızı çerçeve - Ürünler */
+  .kirmizi-cerceve {
+    padding: 0.2cm;
+    border-width: 1.5px;
+    border-radius: 4px;
+  }
+
+  .urun-tablo {
+    font-size: 9pt !important;
+    margin-bottom: 0.2cm;
+  }
+
+  .urun-tablo th {
+    font-size: 9pt !important;
+    padding: 0.1cm 0.15cm;
+    border-bottom-width: 1px;
+  }
+
+  .urun-tablo td {
+    font-size: 9pt !important;
+    padding: 0.1cm 0.15cm;
+  }
+
+  .toplam-alan {
+    font-size: 10pt !important;
+    padding: 0.1cm 0.2cm;
+    border-width: 1px;
+    border-radius: 3px;
+  }
+
+  /* Yan panel */
+  .yan-panel {
+    gap: 0.2cm;
+  }
+
+  .sari-kutu,
+  .yesil-kutu {
+    padding: 0.2cm;
+    border-width: 1px;
+    border-radius: 4px;
+  }
+
+  .kutu-baslik {
+    font-size: 9pt !important;
+    margin-bottom: 0.1cm;
+  }
+
+  .kutu-satir {
+    font-size: 8pt !important;
+    line-height: 1.2;
+    margin-bottom: 1px;
+  }
+
+  .etiket-tablo {
+    font-size: 8pt !important;
+    margin-bottom: 0.15cm;
+  }
+
+  .etiket-tablo th,
+  .etiket-tablo td {
+    font-size: 8pt !important;
+    padding: 0.05cm 0.1cm;
+  }
+
+  .etiket-toplam {
+    font-size: 9pt !important;
+    padding: 0.1cm;
+    border-width: 1px;
+  }
+
+  /* Ödeme bölümü */
+  .odeme-bolumu {
+    margin-bottom: 0.2cm;
+  }
+
+  .odeme-satir {
+    font-size: 9pt !important;
+    padding: 0.05cm 0;
+    margin-bottom: 0.05cm;
+  }
+
+  .hesaba-alan {
+    font-size: 10pt !important;
+    padding: 0.1cm;
+    margin-top: 0.1cm;
+    border-width: 1px;
+    border-radius: 3px;
+  }
+
+  /* Mavi çerçeve - Notlar + Onay */
+  .mavi-cerceve {
+    padding: 0.2cm 0.3cm;
+    margin-bottom: 0.2cm;
+    border-width: 1.5px;
+    border-radius: 4px;
+  }
+
+  .onay-metin {
+    font-size: 11pt !important;
+    margin-bottom: 0.15cm;
+    padding-bottom: 0.1cm;
+    border-bottom-width: 1px;
+  }
+
+  .imza-satirlari {
+    gap: 0.5cm;
+    margin-bottom: 0.1cm;
+  }
+
+  .imza-satir {
+    font-size: 10pt !important;
+  }
+
+  .imza-cizgi {
+    height: 1px;
+  }
+
+  /* Alt bilgi */
+  .alt-bilgi {
+    font-size: 7pt !important;
+    padding-top: 0.1cm;
+    margin-top: 0.1cm;
+    border-top-width: 1px;
+  }
+
+  /* Sayfa sonunda boşluk bırakma */
+  .detay-icerik {
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Tabloların bölünmesini engelle */
+  table {
+    page-break-inside: avoid;
+  }
+
+  /* Başlıkların sayfa sonunda kalmasını engelle */
+  h1, h2, h3, .baslik-bolumu, .kutu-baslik {
+    page-break-after: avoid;
+  }
+}
+
+/* Yüksek çözünürlüklü ekranlar için */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .detay-icerik {
+    border-width: 0.5px;
   }
 }

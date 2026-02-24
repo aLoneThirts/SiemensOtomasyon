@@ -22,8 +22,12 @@ const Layout: React.FC<LayoutProps> = ({ children, pageTitle, headerExtra }) => 
   const kullaniciSoyadi = currentUser?.soyad || '';
   const kullaniciSube = getSubeByKod(currentUser?.subeKodu as SubeKodu)?.ad || '';
 
-  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+  // Sayfa değişince sidebar'ı kapat
+  useEffect(() => { 
+    setSidebarOpen(false); 
+  }, [location.pathname]);
 
+  // Sidebar açıkken body scroll'u engelle
   useEffect(() => {
     if (sidebarOpen) {
       document.body.style.overflow = 'hidden';
@@ -56,11 +60,13 @@ const Layout: React.FC<LayoutProps> = ({ children, pageTitle, headerExtra }) => 
 
   return (
     <div className="layout-container">
+      {/* Overlay - mobilde sidebar açıkken gözükür */}
       <div
         className={`layout-overlay ${sidebarOpen ? 'open' : ''}`}
         onClick={() => setSidebarOpen(false)}
       />
 
+      {/* Sidebar - açık/kapalı state'e göre className alır */}
       <aside className={`layout-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <h1>TÜFEKÇİ HOME<span>SİEMENS</span></h1>
@@ -124,12 +130,13 @@ const Layout: React.FC<LayoutProps> = ({ children, pageTitle, headerExtra }) => 
         </div>
       </aside>
 
+      {/* Ana içerik */}
       <div className="layout-main">
         <header className="layout-header">
           <div className="layout-header-left">
             <button
               className="hamburger-btn"
-              onClick={() => setSidebarOpen(prev => !prev)}
+              onClick={() => setSidebarOpen(!sidebarOpen)}
               aria-label="Menüyü aç/kapat"
             >
               <i className={`fas ${sidebarOpen ? 'fa-times' : 'fa-bars'}`}></i>

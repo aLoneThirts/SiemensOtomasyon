@@ -1,11 +1,11 @@
 /* =============================================
-   KONTROL ET CSS
+   KONTROL ET CSS - MOBİL UYUMLU VERSİYON
    ============================================= */
 
 .kontrol-loading {
   text-align: center;
-  padding: 60px;
-  font-size: 16px;
+  padding: 40px 20px;
+  font-size: 15px;
   color: #6b7280;
   background: white;
   border-radius: 16px;
@@ -15,44 +15,58 @@
 /* ── BÖLÜM ── */
 .kontrol-bolum {
   background: white;
-  border-radius: 14px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   overflow: hidden;
   border: 1px solid #e5e7eb;
+  margin-bottom: 16px;
 }
 
 .kontrol-bolum-baslik {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 16px;
   cursor: pointer;
   user-select: none;
   transition: background 0.2s;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.kontrol-bolum-baslik:hover { background: #f9fafb; }
+.kontrol-bolum-baslik:active { 
+  background: #f9fafb; 
+}
 
 .kontrol-baslik-sol {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  flex: 1;
 }
 
-.kontrol-baslik-ikon { font-size: 20px; }
+.kontrol-baslik-ikon { 
+  font-size: 20px; 
+  flex-shrink: 0;
+}
 
 .kontrol-bolum-baslik h2 {
   font-size: 15px;
   font-weight: 800;
   color: #1f2937;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .kontrol-sayac {
   font-size: 12px;
   font-weight: 800;
-  padding: 3px 10px;
-  border-radius: 20px;
+  padding: 4px 12px;
+  border-radius: 30px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .bekleyen-sayac  { background: #fee2e2; color: #991b1b; }
@@ -70,32 +84,57 @@
 }
 
 .kontrol-chevron {
-  font-size: 12px;
+  font-size: 14px;
   color: #9ca3af;
   transition: transform 0.2s;
   display: inline-block;
+  flex-shrink: 0;
 }
 .kontrol-chevron.acik { transform: rotate(180deg); }
 
 /* ── BOŞ STATE ── */
-.kontrol-bos { text-align: center; padding: 40px 20px; border-top: 1px solid #f3f4f6; }
-.kontrol-bos span { font-size: 32px; }
-.kontrol-bos p { margin: 10px 0 0; color: #6b7280; font-size: 14px; font-weight: 500; }
+.kontrol-bos { 
+  text-align: center; 
+  padding: 40px 20px; 
+  border-top: 1px solid #f3f4f6; 
+}
+.kontrol-bos span { 
+  font-size: 36px; 
+  display: block;
+  margin-bottom: 10px;
+}
+.kontrol-bos p { 
+  margin: 0; 
+  color: #6b7280; 
+  font-size: 14px; 
+  font-weight: 500; 
+}
 
 /* ── TABLO ── */
-.kontrol-tablo-wrapper { overflow-x: auto; border-top: 1px solid #f3f4f6; }
+.kontrol-tablo-wrapper { 
+  overflow-x: auto; 
+  border-top: 1px solid #f3f4f6;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
 
-.kontrol-tablo { width: 100%; border-collapse: collapse; min-width: 860px; }
+.kontrol-tablo { 
+  width: 100%; 
+  border-collapse: collapse; 
+  min-width: 700px; 
+}
 
-.kontrol-tablo thead { background: linear-gradient(135deg, #1f2937, #374151); }
+.kontrol-tablo thead { 
+  background: linear-gradient(135deg, #1f2937, #374151); 
+}
 
 .kontrol-tablo th {
-  padding: 11px 14px;
+  padding: 12px 14px;
   text-align: left;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: white;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -106,163 +145,265 @@
   font-size: 13px;
   color: #4b5563;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .kontrol-tablo tbody tr:last-child td { border-bottom: none; }
 
-.satir-bekleyen:hover   { background: #fff5f5; }
-.satir-onaylandi:hover  { background: #f0fdf4; }
+.satir-bekleyen:active   { background: #fff5f5; }
+.satir-onaylandi:active  { background: #f0fdf4; }
 .satir-iptal-talep      { background: #fff5f5 !important; }
-.satir-iptal-talep:hover { background: #fee2e2 !important; }
+.satir-iptal-talep:active { background: #fee2e2 !important; }
 
-.satis-kodu { color: #009999; font-size: 13px; }
+.satis-kodu { 
+  color: #009999; 
+  font-size: 13px; 
+  font-weight: 700;
+}
 
 /* ── KAR/ZARAR BADGE ── */
 .kz-badge {
-  padding: 4px 9px; border-radius: 20px;
-  font-size: 11px; font-weight: 800;
-  display: inline-block; white-space: nowrap;
+  padding: 6px 12px; 
+  border-radius: 30px;
+  font-size: 11px; 
+  font-weight: 800;
+  display: inline-block; 
+  white-space: nowrap;
 }
 .kz-badge.kar   { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
 .kz-badge.zarar { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; }
 
 /* ── ONAY BUTON/BADGE ── */
 .onay-btn {
-  padding: 5px 12px; border: none; border-radius: 20px;
-  font-size: 11px; font-weight: 800; cursor: pointer;
-  transition: all 0.2s ease; font-family: inherit; letter-spacing: 0.4px;
+  padding: 8px 16px; 
+  border: none; 
+  border-radius: 30px;
+  font-size: 12px; 
+  font-weight: 800; 
+  cursor: pointer;
+  transition: all 0.2s ease; 
+  font-family: inherit; 
+  letter-spacing: 0.3px;
+  min-width: 80px;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.onay-btn.bekleyen { background: linear-gradient(135deg, #fed7aa, #fdba74); color: #92400e; }
-.onay-btn.bekleyen:hover { background: linear-gradient(135deg, #fb923c, #f97316); color: white; transform: scale(1.05); }
-.onay-btn.onayli  { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
-.onay-btn.onayli:hover { background: linear-gradient(135deg, #6ee7b7, #34d399); transform: scale(1.05); }
-.onay-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.onay-btn.bekleyen { 
+  background: linear-gradient(135deg, #fed7aa, #fdba74); 
+  color: #92400e; 
+}
+.onay-btn.bekleyen:active { 
+  background: linear-gradient(135deg, #fb923c, #f97316); 
+  color: white; 
+  transform: scale(0.96); 
+}
+.onay-btn.onayli  { 
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0); 
+  color: #065f46; 
+}
+.onay-btn.onayli:active { 
+  background: linear-gradient(135deg, #6ee7b7, #34d399); 
+  transform: scale(0.96); 
+}
+.onay-btn:disabled { 
+  opacity: 0.5; 
+  cursor: not-allowed; 
+  transform: none; 
+}
 
 .onay-btn.iptal-talep {
-  background: #fef2f2; color: #dc2626;
-  border: 1px solid #fca5a5; font-weight: 700; cursor: default;
+  background: #fef2f2; 
+  color: #dc2626;
+  border: 1px solid #fca5a5; 
+  font-weight: 700; 
+  cursor: default;
+  min-width: auto;
 }
 
-.onay-badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; display: inline-block; }
+.onay-badge { 
+  padding: 6px 12px; 
+  border-radius: 30px; 
+  font-size: 11px; 
+  font-weight: 800; 
+  display: inline-block; 
+}
 .onay-badge.bekleyen  { background: #fed7aa; color: #92400e; }
 .onay-badge.onayli    { background: #d1fae5; color: #065f46; }
 .onay-badge.iptal-talep {
-  background: #fef2f2; color: #dc2626;
-  border: 1px solid #fca5a5; padding: 4px 10px;
-  border-radius: 6px; font-size: 12px; font-weight: 700;
+  background: #fef2f2; 
+  color: #dc2626;
+  border: 1px solid #fca5a5; 
+  padding: 4px 10px;
+  border-radius: 8px; 
+  font-size: 12px; 
+  font-weight: 700;
 }
 
 /* ── İŞLEM BUTONLARI ── */
-.islem-btns { display: flex; gap: 6px; }
+.islem-btns { 
+  display: flex; 
+  gap: 8px; 
+  justify-content: flex-end;
+}
 
 .btn-goster, .btn-duzenle {
-  width: 32px; height: 32px; border: none; border-radius: 8px;
-  cursor: pointer; font-size: 14px;
-  display: flex; align-items: center; justify-content: center;
+  width: 36px; 
+  height: 36px; 
+  border: none; 
+  border-radius: 10px;
+  cursor: pointer; 
+  font-size: 15px;
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
   transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-goster {
   background: linear-gradient(135deg, #009999, #007373);
   box-shadow: 0 2px 6px rgba(0, 153, 153, 0.25);
 }
-.btn-goster:hover { background: linear-gradient(135deg, #00b3b3, #008c8c); transform: translateY(-2px); }
+.btn-goster:active { 
+  background: linear-gradient(135deg, #00b3b3, #008c8c); 
+  transform: scale(0.94); 
+}
 
 .btn-duzenle {
   background: linear-gradient(135deg, #ff9800, #f57c00);
   box-shadow: 0 2px 6px rgba(255, 152, 0, 0.25);
 }
-.btn-duzenle:hover { background: linear-gradient(135deg, #f57c00, #e65100); transform: translateY(-2px); }
+.btn-duzenle:active { 
+  background: linear-gradient(135deg, #f57c00, #e65100); 
+  transform: scale(0.94); 
+}
 
 /* ── SAYFALAMA ── */
 .kontrol-pagination {
-  display: flex; align-items: center; gap: 6px;
-  padding: 14px 20px; border-top: 1px solid #f3f4f6; flex-wrap: wrap;
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  gap: 6px;
+  padding: 16px; 
+  border-top: 1px solid #f3f4f6; 
+  flex-wrap: wrap;
 }
 
 .kontrol-pag-btn {
-  padding: 6px 12px; border: 2px solid #e5e7eb; background: white;
-  border-radius: 8px; font-size: 12px; font-weight: 700;
-  cursor: pointer; transition: all 0.2s ease; font-family: inherit; color: #374151;
+  padding: 8px 14px; 
+  border: 2px solid #e5e7eb; 
+  background: white;
+  border-radius: 10px; 
+  font-size: 13px; 
+  font-weight: 700;
+  cursor: pointer; 
+  transition: all 0.2s ease; 
+  font-family: inherit; 
+  color: #374151;
+  min-width: 42px;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
 }
-.kontrol-pag-btn:hover:not(:disabled) { border-color: #ef4444; color: #ef4444; background: #fff5f5; }
+.kontrol-pag-btn:active:not(:disabled) { 
+  border-color: #ef4444; 
+  color: #ef4444; 
+  background: #fff5f5; 
+  transform: scale(0.94); 
+}
 .kontrol-pag-btn.aktif {
   background: linear-gradient(135deg, #ef4444, #dc2626);
-  border-color: #ef4444; color: white;
+  border-color: #ef4444; 
+  color: white;
   box-shadow: 0 3px 8px rgba(239, 68, 68, 0.3);
 }
-.kontrol-pag-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.kontrol-pag-btn:disabled { 
+  opacity: 0.35; 
+  cursor: not-allowed; 
+}
 
-.kontrol-pag-bilgi { font-size: 12px; color: #9ca3af; margin-left: 8px; font-weight: 500; }
-
-/* ── RESPONSIVE ── */
-@media (max-width: 768px) {
-  .kontrol-bolum-baslik { padding: 14px 16px; }
-  .kontrol-bolum-baslik h2 { font-size: 13px; }
-  .kontrol-tablo td, .kontrol-tablo th { padding: 10px 10px; }
+.kontrol-pag-bilgi { 
+  font-size: 13px; 
+  color: #9ca3af; 
+  margin-left: 8px; 
+  font-weight: 500; 
+  width: 100%;
+  text-align: center;
 }
 
 /* =============================================
-   FİLTRELER
+   FİLTRELER - MOBİL DÜZENLEME
    ============================================= */
 .kontrol-filtre-bar {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 16px;
-  padding: 8px 12px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
   background: #f8fafc;
-  border-radius: 8px;
-  margin-bottom: 12px;
+  border-radius: 16px;
+  margin-bottom: 16px;
   border: 1px solid #e2e8f0;
 }
 
 .kontrol-filtre-item {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
 }
 
 .kontrol-filtre-item label {
-  font-size: 10px; font-weight: 700;
-  letter-spacing: 0.6px; color: #64748b;
-  text-transform: uppercase; white-space: nowrap;
+  font-size: 12px; 
+  font-weight: 700;
+  letter-spacing: 0.5px; 
+  color: #475569;
+  text-transform: uppercase; 
 }
 
 .kontrol-filtre-select,
 .kontrol-filtre-input {
-  padding: 5px 8px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 12px 14px;
+  border: 2px solid #cbd5e1;
+  border-radius: 12px;
+  font-size: 14px;
   color: #1e293b;
   background: white;
-  width: 140px;
-  height: 30px;
+  width: 100%;
+  height: 48px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: all 0.2s;
   font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .kontrol-filtre-select:focus,
-.kontrol-filtre-input:focus { border-color: #0ea5e9; }
+.kontrol-filtre-input:focus { 
+  border-color: #0ea5e9; 
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
 
 .kontrol-filtre-sifirla {
-  padding: 5px 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
   background: white;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 600;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
-  height: 30px;
+  height: 48px;
   white-space: nowrap;
+  width: 100%;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  -webkit-tap-highlight-color: transparent;
 }
-.kontrol-filtre-sifirla:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+.kontrol-filtre-sifirla:active { 
+  background: #fee2e2; 
+  color: #dc2626; 
+  border-color: #fca5a5; 
+  transform: scale(0.96);
+}
 
 /* =============================================
    İPTAL TALEP BÖLÜMÜ
@@ -278,30 +419,317 @@
 
 /* ── İPTAL ONAY DIALOG ── */
 .iptal-dialog {
-  display: flex; flex-direction: column;
-  gap: 6px; align-items: flex-start;
+  display: flex; 
+  flex-direction: column;
+  gap: 10px; 
+  align-items: flex-start;
+  padding: 4px 0;
 }
 
 .iptal-soru {
-  font-size: 12px; font-weight: 600;
-  color: #dc2626; white-space: nowrap;
+  font-size: 13px; 
+  font-weight: 700;
+  color: #dc2626; 
 }
 
-.iptal-butonlar { display: flex; gap: 6px; }
+.iptal-butonlar { 
+  display: flex; 
+  gap: 10px; 
+  width: 100%;
+}
 
 .btn-iptal-evet {
-  padding: 4px 12px;
-  background: #dc2626; color: white;
-  border: none; border-radius: 6px;
-  font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s;
+  padding: 10px 20px;
+  background: #dc2626; 
+  color: white;
+  border: none; 
+  border-radius: 10px;
+  font-size: 13px; 
+  font-weight: 700; 
+  cursor: pointer; 
+  transition: all 0.2s;
+  flex: 1;
+  -webkit-tap-highlight-color: transparent;
 }
-.btn-iptal-evet:hover:not(:disabled) { background: #b91c1c; }
+.btn-iptal-evet:active { 
+  background: #b91c1c; 
+  transform: scale(0.96); 
+}
 
 .btn-iptal-hayir {
-  padding: 4px 12px;
-  background: #f1f5f9; color: #475569;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px; font-size: 12px; font-weight: 600;
-  cursor: pointer; transition: background 0.2s;
+  padding: 10px 20px;
+  background: #f1f5f9; 
+  color: #475569;
+  border: 2px solid #cbd5e1;
+  border-radius: 10px; 
+  font-size: 13px; 
+  font-weight: 700;
+  cursor: pointer; 
+  transition: all 0.2s;
+  flex: 1;
+  -webkit-tap-highlight-color: transparent;
 }
-.btn-iptal-hayir:hover:not(:disabled) { background: #e2e8f0; }
+.btn-iptal-hayir:active { 
+  background: #e2e8f0; 
+  transform: scale(0.96); 
+}
+
+/* =============================================
+   TABLET BOYUTU (576px ve üzeri)
+   ============================================= */
+@media (min-width: 576px) {
+  .kontrol-filtre-bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+  
+  .kontrol-filtre-item {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: auto;
+    flex: 1 1 auto;
+  }
+  
+  .kontrol-filtre-item label {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  
+  .kontrol-filtre-select,
+  .kontrol-filtre-input {
+    width: 140px;
+    height: 40px;
+    padding: 8px 12px;
+  }
+  
+  .kontrol-filtre-sifirla {
+    width: auto;
+    height: 40px;
+    padding: 0 16px;
+  }
+  
+  .kontrol-pagination {
+    justify-content: flex-end;
+  }
+  
+  .kontrol-pag-bilgi {
+    width: auto;
+    margin-left: auto;
+  }
+  
+  .iptal-butonlar {
+    width: auto;
+  }
+}
+
+/* =============================================
+   MASAÜSTÜ BOYUTU (768px ve üzeri)
+   ============================================= */
+@media (min-width: 768px) {
+  .kontrol-bolum-baslik {
+    padding: 18px 24px;
+  }
+  
+  .kontrol-bolum-baslik h2 {
+    font-size: 16px;
+  }
+  
+  .kontrol-baslik-ikon {
+    font-size: 22px;
+  }
+  
+  .kontrol-sayac {
+    font-size: 13px;
+    padding: 4px 14px;
+  }
+  
+  .kontrol-tablo {
+    min-width: 800px;
+  }
+  
+  .kontrol-tablo th {
+    padding: 14px 20px;
+    font-size: 12px;
+  }
+  
+  .kontrol-tablo td {
+    padding: 14px 20px;
+    font-size: 14px;
+  }
+  
+  .onay-btn {
+    padding: 8px 18px;
+    font-size: 12px;
+  }
+  
+  .btn-goster, .btn-duzenle {
+    width: 34px;
+    height: 34px;
+  }
+  
+  .btn-goster:hover, .btn-duzenle:hover {
+    transform: translateY(-2px);
+  }
+  
+  .btn-goster:active, .btn-duzenle:active {
+    transform: translateY(0);
+  }
+  
+  .kontrol-pag-btn:hover:not(:disabled) { 
+    border-color: #ef4444; 
+    color: #ef4444; 
+    background: #fff5f5; 
+    transform: translateY(-1px);
+  }
+  
+  .kontrol-filtre-sifirla:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fca5a5;
+    transform: translateY(-1px);
+  }
+}
+
+/* =============================================
+   BÜYÜK MASAÜSTÜ (1200px ve üzeri)
+   ============================================= */
+@media (min-width: 1200px) {
+  .kontrol-tablo {
+    min-width: 900px;
+  }
+  
+  .kontrol-tablo th {
+    padding: 16px 24px;
+  }
+  
+  .kontrol-tablo td {
+    padding: 16px 24px;
+  }
+  
+  .kontrol-filtre-select,
+  .kontrol-filtre-input {
+    width: 160px;
+  }
+}
+
+/* =============================================
+   ÇOK KÜÇÜK EKRANLAR (360px altı)
+   ============================================= */
+@media (max-width: 360px) {
+  .kontrol-bolum-baslik {
+    padding: 14px;
+  }
+  
+  .kontrol-bolum-baslik h2 {
+    font-size: 14px;
+  }
+  
+  .kontrol-sayac {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+  
+  .kontrol-baslik-ikon {
+    font-size: 18px;
+  }
+  
+  .kontrol-chevron {
+    font-size: 12px;
+  }
+  
+  .onay-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+    min-width: 70px;
+  }
+  
+  .btn-goster, .btn-duzenle {
+    width: 38px;
+    height: 38px;
+  }
+  
+  .kontrol-pag-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-width: 36px;
+  }
+  
+  .iptal-soru {
+    font-size: 12px;
+  }
+  
+  .btn-iptal-evet, .btn-iptal-hayir {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
+/* =============================================
+   DOKUNMATİK EKRAN OPTİMİZASYONU
+   ============================================= */
+@media (hover: none) and (pointer: coarse) {
+  .kontrol-bolum-baslik:hover {
+    background: none;
+  }
+  
+  .onay-btn.bekleyen:hover,
+  .onay-btn.onayli:hover,
+  .btn-goster:hover,
+  .btn-duzenle:hover,
+  .kontrol-pag-btn:hover:not(:disabled),
+  .kontrol-filtre-sifirla:hover {
+    transform: none;
+  }
+  
+  .onay-btn.bekleyen:active,
+  .onay-btn.onayli:active,
+  .btn-goster:active,
+  .btn-duzenle:active,
+  .kontrol-pag-btn:active:not(:disabled),
+  .kontrol-filtre-sifirla:active {
+    transform: scale(0.96);
+  }
+  
+  .kontrol-filtre-select:hover,
+  .kontrol-filtre-input:hover {
+    border-color: #cbd5e1;
+  }
+  
+  .kontrol-tablo tbody tr:hover {
+    background: none;
+  }
+  
+  .satir-bekleyen:active { background: #fff5f5; }
+  .satir-onaylandi:active { background: #f0fdf4; }
+}
+
+/* =============================================
+   YATAY TELEFON MODU
+   ============================================= */
+@media (min-width: 480px) and (max-width: 767px) and (orientation: landscape) {
+  .kontrol-filtre-bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .kontrol-filtre-item {
+    flex: 1 1 auto;
+  }
+  
+  .kontrol-tablo {
+    min-width: 700px;
+  }
+  
+  .iptal-dialog {
+    flex-direction: row;
+    align-items: center;
+  }
+  
+  .iptal-butonlar {
+    width: auto;
+  }
+}

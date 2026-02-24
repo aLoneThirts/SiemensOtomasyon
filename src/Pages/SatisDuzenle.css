@@ -1,5 +1,6 @@
 /* =============================================
    SATIŞ DÜZENLE — IBM Plex Sans Kurumsal Tema
+   TÜM BİLEŞENLER MOBİL İÇİN OPTİMİZE EDİLDİ
    ============================================= */
 
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
@@ -36,9 +37,21 @@
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
   --shadow-teal: 0 4px 14px rgba(0,153,153,0.25);
+  
+  /* Mobil değişkenler */
+  --mobile-padding: 16px;
+  --mobile-input-height: 48px;
+  --touch-target-size: 44px;
 }
 
-* { box-sizing: border-box; }
+* { 
+  box-sizing: border-box; 
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* =============================================
+   MAIN FORM
+   ============================================= */
 
 .duzenle-form {
   font-family: var(--font);
@@ -51,6 +64,10 @@
   color: var(--gray-800);
 }
 
+/* =============================================
+   SECTIONS
+   ============================================= */
+
 .duzenle-section {
   background: white;
   border-radius: var(--r8);
@@ -60,11 +77,17 @@
   position: relative;
   transition: box-shadow 0.2s;
 }
-.duzenle-section:hover { box-shadow: var(--shadow-md); }
+
+.duzenle-section:hover { 
+  box-shadow: var(--shadow-md); 
+}
+
 .duzenle-section::before {
   content: '';
   position: absolute;
-  left: 0; top: 0; bottom: 0;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: 4px;
   background: var(--teal);
   border-radius: var(--r8) 0 0 var(--r8);
@@ -83,6 +106,7 @@
   align-items: center;
   gap: 8px;
 }
+
 .duzenle-section-title::after {
   content: '';
   flex: 1;
@@ -98,38 +122,87 @@
   padding-bottom: 14px;
   border-bottom: 1px solid var(--gray-200);
 }
-.duzenle-section-header .duzenle-section-title { margin: 0; padding: 0; border: none; }
-.duzenle-section-header .duzenle-section-title::after { display: none; }
+
+.duzenle-section-header .duzenle-section-title { 
+  margin: 0; 
+  padding: 0; 
+  border: none; 
+}
+
+.duzenle-section-header .duzenle-section-title::after { 
+  display: none; 
+}
+
+/* =============================================
+   INPUTS
+   ============================================= */
 
 .duzenle-input {
   width: 100%;
-  padding: 9px 12px;
+  padding: 12px 14px;
   border: 1.5px solid var(--gray-300);
   border-radius: var(--r4);
-  font-size: 13px;
+  font-size: 15px;
   font-family: var(--font);
   color: var(--gray-800);
   background: white;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: var(--mobile-input-height);
 }
-.duzenle-input:hover { border-color: var(--gray-400); }
-.duzenle-input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0,153,153,0.1); background: var(--teal-xlight); }
-.duzenle-input.mono { font-family: var(--mono); }
-.duzenle-input.input-blue:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); background: var(--blue-light); }
-.duzenle-input[type="date"] { cursor: pointer; }
-.duzenle-input:disabled { background: var(--gray-100); color: var(--gray-500); cursor: not-allowed; opacity: 0.7; }
+
+.duzenle-input:hover { 
+  border-color: var(--gray-400); 
+}
+
+.duzenle-input:focus { 
+  border-color: var(--teal); 
+  box-shadow: 0 0 0 3px rgba(0,153,153,0.1); 
+  background: var(--teal-xlight); 
+}
+
+.duzenle-input.mono { 
+  font-family: var(--mono); 
+}
+
+.duzenle-input.input-blue:focus { 
+  border-color: var(--blue); 
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1); 
+  background: var(--blue-light); 
+}
+
+.duzenle-input[type="date"] { 
+  cursor: pointer; 
+  min-height: var(--mobile-input-height);
+}
+
+.duzenle-input:disabled { 
+  background: var(--gray-100); 
+  color: var(--gray-500); 
+  cursor: not-allowed; 
+  opacity: 0.7; 
+}
+
+/* =============================================
+   LABELS
+   ============================================= */
 
 .duzenle-label {
   display: block;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--gray-500);
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   user-select: none;
 }
+
+/* =============================================
+   ÜRÜN LİSTESİ
+   ============================================= */
 
 .duzenle-urun-header {
   display: grid;
@@ -148,144 +221,665 @@
   grid-template-columns: 1.5fr 2.2fr 0.65fr 1.1fr 1.1fr 72px;
   gap: 10px;
   align-items: center;
-  padding: 12px 14px;
+  padding: 16px 14px;
   background: var(--gray-50);
   border: 1.5px solid var(--gray-200);
   border-radius: var(--r4);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   transition: border-color 0.2s, background 0.2s;
   position: relative;
+  min-height: 70px;
 }
-.duzenle-urun-row:hover { border-color: var(--teal); background: var(--teal-xlight); }
 
-.duzenle-urun-kod-wrap { position: relative; }
-.duzenle-urun-kod-wrap .duzenle-input { padding-right: 64px; }
+.duzenle-urun-row:hover { 
+  border-color: var(--teal); 
+  background: var(--teal-xlight); 
+}
+
+.duzenle-urun-row:active { 
+  background: var(--teal-light); 
+}
+
+.duzenle-urun-kod-wrap { 
+  position: relative; 
+}
+
+.duzenle-urun-kod-wrap .duzenle-input { 
+  padding-right: 70px; 
+}
 
 .urun-found-badge {
-  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-  font-size: 9px; background: #dcfce7; color: #15803d;
-  padding: 2px 7px; border-radius: 20px; font-weight: 700;
-  pointer-events: none; white-space: nowrap; border: 1px solid #86efac;
-  font-family: var(--font); letter-spacing: 0.3px;
+  position: absolute; 
+  right: 10px; 
+  top: 50%; 
+  transform: translateY(-50%);
+  font-size: 11px; 
+  background: #dcfce7; 
+  color: #15803d;
+  padding: 4px 10px; 
+  border-radius: 20px; 
+  font-weight: 700;
+  pointer-events: none; 
+  white-space: nowrap; 
+  border: 1px solid #86efac;
+  font-family: var(--font); 
+  letter-spacing: 0.3px;
+  z-index: 1;
 }
 
+/* =============================================
+   TOPLAM BAR
+   ============================================= */
+
 .duzenle-toplam-bar {
-  margin-top: 12px; padding: 14px 20px;
-  background: var(--gray-900); border-radius: var(--r4);
-  display: flex; justify-content: space-between; align-items: center;
-  color: white; font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
+  margin-top: 16px; 
+  padding: 16px 20px;
+  background: var(--gray-900); 
+  border-radius: var(--r4);
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  color: white; 
+  font-size: 15px; 
+  font-weight: 600; 
+  letter-spacing: 0.5px;
+  min-height: 60px;
 }
 
 .duzenle-maliyet-notu {
-  margin-top: 8px; padding: 10px 16px;
-  background: var(--teal-xlight); border-left: 3px solid var(--teal);
-  border-radius: var(--r4); color: var(--teal-dark);
-  font-size: 12px; font-family: var(--mono);
+  margin-top: 10px; 
+  padding: 12px 16px;
+  background: var(--teal-xlight); 
+  border-left: 3px solid var(--teal);
+  border-radius: var(--r4); 
+  color: var(--teal-dark);
+  font-size: 13px; 
+  font-family: var(--mono);
+  line-height: 1.5;
 }
+
+/* =============================================
+   YEŞİL ÖZET
+   ============================================= */
 
 .duzenle-yesil-ozet {
-  margin-top: 12px; padding: 16px 20px;
-  background: var(--green-light); border: 1.5px solid #bbf7d0;
-  border-radius: var(--r8); border-left: 4px solid var(--green);
+  margin-top: 16px; 
+  padding: 20px;
+  background: var(--green-light); 
+  border: 1.5px solid #bbf7d0;
+  border-radius: var(--r8); 
+  border-left: 4px solid var(--green);
 }
-.duzenle-yesil-ozet-title { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--green); margin-bottom: 12px; }
-.duzenle-yesil-ozet-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px dashed #bbf7d0; font-size: 13px; color: var(--gray-700); gap: 16px; }
-.duzenle-yesil-ozet-row:last-of-type { border-bottom: none; }
-.duzenle-yesil-ozet-row span:first-child { flex: 1; font-family: var(--mono); font-size: 12px; }
-.duzenle-yesil-ozet-row span:last-child { color: var(--green); font-weight: 700; font-family: var(--mono); white-space: nowrap; }
-.duzenle-yesil-ozet-toplam { margin-top: 10px; padding-top: 10px; border-top: 2px solid #86efac; font-size: 14px; font-weight: 700; color: var(--green); font-family: var(--mono); text-align: right; }
 
-.duzenle-kampanya-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-.duzenle-kampanya-item { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; border: 1.5px solid var(--gray-200); border-radius: var(--r8); background: var(--gray-50); cursor: pointer; transition: all 0.15s; user-select: none; }
-.duzenle-kampanya-item:hover { border-color: var(--teal); background: var(--teal-xlight); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-.duzenle-kampanya-item.selected { border-color: var(--teal); background: var(--teal-xlight); box-shadow: 0 0 0 3px rgba(0,153,153,0.12); }
-.duzenle-kampanya-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--teal); flex-shrink: 0; margin-top: 1px; }
-.duzenle-kampanya-ad { font-size: 13px; font-weight: 700; color: var(--gray-800); margin-bottom: 4px; }
-.duzenle-kampanya-aciklama { font-size: 11px; color: var(--gray-500); margin-bottom: 6px; line-height: 1.4; }
-.duzenle-empty-state { padding: 32px; text-align: center; color: var(--gray-400); font-size: 13px; background: var(--gray-50); border-radius: var(--r8); border: 1.5px dashed var(--gray-300); }
-
-.duzenle-odeme-blok { background: var(--gray-50); border: 1.5px solid var(--gray-200); border-radius: var(--r8); padding: 16px 20px; }
-.duzenle-odeme-blok-title { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--gray-500); margin-bottom: 10px; }
-.duzenle-odeme-blok-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.duzenle-odeme-bilgi { font-size: 12px; font-weight: 700; font-family: var(--mono); margin-top: 8px; }
-.duzenle-odeme-bilgi.ok { color: var(--green); }
-
-.duzenle-kart-row { background: var(--blue-light); border: 1.5px solid var(--blue-border); border-radius: var(--r8); padding: 14px 18px; margin-bottom: 10px; transition: border-color 0.2s; }
-.duzenle-kart-row:hover { border-color: #93c5fd; box-shadow: 0 2px 8px rgba(37,99,235,0.08); }
-.duzenle-kart-fields { display: grid; grid-template-columns: 2fr 1fr 1.2fr 1fr auto; gap: 10px; align-items: flex-end; }
-.duzenle-kart-net { margin-top: 8px; padding: 9px 13px; background: white; border: 1px solid var(--blue-border); border-radius: var(--r4); font-size: 12px; font-family: var(--mono); color: var(--gray-600); display: flex; flex-wrap: wrap; gap: 12px; }
-.duzenle-kart-net strong { color: var(--green); }
-
-.duzenle-kar-bar { margin-top: 14px; padding: 13px 18px; border-radius: var(--r8); font-size: 14px; font-weight: 700; font-family: var(--mono); }
-
-.duzenle-notlar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
-.duzenle-mars-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.duzenle-mars-sayac { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--teal); background: var(--teal-xlight); border: 1px solid var(--teal-light); padding: 4px 12px; border-radius: 20px; }
-.duzenle-mars-limit { font-size: 12px; color: var(--gray-400); font-weight: 600; padding: 8px 16px; background: var(--gray-50); border: 1.5px dashed var(--gray-200); border-radius: var(--r4); }
-.duzenle-mars-timeline { display: flex; flex-direction: column; padding-left: 4px; }
-.duzenle-mars-card { display: flex; gap: 18px; }
-.duzenle-mars-sol { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 42px; }
-.duzenle-mars-nokta { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; z-index: 2; transition: transform 0.2s; }
-.duzenle-mars-card:hover .duzenle-mars-nokta { transform: scale(1.08); }
-.nokta-teal { background: linear-gradient(135deg, #00b89c, var(--teal)); box-shadow: 0 4px 14px rgba(0,153,153,0.4); }
-.nokta-blue { background: linear-gradient(135deg, #42a5f5, var(--blue)); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
-.duzenle-mars-cizgi { width: 2px; flex: 1; min-height: 20px; background: linear-gradient(to bottom, var(--gray-200), transparent); margin: 6px 0; }
-.duzenle-mars-icerik { flex: 1; border-radius: var(--r8); padding: 18px 22px; margin-bottom: 16px; transition: all 0.2s; }
-.duzenle-mars-card.orijinal .duzenle-mars-icerik { background: linear-gradient(135deg, #f0fdfb, #e6f9f6); border: 1.5px solid rgba(0,153,153,0.25); border-left: 4px solid var(--teal); }
-.duzenle-mars-card.yeni .duzenle-mars-icerik { background: linear-gradient(135deg, #f0f5ff, #e8effe); border: 1.5px solid rgba(37,99,235,0.2); border-left: 4px solid var(--blue); }
-.duzenle-mars-card.orijinal .duzenle-mars-icerik:hover { box-shadow: 0 4px 16px rgba(0,153,153,0.12); transform: translateX(2px); }
-.duzenle-mars-card.yeni .duzenle-mars-icerik:hover { box-shadow: 0 4px 16px rgba(37,99,235,0.1); transform: translateX(2px); }
-.duzenle-mars-baslik { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.duzenle-mars-etiket { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; }
-.etiket-teal { background: rgba(0,153,153,0.1); color: var(--teal-dark); border: 1px solid rgba(0,153,153,0.3); }
-.etiket-blue { background: rgba(37,99,235,0.1); color: var(--blue); border: 1px solid rgba(37,99,235,0.25); }
-.duzenle-mars-sil { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: transparent; border: 1.5px solid #fecaca; color: #e57373; border-radius: var(--r4); cursor: pointer; font-size: 11px; transition: all 0.15s; }
-.duzenle-mars-sil:hover { background: var(--red); border-color: var(--red); color: white; }
-.duzenle-mars-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
-.duzenle-btn-add { display: inline-flex; align-items: center; gap: 6px; padding: 9px 20px; background: var(--teal); color: white; border: none; border-radius: var(--r4); cursor: pointer; font-family: var(--font); font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; transition: all 0.2s; white-space: nowrap; }
-.duzenle-btn-add:hover { background: var(--teal-dark); transform: translateY(-1px); box-shadow: var(--shadow-teal); }
-
-.duzenle-btn-sm { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; background: white; color: var(--blue); border: 1.5px solid #93c5fd; border-radius: var(--r4); cursor: pointer; font-family: var(--font); font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; transition: all 0.2s; white-space: nowrap; }
-.duzenle-btn-sm:hover { background: var(--blue-light); border-color: var(--blue); }
-
-.duzenle-btn-remove { padding: 9px 14px; background: white; color: var(--red); border: 1.5px solid var(--red); border-radius: var(--r4); cursor: pointer; font-family: var(--font); font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; transition: all 0.2s; white-space: nowrap; }
-.duzenle-btn-remove:hover { background: var(--red); color: white; }
-
-.duzenle-btn-cancel { padding: 11px 28px; background: white; border: 1.5px solid var(--gray-300); border-radius: var(--r4); cursor: pointer; font-size: 13px; font-weight: 600; font-family: var(--font); color: var(--gray-600); letter-spacing: 0.5px; text-transform: uppercase; transition: all 0.2s; }
-.duzenle-btn-cancel:hover { border-color: var(--gray-500); color: var(--gray-800); }
-
-.duzenle-btn-submit { padding: 11px 44px; background: var(--teal); color: white; border: none; border-radius: var(--r4); cursor: pointer; font-size: 13px; font-weight: 700; font-family: var(--font); letter-spacing: 1.5px; text-transform: uppercase; transition: all 0.2s; position: relative; overflow: hidden; }
-.duzenle-btn-submit::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent); pointer-events: none; }
-.duzenle-btn-submit:hover { background: var(--teal-dark); transform: translateY(-1px); box-shadow: var(--shadow-teal); }
-
-.duzenle-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 8px; }
-
-.duzenle-loading { text-align: center; padding: 60px; font-size: 16px; font-weight: 600; color: var(--teal); background: white; border-radius: var(--r8); box-shadow: var(--shadow-sm); font-family: var(--font); }
-.duzenle-not-found { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 60px; text-align: center; }
-
-@media (max-width: 1100px) {
-  .duzenle-urun-header, .duzenle-urun-row { grid-template-columns: 1.3fr 2fr 0.6fr 1fr 1fr 66px; gap: 8px; }
-  .duzenle-kart-fields { grid-template-columns: 1.5fr 1fr 1fr 1fr auto; }
+.duzenle-yesil-ozet-title { 
+  font-size: 12px; 
+  font-weight: 700; 
+  letter-spacing: 1.5px; 
+  text-transform: uppercase; 
+  color: var(--green); 
+  margin-bottom: 16px; 
 }
-@media (max-width: 900px) {
-  .duzenle-form { padding: 16px 20px 60px; }
-  .duzenle-section { padding: 20px; }
-  .duzenle-urun-header { display: none; }
-  .duzenle-urun-row { grid-template-columns: 1fr 1fr; }
-  .duzenle-kart-fields { grid-template-columns: 1fr 1fr; }
-  .duzenle-notlar-grid { grid-template-columns: 1fr; }
-  .duzenle-kampanya-grid { grid-template-columns: 1fr; }
-  .duzenle-mars-inputs { grid-template-columns: 1fr; }
+
+.duzenle-yesil-ozet-row { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  padding: 10px 0; 
+  border-bottom: 1px dashed #bbf7d0; 
+  font-size: 14px; 
+  color: var(--gray-700); 
+  gap: 16px; 
 }
-@media (max-width: 640px) {
-  .duzenle-urun-row { grid-template-columns: 1fr; }
-  .duzenle-kart-fields { grid-template-columns: 1fr; }
-  .duzenle-section-header { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .duzenle-mars-header { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .duzenle-actions { flex-direction: column-reverse; }
-  .duzenle-btn-cancel, .duzenle-btn-submit { width: 100%; text-align: center; }
+
+.duzenle-yesil-ozet-row:last-of-type { 
+  border-bottom: none; 
+}
+
+.duzenle-yesil-ozet-row span:first-child { 
+  flex: 1; 
+  font-family: var(--mono); 
+  font-size: 13px; 
+}
+
+.duzenle-yesil-ozet-row span:last-child { 
+  color: var(--green); 
+  font-weight: 700; 
+  font-family: var(--mono); 
+  white-space: nowrap; 
+}
+
+.duzenle-yesil-ozet-toplam { 
+  margin-top: 14px; 
+  padding-top: 14px; 
+  border-top: 2px solid #86efac; 
+  font-size: 16px; 
+  font-weight: 700; 
+  color: var(--green); 
+  font-family: var(--mono); 
+  text-align: right; 
+}
+
+/* =============================================
+   KAMPANYA GRID
+   ============================================= */
+
+.duzenle-kampanya-grid { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+  gap: 12px; 
+}
+
+.duzenle-kampanya-item { 
+  display: flex; 
+  align-items: flex-start; 
+  gap: 12px; 
+  padding: 18px; 
+  border: 1.5px solid var(--gray-200); 
+  border-radius: var(--r8); 
+  background: var(--gray-50); 
+  cursor: pointer; 
+  transition: all 0.15s; 
+  user-select: none; 
+  min-height: 80px;
+}
+
+.duzenle-kampanya-item:hover { 
+  border-color: var(--teal); 
+  background: var(--teal-xlight); 
+  transform: translateY(-2px); 
+  box-shadow: var(--shadow-sm); 
+}
+
+.duzenle-kampanya-item:active { 
+  transform: translateY(0); 
+}
+
+.duzenle-kampanya-item.selected { 
+  border-color: var(--teal); 
+  background: var(--teal-xlight); 
+  box-shadow: 0 0 0 4px rgba(0,153,153,0.12); 
+}
+
+.duzenle-kampanya-item input[type="checkbox"] { 
+  width: 22px; 
+  height: 22px; 
+  accent-color: var(--teal); 
+  flex-shrink: 0; 
+  margin-top: 2px; 
+}
+
+.duzenle-kampanya-ad { 
+  font-size: 15px; 
+  font-weight: 700; 
+  color: var(--gray-800); 
+  margin-bottom: 5px; 
+}
+
+.duzenle-kampanya-aciklama { 
+  font-size: 13px; 
+  color: var(--gray-500); 
+  margin-bottom: 8px; 
+  line-height: 1.5; 
+}
+
+.duzenle-empty-state { 
+  padding: 48px 24px; 
+  text-align: center; 
+  color: var(--gray-400); 
+  font-size: 15px; 
+  background: var(--gray-50); 
+  border-radius: var(--r8); 
+  border: 1.5px dashed var(--gray-300); 
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* =============================================
+   ÖDEME BLOKLARI
+   ============================================= */
+
+.duzenle-odeme-blok { 
+  background: var(--gray-50); 
+  border: 1.5px solid var(--gray-200); 
+  border-radius: var(--r8); 
+  padding: 20px; 
+}
+
+.duzenle-odeme-blok-title { 
+  font-size: 12px; 
+  font-weight: 700; 
+  letter-spacing: 1.2px; 
+  text-transform: uppercase; 
+  color: var(--gray-500); 
+  margin-bottom: 12px; 
+}
+
+.duzenle-odeme-blok-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-bottom: 12px; 
+}
+
+.duzenle-odeme-bilgi { 
+  font-size: 14px; 
+  font-weight: 700; 
+  font-family: var(--mono); 
+  margin-top: 10px; 
+}
+
+.duzenle-odeme-bilgi.ok { 
+  color: var(--green); 
+}
+
+/* =============================================
+   KART SATIRLARI
+   ============================================= */
+
+.duzenle-kart-row { 
+  background: var(--blue-light); 
+  border: 1.5px solid var(--blue-border); 
+  border-radius: var(--r8); 
+  padding: 18px; 
+  margin-bottom: 12px; 
+  transition: border-color 0.2s; 
+}
+
+.duzenle-kart-row:hover { 
+  border-color: #93c5fd; 
+  box-shadow: 0 2px 8px rgba(37,99,235,0.08); 
+}
+
+.duzenle-kart-fields { 
+  display: grid; 
+  grid-template-columns: 2fr 1fr 1.2fr 1fr auto; 
+  gap: 12px; 
+  align-items: flex-end; 
+}
+
+.duzenle-kart-net { 
+  margin-top: 12px; 
+  padding: 12px 16px; 
+  background: white; 
+  border: 1px solid var(--blue-border); 
+  border-radius: var(--r4); 
+  font-size: 13px; 
+  font-family: var(--mono); 
+  color: var(--gray-600); 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 16px; 
+}
+
+.duzenle-kart-net strong { 
+  color: var(--green); 
+}
+
+/* =============================================
+   KAR BAR
+   ============================================= */
+
+.duzenle-kar-bar { 
+  margin-top: 16px; 
+  padding: 16px 20px; 
+  border-radius: var(--r8); 
+  font-size: 16px; 
+  font-weight: 700; 
+  font-family: var(--mono); 
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+}
+
+/* =============================================
+   NOTLAR GRID
+   ============================================= */
+
+.duzenle-notlar-grid { 
+  display: grid; 
+  grid-template-columns: 1fr 1fr; 
+  gap: 16px; 
+}
+
+/* =============================================
+   MARS (ZAMAN ÇİZELGESİ)
+   ============================================= */
+
+.duzenle-mars-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-bottom: 28px; 
+}
+
+.duzenle-mars-sayac { 
+  font-family: var(--mono); 
+  font-size: 12px; 
+  font-weight: 500; 
+  color: var(--teal); 
+  background: var(--teal-xlight); 
+  border: 1px solid var(--teal-light); 
+  padding: 6px 14px; 
+  border-radius: 20px; 
+  white-space: nowrap;
+}
+
+.duzenle-mars-limit { 
+  font-size: 13px; 
+  color: var(--gray-400); 
+  font-weight: 600; 
+  padding: 10px 18px; 
+  background: var(--gray-50); 
+  border: 1.5px dashed var(--gray-200); 
+  border-radius: var(--r4); 
+}
+
+.duzenle-mars-timeline { 
+  display: flex; 
+  flex-direction: column; 
+  padding-left: 4px; 
+}
+
+.duzenle-mars-card { 
+  display: flex; 
+  gap: 20px; 
+}
+
+.duzenle-mars-sol { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  flex-shrink: 0; 
+  width: 50px; 
+}
+
+.duzenle-mars-nokta { 
+  width: 50px; 
+  height: 50px; 
+  border-radius: 50%; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  font-size: 18px; 
+  flex-shrink: 0; 
+  z-index: 2; 
+  transition: transform 0.2s; 
+}
+
+.duzenle-mars-card:hover .duzenle-mars-nokta { 
+  transform: scale(1.08); 
+}
+
+.nokta-teal { 
+  background: linear-gradient(135deg, #00b89c, var(--teal)); 
+  box-shadow: 0 4px 14px rgba(0,153,153,0.4); 
+}
+
+.nokta-blue { 
+  background: linear-gradient(135deg, #42a5f5, var(--blue)); 
+  box-shadow: 0 4px 14px rgba(37,99,235,0.35); 
+}
+
+.duzenle-mars-cizgi { 
+  width: 2px; 
+  flex: 1; 
+  min-height: 30px; 
+  background: linear-gradient(to bottom, var(--gray-200), transparent); 
+  margin: 8px 0; 
+}
+
+.duzenle-mars-icerik { 
+  flex: 1; 
+  border-radius: var(--r8); 
+  padding: 20px 24px; 
+  margin-bottom: 20px; 
+  transition: all 0.2s; 
+}
+
+.duzenle-mars-card.orijinal .duzenle-mars-icerik { 
+  background: linear-gradient(135deg, #f0fdfb, #e6f9f6); 
+  border: 1.5px solid rgba(0,153,153,0.25); 
+  border-left: 4px solid var(--teal); 
+}
+
+.duzenle-mars-card.yeni .duzenle-mars-icerik { 
+  background: linear-gradient(135deg, #f0f5ff, #e8effe); 
+  border: 1.5px solid rgba(37,99,235,0.2); 
+  border-left: 4px solid var(--blue); 
+}
+
+.duzenle-mars-card.orijinal .duzenle-mars-icerik:hover { 
+  box-shadow: 0 4px 16px rgba(0,153,153,0.12); 
+  transform: translateX(4px); 
+}
+
+.duzenle-mars-card.yeni .duzenle-mars-icerik:hover { 
+  box-shadow: 0 4px 16px rgba(37,99,235,0.1); 
+  transform: translateX(4px); 
+}
+
+.duzenle-mars-baslik { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-bottom: 18px; 
+}
+
+.duzenle-mars-etiket { 
+  font-family: var(--mono); 
+  font-size: 11px; 
+  font-weight: 600; 
+  letter-spacing: 2px; 
+  text-transform: uppercase; 
+  padding: 6px 14px; 
+  border-radius: 20px; 
+}
+
+.etiket-teal { 
+  background: rgba(0,153,153,0.1); 
+  color: var(--teal-dark); 
+  border: 1px solid rgba(0,153,153,0.3); 
+}
+
+.etiket-blue { 
+  background: rgba(37,99,235,0.1); 
+  color: var(--blue); 
+  border: 1px solid rgba(37,99,235,0.25); 
+}
+
+.duzenle-mars-sil { 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  width: 36px; 
+  height: 36px; 
+  background: transparent; 
+  border: 1.5px solid #fecaca; 
+  color: #e57373; 
+  border-radius: var(--r4); 
+  cursor: pointer; 
+  font-size: 13px; 
+  transition: all 0.15s; 
+}
+
+.duzenle-mars-sil:hover { 
+  background: var(--red); 
+  border-color: var(--red); 
+  color: white; 
+}
+
+.duzenle-mars-sil:active { 
+  transform: scale(0.92); 
+}
+
+.duzenle-mars-inputs { 
+  display: grid; 
+  grid-template-columns: 1fr 1fr; 
+  gap: 16px; 
+}
+
+/* =============================================
+   BUTONLAR
+   ============================================= */
+
+.duzenle-btn-add { 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center;
+  gap: 8px; 
+  padding: 14px 24px; 
+  background: var(--teal); 
+  color: white; 
+  border: none; 
+  border-radius: var(--r4); 
+  cursor: pointer; 
+  font-family: var(--font); 
+  font-size: 14px; 
+  font-weight: 700; 
+  letter-spacing: 1px; 
+  text-transform: uppercase; 
+  transition: all 0.2s; 
+  white-space: nowrap; 
+  min-height: var(--touch-target-size);
+  min-width: var(--touch-target-size);
+}
+
+.duzenle-btn-add:hover { 
+  background: var(--teal-dark); 
+  transform: translateY(-2px); 
+  box-shadow: var(--shadow-teal); 
+}
+
+.duzenle-btn-add:active { 
+  transform: translateY(0); 
+}
+
+.duzenle-btn-sm { 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center;
+  gap: 6px; 
+  padding: 12px 18px; 
+  background: white; 
+  color: var(--blue); 
+  border: 1.5px solid #93c5fd; 
+  border-radius: var(--r4); 
+  cursor: pointer; 
+  font-family: var(--font); 
+  font-size: 13px; 
+  font-weight: 700; 
+  letter-spacing: 0.5px; 
+  text-transform: uppercase; 
+  transition: all 0.2s; 
+  white-space: nowrap; 
+  min-height: 44px;
+}
+
+.duzenle-btn-sm:hover { 
+  background: var(--blue-light); 
+  border-color: var(--blue); 
+}
+
+.duzenle-btn-sm:active { 
+  transform: scale(0.96); 
+}
+
+.duzenle-btn-remove { 
+  padding: 12px 18px; 
+  background: white; 
+  color: var(--red); 
+  border: 1.5px solid var(--red); 
+  border-radius: var(--r4); 
+  cursor: pointer; 
+  font-family: var(--font); 
+  font-size: 13px; 
+  font-weight: 700; 
+  letter-spacing: 0.5px; 
+  text-transform: uppercase; 
+  transition: all 0.2s; 
+  white-space: nowrap; 
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.duzenle-btn-remove:hover { 
+  background: var(--red); 
+  color: white; 
+}
+
+.duzenle-btn-remove:active { 
+  transform: scale(0.96); 
+}
+
+.duzenle-btn-cancel { 
+  padding: 14px 28px; 
+  background: white; 
+  border: 1.5px solid var(--gray-300); 
+  border-radius: var(--r4); 
+  cursor: pointer; 
+  font-size: 15px; 
+  font-weight: 600; 
+  font-family: var(--font); 
+  color: var(--gray-600); 
+  letter-spacing: 0.5px; 
+  text-transform: uppercase; 
+  transition: all 0.2s; 
+  min-height: 48px;
+}
+
+.duzenle-btn-cancel:hover { 
+  border-color: var(--gray-500); 
+  color: var(--gray-800); 
+}
+
+.duzenle-btn-cancel:active { 
+  background: var(--gray-100); 
+}
+
+.duzenle-btn-submit { 
+  padding: 14px 44px; 
+  background: var(--teal); 
+  color: white; 
+  border: none; 
+  border-radius: var(--r4); 
+  cursor: pointer; 
+  font-size: 15px; 
+  font-weight: 700; 
+  font-family: var(--font); 
+  letter-spacing: 1.5px; 
+  text-transform: uppercase; 
+  transition: all 0.2s; 
+  position: relative; 
+  overflow: hidden; 
+  min-height: 48px;
+  min-width: 48px;
+}
+
+.duzenle-btn-submit::after { 
+  content: ''; 
+  position: absolute; 
+  inset: 0; 
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent); 
+  pointer-events: none; 
+}
+
+.duzenle-btn-submit:hover { 
+  background: var(--teal-dark); 
+  transform: translateY(-2px); 
+  box-shadow: var(--shadow-teal); 
+}
+
+.duzenle-btn-submit:active { 
+  transform: translateY(0); 
+}
+
+.duzenle-actions { 
+  display: flex; 
+  justify-content: flex-end; 
+  gap: 16px; 
+  padding-top: 12px; 
 }
 
 /* =============================================
@@ -293,77 +887,664 @@
    ============================================= */
 
 .duzenle-popup-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 9999; backdrop-filter: blur(2px);
+  position: fixed; 
+  inset: 0; 
+  background: rgba(0,0,0,0.5);
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  z-index: 99999; 
+  backdrop-filter: blur(4px);
+  padding: 16px;
 }
+
 .duzenle-popup {
-  background: white; border-radius: 16px; padding: 32px 28px;
-  max-width: 420px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  background: white; 
+  border-radius: 24px; 
+  padding: 32px 24px;
+  max-width: 460px; 
+  width: 100%; 
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  gap: 16px; 
+  text-align: center;
+  max-height: 90vh;
+  overflow-y: auto;
 }
-.duzenle-popup-ikon { font-size: 40px; line-height: 1; }
-.duzenle-popup-baslik { font-size: 18px; font-weight: 800; color: #1f2937; margin: 0; }
-.duzenle-popup-mesaj { font-size: 14px; color: #4b5563; margin: 0; line-height: 1.6; }
-.duzenle-popup-alt-not { font-size: 12px; color: #9ca3af; display: block; margin-top: 6px; }
+
+.duzenle-popup-ikon { 
+  font-size: 48px; 
+  line-height: 1; 
+}
+
+.duzenle-popup-baslik { 
+  font-size: 20px; 
+  font-weight: 800; 
+  color: #1f2937; 
+  margin: 0; 
+}
+
+.duzenle-popup-mesaj { 
+  font-size: 15px; 
+  color: #4b5563; 
+  margin: 0; 
+  line-height: 1.6; 
+}
+
+.duzenle-popup-alt-not { 
+  font-size: 13px; 
+  color: #9ca3af; 
+  display: block; 
+  margin-top: 8px; 
+}
 
 .duzenle-popup-statu-sec {
-  width: 100%; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px;
+  width: 100%; 
+  background: #f9fafb; 
+  border: 1px solid #e5e7eb; 
+  border-radius: 12px; 
+  padding: 20px;
 }
-.duzenle-popup-statu-baslik { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 10px 0; }
-.duzenle-popup-statu-secenekler { display: flex; gap: 10px; justify-content: center; }
+
+.duzenle-popup-statu-baslik { 
+  font-size: 12px; 
+  font-weight: 700; 
+  color: #6b7280; 
+  text-transform: uppercase; 
+  letter-spacing: 0.5px; 
+  margin: 0 0 14px 0; 
+}
+
+.duzenle-popup-statu-secenekler { 
+  display: flex; 
+  gap: 12px; 
+  justify-content: center; 
+  flex-wrap: wrap;
+}
 
 .duzenle-popup-statu-btn {
-  display: flex; align-items: center; gap: 8px; padding: 9px 16px;
-  border: 2px solid #e5e7eb; border-radius: 8px; background: white;
-  cursor: pointer; font-size: 13px; font-weight: 600; color: #374151;
-  transition: all 0.2s; user-select: none;
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  padding: 12px 20px;
+  border: 2px solid #e5e7eb; 
+  border-radius: 10px; 
+  background: white;
+  cursor: pointer; 
+  font-size: 14px; 
+  font-weight: 600; 
+  color: #374151;
+  transition: all 0.2s; 
+  user-select: none;
+  min-height: 48px;
 }
-.duzenle-popup-statu-btn input[type="radio"] { display: none; }
-.duzenle-popup-statu-btn:hover { border-color: #009999; background: #f0fafa; }
-.duzenle-popup-statu-btn.secili { border-color: #009999; background: #e0f5f5; color: #007575; }
 
-.duzenle-popup-butonlar { display: flex; gap: 10px; width: 100%; justify-content: center; margin-top: 4px; }
+.duzenle-popup-statu-btn input[type="radio"] { 
+  display: none; 
+}
+
+.duzenle-popup-statu-btn:hover { 
+  border-color: #009999; 
+  background: #f0fafa; 
+}
+
+.duzenle-popup-statu-btn:active { 
+  transform: scale(0.96); 
+}
+
+.duzenle-popup-statu-btn.secili { 
+  border-color: #009999; 
+  background: #e0f5f5; 
+  color: #007575; 
+}
+
+.duzenle-popup-butonlar { 
+  display: flex; 
+  gap: 12px; 
+  width: 100%; 
+  justify-content: center; 
+  margin-top: 8px; 
+  flex-wrap: wrap;
+}
 
 .duzenle-popup-hayir {
-  padding: 10px 24px; background: white; border: 2px solid #e5e7eb;
-  border-radius: 8px; font-size: 13px; font-weight: 700; color: #6b7280;
-  cursor: pointer; transition: all 0.2s; font-family: inherit;
+  padding: 14px 28px; 
+  background: white; 
+  border: 2px solid #e5e7eb;
+  border-radius: 10px; 
+  font-size: 14px; 
+  font-weight: 700; 
+  color: #6b7280;
+  cursor: pointer; 
+  transition: all 0.2s; 
+  font-family: inherit;
+  min-height: 48px;
+  min-width: 100px;
 }
-.duzenle-popup-hayir:hover:not(:disabled) { border-color: #9ca3af; color: #374151; }
+
+.duzenle-popup-hayir:hover:not(:disabled) { 
+  border-color: #9ca3af; 
+  color: #374151; 
+}
+
+.duzenle-popup-hayir:active { 
+  background: #f3f4f6; 
+}
 
 .duzenle-popup-evet {
-  padding: 10px 24px; border: none; border-radius: 8px;
-  font-size: 13px; font-weight: 700; cursor: pointer;
-  transition: all 0.2s; font-family: inherit; color: white;
+  padding: 14px 28px; 
+  border: none; 
+  border-radius: 10px;
+  font-size: 14px; 
+  font-weight: 700; 
+  cursor: pointer;
+  transition: all 0.2s; 
+  font-family: inherit; 
+  color: white;
+  min-height: 48px;
+  min-width: 100px;
 }
-.duzenle-popup-evet:disabled { opacity: 0.6; cursor: not-allowed; }
-.duzenle-popup-evet--iptal { background: #dc2626; }
-.duzenle-popup-evet--iptal:hover:not(:disabled) { background: #b91c1c; }
-.duzenle-popup-evet--cikar { background: #009999; }
-.duzenle-popup-evet--cikar:hover:not(:disabled) { background: #007575; }
+
+.duzenle-popup-evet:disabled { 
+  opacity: 0.6; 
+  cursor: not-allowed; 
+}
+
+.duzenle-popup-evet--iptal { 
+  background: #dc2626; 
+}
+
+.duzenle-popup-evet--iptal:hover:not(:disabled) { 
+  background: #b91c1c; 
+}
+
+.duzenle-popup-evet--cikar { 
+  background: #009999; 
+}
+
+.duzenle-popup-evet--cikar:hover:not(:disabled) { 
+  background: #007575; 
+}
 
 .duzenle-iptal-banner {
-  background: #fef2f2; border: 2px solid #fca5a5; border-left: 5px solid #dc2626;
-  border-radius: 10px; padding: 12px 20px; margin-bottom: 8px;
-  font-size: 14px; color: #991b1b; font-weight: 600;
+  background: #fef2f2; 
+  border: 2px solid #fca5a5; 
+  border-left: 5px solid #dc2626;
+  border-radius: 12px; 
+  padding: 16px 20px; 
+  margin-bottom: 12px;
+  font-size: 15px; 
+  color: #991b1b; 
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .duzenle-iptal-buton-alani {
-  margin-top: 20px; padding-top: 16px; border-top: 1px dashed #e5e7eb;
-  display: flex; justify-content: flex-start;
+  margin-top: 24px; 
+  padding-top: 20px; 
+  border-top: 1px dashed #e5e7eb;
+  display: flex; 
+  justify-content: flex-start; 
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .duzenle-btn-iptal-et {
-  padding: 9px 20px; background: white; border: 1.5px solid #fca5a5;
-  border-radius: 8px; color: #dc2626; font-size: 12px; font-weight: 700;
-  cursor: pointer; transition: all 0.2s; font-family: inherit; letter-spacing: 0.5px;
+  padding: 12px 24px; 
+  background: white; 
+  border: 1.5px solid #fca5a5;
+  border-radius: 10px; 
+  color: #dc2626; 
+  font-size: 14px; 
+  font-weight: 700;
+  cursor: pointer; 
+  transition: all 0.2s; 
+  font-family: inherit; 
+  letter-spacing: 0.5px;
+  min-height: 48px;
 }
-.duzenle-btn-iptal-et:hover { background: #fef2f2; border-color: #dc2626; transform: translateY(-1px); }
+
+.duzenle-btn-iptal-et:hover { 
+  background: #fef2f2; 
+  border-color: #dc2626; 
+  transform: translateY(-2px); 
+}
+
+.duzenle-btn-iptal-et:active { 
+  transform: translateY(0); 
+}
 
 .duzenle-btn-iptalden-cikar {
-  padding: 9px 20px; background: white; border: 1.5px solid #6ee7b7;
-  border-radius: 8px; color: #059669; font-size: 12px; font-weight: 700;
-  cursor: pointer; transition: all 0.2s; font-family: inherit; letter-spacing: 0.5px;
+  padding: 12px 24px; 
+  background: white; 
+  border: 1.5px solid #6ee7b7;
+  border-radius: 10px; 
+  color: #059669; 
+  font-size: 14px; 
+  font-weight: 700;
+  cursor: pointer; 
+  transition: all 0.2s; 
+  font-family: inherit; 
+  letter-spacing: 0.5px;
+  min-height: 48px;
 }
-.duzenle-btn-iptalden-cikar:hover { background: #f0fdf4; border-color: #059669; transform: translateY(-1px); }
+
+.duzenle-btn-iptalden-cikar:hover { 
+  background: #f0fdf4; 
+  border-color: #059669; 
+  transform: translateY(-2px); 
+}
+
+.duzenle-btn-iptalden-cikar:active { 
+  transform: translateY(0); 
+}
+
+/* =============================================
+   LOADING & NOT FOUND
+   ============================================= */
+
+.duzenle-loading { 
+  text-align: center; 
+  padding: 80px 24px; 
+  font-size: 18px; 
+  font-weight: 600; 
+  color: var(--teal); 
+  background: white; 
+  border-radius: var(--r8); 
+  box-shadow: var(--shadow-sm); 
+  font-family: var(--font); 
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.duzenle-not-found { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  justify-content: center; 
+  gap: 24px; 
+  padding: 80px 24px; 
+  text-align: center; 
+  min-height: 400px;
+}
+
+/* =============================================
+   RESPONSIVE BREAKPOINTS
+   ============================================= */
+
+@media (max-width: 1100px) {
+  .duzenle-urun-header, 
+  .duzenle-urun-row { 
+    grid-template-columns: 1.3fr 2fr 0.6fr 1fr 1fr 70px; 
+    gap: 8px; 
+  }
+  
+  .duzenle-kart-fields { 
+    grid-template-columns: 1.5fr 1fr 1fr 1fr auto; 
+  }
+}
+
+@media (max-width: 900px) {
+  .duzenle-form { 
+    padding: 16px; 
+  }
+  
+  .duzenle-section { 
+    padding: 20px; 
+  }
+  
+  .duzenle-urun-header { 
+    display: none; 
+  }
+  
+  .duzenle-urun-row { 
+    grid-template-columns: 1fr 1fr; 
+    padding: 20px;
+    gap: 12px;
+  }
+  
+  .duzenle-urun-kod-wrap .duzenle-input { 
+    padding-right: 80px; 
+  }
+  
+  .duzenle-kart-fields { 
+    grid-template-columns: 1fr 1fr; 
+    gap: 12px;
+  }
+  
+  .duzenle-notlar-grid { 
+    grid-template-columns: 1fr; 
+  }
+  
+  .duzenle-kampanya-grid { 
+    grid-template-columns: 1fr; 
+  }
+  
+  .duzenle-mars-inputs { 
+    grid-template-columns: 1fr; 
+    gap: 12px;
+  }
+  
+  .duzenle-mars-icerik { 
+    padding: 18px; 
+  }
+  
+  .duzenle-mars-card { 
+    gap: 15px; 
+  }
+}
+
+@media (max-width: 640px) {
+  .duzenle-form {
+    padding: 12px;
+  }
+  
+  .duzenle-section {
+    padding: 16px;
+    border-radius: 12px;
+  }
+  
+  .duzenle-section::before {
+    width: 3px;
+    border-radius: 12px 0 0 12px;
+  }
+  
+  .duzenle-section-title {
+    font-size: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+  }
+  
+  .duzenle-urun-row { 
+    grid-template-columns: 1fr; 
+    padding: 16px;
+  }
+  
+  .duzenle-urun-kod-wrap .duzenle-input { 
+    padding-right: 70px; 
+  }
+  
+  .duzenle-kart-fields { 
+    grid-template-columns: 1fr; 
+    gap: 12px;
+  }
+  
+  .duzenle-kart-row {
+    padding: 16px;
+  }
+  
+  .duzenle-kart-net {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .duzenle-section-header { 
+    flex-direction: column; 
+    align-items: flex-start; 
+    gap: 12px; 
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+  }
+  
+  .duzenle-mars-header { 
+    flex-direction: column; 
+    align-items: flex-start; 
+    gap: 12px; 
+  }
+  
+  .duzenle-actions { 
+    flex-direction: column-reverse; 
+    gap: 12px;
+  }
+  
+  .duzenle-btn-cancel, 
+  .duzenle-btn-submit,
+  .duzenle-btn-add,
+  .duzenle-btn-remove,
+  .duzenle-btn-sm { 
+    width: 100%; 
+    text-align: center; 
+    justify-content: center;
+  }
+  
+  .duzenle-mars-card {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .duzenle-mars-sol {
+    flex-direction: row;
+    width: 100%;
+    gap: 10px;
+    margin-bottom: 5px;
+  }
+  
+  .duzenle-mars-nokta {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+  
+  .duzenle-mars-cizgi {
+    width: 100%;
+    height: 2px;
+    min-height: auto;
+    margin: 0 0 10px 0;
+    background: linear-gradient(to right, var(--gray-200), transparent);
+  }
+  
+  .duzenle-mars-icerik {
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 16px;
+  }
+  
+  .duzenle-mars-baslik {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .duzenle-mars-sil {
+    align-self: flex-end;
+  }
+  
+  .duzenle-popup {
+    padding: 24px 20px;
+    max-width: 90%;
+  }
+  
+  .duzenle-popup-statu-secenekler {
+    flex-direction: column;
+  }
+  
+  .duzenle-popup-statu-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .duzenle-popup-butonlar {
+    flex-direction: column-reverse;
+    width: 100%;
+  }
+  
+  .duzenle-popup-hayir,
+  .duzenle-popup-evet {
+    width: 100%;
+  }
+  
+  .duzenle-iptal-buton-alani {
+    flex-direction: column;
+  }
+  
+  .duzenle-btn-iptal-et,
+  .duzenle-btn-iptalden-cikar {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .duzenle-yesil-ozet-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .duzenle-yesil-ozet-row span:last-child {
+    align-self: flex-end;
+  }
+  
+  .duzenle-toplam-bar {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 16px;
+  }
+}
+
+/* =============================================
+   MOBİL İYİLEŞTİRMELER (EXTRA SMALL)
+   ============================================= */
+@media (max-width: 380px) {
+  .duzenle-form {
+    padding: 8px;
+  }
+  
+  .duzenle-section {
+    padding: 14px;
+  }
+  
+  .duzenle-urun-row {
+    padding: 14px;
+  }
+  
+  .duzenle-mars-icerik {
+    padding: 14px;
+  }
+  
+  .urun-found-badge {
+    font-size: 10px;
+    padding: 3px 8px;
+    right: 8px;
+  }
+  
+  .duzenle-urun-kod-wrap .duzenle-input {
+    padding-right: 65px;
+  }
+  
+  .duzenle-popup-ikon {
+    font-size: 40px;
+  }
+  
+  .duzenle-popup-baslik {
+    font-size: 18px;
+  }
+  
+  .duzenle-popup-mesaj {
+    font-size: 14px;
+  }
+  
+  .duzenle-kampanya-item {
+    padding: 14px;
+  }
+  
+  .duzenle-kampanya-ad {
+    font-size: 14px;
+  }
+  
+  .duzenle-kampanya-aciklama {
+    font-size: 12px;
+  }
+}
+
+/* =============================================
+   TOUCH OPTIMIZATIONS
+   ============================================= */
+@media (hover: none) and (pointer: coarse) {
+  .duzenle-btn-add,
+  .duzenle-btn-sm,
+  .duzenle-btn-remove,
+  .duzenle-btn-cancel,
+  .duzenle-btn-submit,
+  .duzenle-kampanya-item,
+  .duzenle-urun-row,
+  .duzenle-mars-card,
+  .duzenle-popup-statu-btn,
+  .duzenle-popup-hayir,
+  .duzenle-popup-evet,
+  .duzenle-btn-iptal-et,
+  .duzenle-btn-iptalden-cikar {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  .duzenle-btn-add:active,
+  .duzenle-btn-sm:active,
+  .duzenle-btn-remove:active,
+  .duzenle-btn-cancel:active,
+  .duzenle-btn-submit:active,
+  .duzenle-kampanya-item:active,
+  .duzenle-urun-row:active,
+  .duzenle-mars-card:active {
+    opacity: 0.7;
+    transform: scale(0.98);
+  }
+  
+  /* Hover efektlerini kaldır */
+  .duzenle-btn-add:hover,
+  .duzenle-btn-sm:hover,
+  .duzenle-btn-remove:hover,
+  .duzenle-btn-cancel:hover,
+  .duzenle-btn-submit:hover,
+  .duzenle-kampanya-item:hover,
+  .duzenle-urun-row:hover,
+  .duzenle-mars-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* =============================================
+   SAFE AREA SUPPORT (iPhone notch)
+   ============================================= */
+@supports (padding: max(0px)) {
+  .duzenle-form {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  
+  .duzenle-popup {
+    margin-left: env(safe-area-inset-left);
+    margin-right: env(safe-area-inset-right);
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* =============================================
+   REDUCED MOTION
+   ============================================= */
+@media (prefers-reduced-motion: reduce) {
+  .duzenle-section,
+  .duzenle-urun-row,
+  .duzenle-kampanya-item,
+  .duzenle-mars-card,
+  .duzenle-btn-add,
+  .duzenle-btn-sm,
+  .duzenle-btn-remove,
+  .duzenle-btn-cancel,
+  .duzenle-btn-submit,
+  .duzenle-popup,
+  .duzenle-mars-nokta {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+  
+  .duzenle-section::before {
+    transition: none;
+  }
+}
