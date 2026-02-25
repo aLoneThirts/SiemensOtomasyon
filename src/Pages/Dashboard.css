@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* =============================================
    DASHBOARD CSS - MOBİL UYUMLU VERSİYON
    ============================================= */
@@ -6,205 +10,222 @@
    TESLİM ALARM BANNER
    ============================================= */
 
-.alarm-banner { 
-  margin-bottom: 16px; 
-  border-radius: 12px; 
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08); 
+.alarm-banner {
+  margin-bottom: 16px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
   width: 100%;
 }
 
 .alarm-baslik {
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 14px 16px; 
-  cursor: pointer; 
+  padding: 14px 16px;
+  cursor: pointer;
   user-select: none;
-  border-radius: 12px; 
+  border-radius: 12px;
   gap: 10px;
+  transition: all 0.2s ease;
 }
 
-.alarm-baslik-sol { 
-  display: flex; 
-  align-items: center; 
-  gap: 8px; 
+.alarm-baslik-sol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
   min-width: 0;
 }
-.alarm-baslik-sol i { 
-  font-size: 16px; 
-  flex-shrink: 0; 
+.alarm-baslik-sol i {
+  font-size: 16px;
+  flex-shrink: 0;
 }
-.alarm-baslik-sol strong { 
-  font-size: 14px; 
+.alarm-baslik-sol strong {
+  font-size: 14px;
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.alarm-badge { 
-  font-size: 11px; 
-  font-weight: 700; 
-  padding: 4px 10px; 
-  border-radius: 20px; 
+.alarm-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
   white-space: nowrap;
 }
 
-.alarm-toggle-icon { 
-  font-size: 12px; 
-  transition: transform 0.2s ease; 
-  flex-shrink: 0; 
+.alarm-toggle-icon {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
 }
-.alarm-toggle-icon.acik { 
-  transform: rotate(180deg); 
+.alarm-toggle-icon.acik {
+  transform: rotate(180deg);
 }
 
 .alarm-banner.bugun .alarm-baslik {
   background: linear-gradient(135deg, #fee2e2, #fecaca);
-  border-left: 4px solid #dc2626; 
+  border-left: 4px solid #dc2626;
   color: #991b1b;
 }
-.alarm-banner.bugun .alarm-badge { 
-  background: #dc2626; 
-  color: white; 
+.alarm-banner.bugun .alarm-badge {
+  background: #dc2626;
+  color: white;
 }
-.alarm-banner.bugun .alarm-liste { 
-  border: 2px solid #fecaca; 
-  border-top: none; 
-  border-radius: 0 0 12px 12px; 
-  overflow: hidden; 
+.alarm-banner.bugun .alarm-liste {
+  border: 2px solid #fecaca;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
 }
 
 .alarm-banner.yarin .alarm-baslik {
   background: linear-gradient(135deg, #fff7ed, #fed7aa);
-  border-left: 4px solid #f97316; 
+  border-left: 4px solid #f97316;
   color: #9a3412;
 }
-.alarm-banner.yarin .alarm-badge { 
-  background: #f97316; 
-  color: white; 
+.alarm-banner.yarin .alarm-badge {
+  background: #f97316;
+  color: white;
 }
-.alarm-banner.yarin .alarm-liste { 
-  border: 2px solid #fed7aa; 
-  border-top: none; 
-  border-radius: 0 0 12px 12px; 
-  overflow: hidden; 
+.alarm-banner.yarin .alarm-liste {
+  border: 2px solid #fed7aa;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
 }
 
-.alarm-liste { 
-  background: white; 
+.alarm-liste {
+  background: white;
 }
 
 .alarm-satir {
-  display: flex; 
+  display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 14px 16px; 
-  border-bottom: 1px solid #f3f4f6; 
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
   gap: 10px;
+  transition: all 0.15s ease;
 }
-.alarm-satir:last-child { 
-  border-bottom: none; 
+.alarm-satir:last-child {
+  border-bottom: none;
 }
-.alarm-satir:hover { 
-  background: #fafafa; 
+.alarm-satir:hover {
+  background: #fafafa;
 }
 
-.alarm-satir-sol { 
-  display: flex; 
-  align-items: center; 
-  gap: 8px; 
+.alarm-satir-sol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   flex-wrap: wrap;
 }
-.alarm-satis-kodu { 
-  font-size: 13px; 
-  font-weight: 700; 
-  color: #009999; 
-  white-space: nowrap; 
+.alarm-satis-kodu {
+  font-size: 13px;
+  font-weight: 700;
+  color: #009999;
+  white-space: nowrap;
 }
-.alarm-musteri { 
-  font-size: 14px; 
-  color: #374151; 
+.alarm-musteri {
+  font-size: 14px;
+  color: #374151;
   font-weight: 600;
   word-break: break-word;
 }
-.alarm-sube { 
-  font-size: 11px; 
-  color: #9ca3af; 
-  background: #f3f4f6; 
-  padding: 4px 10px; 
-  border-radius: 20px; 
-  white-space: nowrap; 
+.alarm-sube {
+  font-size: 11px;
+  color: #9ca3af;
+  background: #f3f4f6;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
 }
-.alarm-satir-sag { 
-  display: flex; 
-  align-items: center; 
+.alarm-satir-sag {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   width: 100%;
   gap: 10px;
 }
-.alarm-tutar { 
-  font-size: 15px; 
-  font-weight: 700; 
-  color: #1f2937; 
+.alarm-tutar {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
 }
 
 .alarm-detay-btn {
-  padding: 8px 16px; 
-  background: #009999; 
+  padding: 8px 16px;
+  background: #009999;
   color: white;
-  border: none; 
-  border-radius: 10px; 
-  font-size: 12px; 
+  border: none;
+  border-radius: 10px;
+  font-size: 12px;
   font-weight: 700;
-  cursor: pointer; 
-  transition: all 0.2s ease; 
-  white-space: nowrap; 
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
 }
-.alarm-detay-btn:active { 
-  background: #007575; 
-  transform: scale(0.98); 
+.alarm-detay-btn:hover {
+  background: #00b3b3;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0, 153, 153, 0.25);
+}
+.alarm-detay-btn:active {
+  background: #007575;
+  transform: scale(0.98);
 }
 
 /* =============================================
    ÖZET KARTLAR
    ============================================= */
 .ozet-kartlar {
-  display: grid; 
+  display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px; 
+  gap: 10px;
   margin-bottom: 20px;
 }
 
 .ozet-kart {
-  background: white; 
-  border-radius: 14px; 
+  background: white;
+  border-radius: 14px;
   padding: 14px 12px;
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   gap: 10px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06); 
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   border: 1px solid #edf2f7;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
-.ozet-kart:active { 
-  transform: scale(0.98); 
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
+.ozet-kart:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+.ozet-kart:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .ozet-kart-ikon {
-  width: 40px; 
-  height: 40px; 
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   justify-content: center;
-  font-size: 18px; 
+  font-size: 18px;
   flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.ozet-kart:hover .ozet-kart-ikon {
+  transform: scale(1.08);
 }
 
 .ozet-ciro .ozet-kart-ikon     { background: linear-gradient(135deg, #e0f7fa, #b2ebf2); color: #00838f; }
@@ -213,7 +234,6 @@
 .ozet-bekleyen .ozet-kart-ikon { background: linear-gradient(135deg, #e8eaf6, #c5cae9); color: #283593; }
 .ozet-zarar .ozet-kart-ikon    { background: linear-gradient(135deg, #fce4ec, #f8bbd0); color: #c62828; }
 
-/* ✅ DEĞİŞİKLİK 3: İptal kartı — kırmızı tema */
 .ozet-iptal {
   background: linear-gradient(135deg, #fef2f2, #fee2e2);
   border: 1px solid #fecaca;
@@ -223,11 +243,11 @@
   background: linear-gradient(135deg, #fee2e2, #fecaca);
   border-color: #f87171;
   box-shadow: 0 4px 16px rgba(220, 38, 38, 0.15);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
 }
 .ozet-iptal:active {
   background: linear-gradient(135deg, #fecaca, #fca5a5);
-  transform: scale(0.98) translateY(0);
+  transform: scale(0.98);
   box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
 }
 .ozet-iptal .ozet-kart-ikon {
@@ -242,88 +262,92 @@
   color: #dc2626;
 }
 
-.ozet-kart-bilgi { 
-  display: flex; 
-  flex-direction: column; 
-  gap: 4px; 
+.ozet-kart-bilgi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
-.ozet-kart-baslik { 
-  font-size: 11px; 
-  font-weight: 700; 
-  color: #6b7280; 
-  text-transform: uppercase; 
-  letter-spacing: 0.5px; 
-  white-space: nowrap; 
+.ozet-kart-baslik {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
 }
-.ozet-kart-deger { 
-  font-size: 16px; 
-  font-weight: 800; 
-  color: #1f2937; 
-  white-space: nowrap; 
-  overflow: hidden; 
-  text-overflow: ellipsis; 
+.ozet-kart-dever {
+  font-size: 16px;
+  font-weight: 800;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.ozet-kart-deger.negatif { 
-  color: #dc2626; 
+.ozet-kart-dever.negatif {
+  color: #dc2626;
 }
 
 /* =============================================
    FİLTRE
    ============================================= */
 .filtre-container {
-  background: white; 
-  border-radius: 16px; 
+  background: white;
+  border-radius: 16px;
   padding: 16px;
-  margin-bottom: 16px; 
+  margin-bottom: 16px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  border: 1px solid #edf2f7; 
-  display: flex; 
+  border: 1px solid #edf2f7;
+  display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.filtre-item { 
-  display: flex; 
-  flex-direction: column; 
-  gap: 6px; 
+.filtre-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   width: 100%;
 }
-.filtre-item label { 
-  font-size: 12px; 
-  font-weight: 700; 
-  color: #4a5568; 
-  text-transform: uppercase; 
-  letter-spacing: 0.5px; 
+.filtre-item label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .filtre-select,
 .filtre-input {
-  width: 100%; 
-  padding: 12px 14px; 
+  width: 100%;
+  padding: 12px 14px;
   background: #f8fafc;
-  border: 2px solid #e2e8f0; 
+  border: 2px solid #e2e8f0;
   border-radius: 12px;
-  font-size: 14px; 
-  font-weight: 500; 
+  font-size: 14px;
+  font-weight: 500;
   color: #1e293b;
-  transition: all 0.2s ease; 
-  cursor: pointer; 
+  transition: all 0.2s ease;
+  cursor: pointer;
   height: 48px;
-  box-sizing: border-box; 
+  box-sizing: border-box;
   font-family: inherit;
   -webkit-appearance: none;
   appearance: none;
 }
-.filtre-select:focus, .filtre-input:focus { 
-  outline: none; 
-  border-color: #009999; 
-  background: white; 
-  box-shadow: 0 0 0 3px rgba(0,153,153,0.1); 
+.filtre-select:hover,
+.filtre-input:hover {
+  border-color: #cbd5e1;
+  background: white;
+}
+.filtre-select:focus, .filtre-input:focus {
+  outline: none;
+  border-color: #009999;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0,153,153,0.1);
 }
 
-/* ✅ DEĞİŞİKLİK 2: Tarih aralığı hata stili */
 .filtre-input--hata {
   border-color: #f87171 !important;
   background: #fef2f2 !important;
@@ -342,111 +366,132 @@
   line-height: 1.3;
 }
 
-.search-container { 
-  display: flex; 
-  gap: 8px; 
-  align-items: center; 
-  width: 100%; 
+.search-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
 }
 .search-input {
-  flex: 1; 
-  padding: 12px 14px; 
-  background: #f8fafc; 
+  flex: 1;
+  padding: 12px 14px;
+  background: #f8fafc;
   border: 2px solid #e2e8f0;
-  border-radius: 12px; 
-  font-size: 14px; 
-  height: 48px; 
+  border-radius: 12px;
+  font-size: 14px;
+  height: 48px;
   box-sizing: border-box;
-  transition: all 0.2s ease; 
-  font-family: inherit; 
+  transition: all 0.2s ease;
+  font-family: inherit;
   color: #1e293b;
 }
-.search-input:focus { 
-  outline: none; 
-  border-color: #009999; 
-  background: white; 
-  box-shadow: 0 0 0 3px rgba(0,153,153,0.1); 
+.search-input:hover {
+  border-color: #cbd5e1;
+  background: white;
+}
+.search-input:focus {
+  outline: none;
+  border-color: #009999;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0,153,153,0.1);
 }
 
 .search-btn {
-  width: 48px; 
+  width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #009999, #007373);
-  color: white; 
-  border: none; 
+  background: #009999;
+  color: white;
+  border: none;
   border-radius: 12px;
-  cursor: pointer; 
+  cursor: pointer;
   transition: all 0.2s ease;
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   justify-content: center;
-  font-size: 16px; 
+  font-size: 16px;
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
-.search-btn:active { 
-  background: linear-gradient(135deg, #00b3b3, #008c8c); 
-  transform: scale(0.96); 
+.search-btn:hover {
+  background: #00b3b3;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0, 153, 153, 0.25);
+}
+.search-btn:active {
+  background: #007575;
+  transform: scale(0.96);
 }
 
-.filtre-actions-group { 
-  display: flex; 
-  gap: 8px; 
+.filtre-actions-group {
+  display: flex;
+  gap: 8px;
   width: 100%;
 }
 
 .btn-sifirla {
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 16px; 
-  height: 48px;
-  background: linear-gradient(135deg, #ff9800, #f57c00);
-  color: white; 
-  border: none; 
-  border-radius: 12px; 
-  font-weight: 700;
-  font-size: 13px; 
-  cursor: pointer; 
+  gap: 8px;
+  padding: 0 18px;
+  height: 44px;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  border: 1px solid #e8e8ed;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
   transition: all 0.2s ease;
-  text-transform: uppercase; 
-  letter-spacing: 0.5px; 
-  white-space: nowrap; 
+  white-space: nowrap;
   font-family: inherit;
-  flex: 1;
+  flex: 0 1 auto;
+  min-width: 100px;
   -webkit-tap-highlight-color: transparent;
 }
-.btn-sifirla:active { 
-  background: linear-gradient(135deg, #f57c00, #e65100); 
-  transform: scale(0.96); 
+
+.btn-sifirla:hover {
+  background: #ffa726;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(255, 152, 0, 0.25);
+  width: 100%;
+
+}
+.btn-sifirla:active {
+  background: #f57c00;
+  transform: scale(0.96);
 }
 
 .dash-btn-excel {
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0 16px; 
+  padding: 0 16px;
   height: 48px;
-  background: linear-gradient(135deg, #1d6f42, #155934);
-  color: white; 
-  border: none; 
-  border-radius: 12px; 
+  background: #1d6f42;
+  color: white;
+  border: none;
+  border-radius: 12px;
   font-weight: 700;
-  font-size: 13px; 
-  cursor: pointer; 
+  font-size: 13px;
+  cursor: pointer;
   transition: all 0.2s ease;
-  text-transform: uppercase; 
-  letter-spacing: 0.5px; 
-  white-space: nowrap; 
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
   font-family: inherit;
   flex: 1;
   -webkit-tap-highlight-color: transparent;
 }
-.dash-btn-excel:active { 
-  background: linear-gradient(135deg, #257347, #1a6b3e); 
-  transform: scale(0.96); 
+.dash-btn-excel:hover {
+  background: #257347;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(21, 128, 61, 0.25);
+}
+.dash-btn-excel:active {
+  background: #155934;
+  transform: scale(0.96);
 }
 
 /* =============================================
@@ -455,22 +500,22 @@
 .sonuc-bilgi {
   padding: 14px 16px;
   background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
-  border-left: 4px solid #4caf50; 
+  border-left: 4px solid #4caf50;
   border-radius: 12px;
-  margin-bottom: 16px; 
+  margin-bottom: 16px;
   box-shadow: 0 2px 8px rgba(76,175,80,0.12);
 }
-.sonuc-bilgi p { 
-  margin: 0; 
-  font-size: 14px; 
-  color: #2e7d32; 
-  font-weight: 600; 
+.sonuc-bilgi p {
+  margin: 0;
+  font-size: 14px;
+  color: #2e7d32;
+  font-weight: 600;
   line-height: 1.4;
 }
-.sonuc-bilgi strong { 
-  font-weight: 900; 
-  color: #1b5e20; 
-  font-size: 16px; 
+.sonuc-bilgi strong {
+  font-weight: 900;
+  color: #1b5e20;
+  font-size: 16px;
 }
 
 /* =============================================
@@ -484,84 +529,91 @@
   width: calc(100% + 32px);
 }
 
-.sales-table-container { 
-  background: white; 
-  min-width: 800px; 
+.sales-table-container {
+  background: white;
+  min-width: 800px;
   width: 100%;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0,0,0,0.06);
 }
 
-.sales-table { 
-  width: 100%; 
-  border-collapse: collapse; 
+.sales-table {
+  width: 100%;
+  border-collapse: collapse;
 }
-.sales-table thead { 
-  background: linear-gradient(135deg, #009999, #007373); 
+.sales-table thead {
+  background: #009999;
 }
 .sales-table th {
-  padding: 14px 12px; 
-  text-align: left; 
-  font-weight: 800; 
+  padding: 14px 12px;
+  text-align: left;
+  font-weight: 800;
   color: white;
-  font-size: 11px; 
-  letter-spacing: 0.5px; 
-  text-transform: uppercase; 
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
   white-space: nowrap;
 }
-.sales-table td { 
-  padding: 14px 12px; 
-  border-bottom: 1px solid #f3f4f6; 
-  color: #4b5563; 
-  font-size: 13px; 
-  font-weight: 500; 
+.sales-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
 }
-.sales-table tbody tr { 
-  transition: all 0.15s ease; 
-  border-left: 3px solid transparent; 
+.sales-table tbody tr {
+  transition: all 0.15s ease;
+  border-left: 3px solid transparent;
 }
-.sales-table tbody tr:active { 
-  background: rgba(0,153,153,0.08); 
-  border-left-color: #009999; 
+.sales-table tbody tr:hover {
+  background: #f9fafb;
+  border-left-color: #009999;
 }
-.sales-table tbody tr:last-child td { 
-  border-bottom: none; 
+.sales-table tbody tr:active {
+  background: rgba(0,153,153,0.08);
+  border-left-color: #009999;
+}
+.sales-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
-/* İptal satır stili */
-.satir-iptal { 
-  opacity: 0.7; 
-  background: #fafafa !important; 
+.satir-iptal {
+  opacity: 0.7;
+  background: #fafafa !important;
 }
-.satir-iptal td { 
-  color: #6b7280; 
+.satir-iptal td {
+  color: #6b7280;
 }
 
 /* =============================================
    BADGE'LER
    ============================================= */
 .status-badge {
-  padding: 6px 12px; 
-  border-radius: 30px; 
-  font-size: 11px; 
+  padding: 6px 12px;
+  border-radius: 30px;
+  font-size: 11px;
   font-weight: 800;
-  display: inline-block; 
-  letter-spacing: 0.3px; 
+  display: inline-block;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
-  white-space: nowrap; 
-  cursor: default; 
-  border: none; 
+  white-space: nowrap;
+  cursor: default;
+  border: none;
   font-family: inherit;
 }
-.status-badge.clickable { 
-  cursor: pointer; 
-  transition: all 0.2s ease; 
+.status-badge.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.status-badge.clickable:active { 
-  transform: scale(0.96); 
+.status-badge.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.status-badge.clickable:active {
+  transform: scale(0.96);
 }
 
 .status-badge.approved,
@@ -572,212 +624,237 @@
 
 .status-badge.iptal { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-weight: 700; }
 
-.kar-zarar-badge { 
-  padding: 6px 12px; 
-  border-radius: 30px; 
-  font-size: 12px; 
-  font-weight: 800; 
-  display: inline-block; 
-  white-space: nowrap; 
+.kar-zarar-badge {
+  padding: 6px 12px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-block;
+  white-space: nowrap;
 }
 .kar-zarar-badge.kar   { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; box-shadow: 0 2px 6px rgba(16,185,129,0.2); }
 .kar-zarar-badge.zarar { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; box-shadow: 0 2px 6px rgba(239,68,68,0.2); }
 
-/* İptal & Talep etiketler */
 .iptal-etiket {
-  display: inline-block; 
-  margin-left: 6px; 
+  display: inline-block;
+  margin-left: 6px;
   padding: 2px 8px;
-  background: #dc2626; 
-  color: white; 
-  font-size: 9px; 
+  background: #dc2626;
+  color: white;
+  font-size: 9px;
   font-weight: 700;
-  border-radius: 6px; 
-  letter-spacing: 0.3px; 
+  border-radius: 6px;
+  letter-spacing: 0.3px;
   vertical-align: middle;
 }
 .iptal-talep-etiket {
-  display: inline-block; 
-  margin-left: 6px; 
+  display: inline-block;
+  margin-left: 6px;
   padding: 2px 8px;
-  background: #f97316; 
-  color: white; 
-  font-size: 9px; 
+  background: #f97316;
+  color: white;
+  font-size: 9px;
   font-weight: 700;
-  border-radius: 6px; 
-  letter-spacing: 0.3px; 
+  border-radius: 6px;
+  letter-spacing: 0.3px;
   vertical-align: middle;
 }
 
 /* =============================================
    ACTION BUTTONS
    ============================================= */
-.action-buttons { 
-  display: flex; 
-  gap: 8px; 
-  flex-wrap: wrap; 
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .btn-view, .btn-edit, .btn-iptal-talep {
-  width: 38px; 
-  height: 38px; 
-  border: none; 
+  width: 38px;
+  height: 38px;
+  border: none;
   border-radius: 10px;
-  cursor: pointer; 
+  cursor: pointer;
   transition: all 0.2s ease;
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 15px;
   -webkit-tap-highlight-color: transparent;
 }
-.btn-view { 
-  background: linear-gradient(135deg, #009999, #007373); 
-  color: white; 
-  box-shadow: 0 2px 6px rgba(0,153,153,0.25); 
+.btn-view {
+  background: #009999;
+  color: white;
+  box-shadow: 0 2px 6px rgba(0,153,153,0.25);
 }
-.btn-view:active { 
-  background: linear-gradient(135deg, #00b3b3, #008c8c); 
-  transform: scale(0.94); 
+.btn-view:hover {
+  background: #00b3b3;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0, 153, 153, 0.3);
 }
-.btn-edit { 
-  background: linear-gradient(135deg, #ff9800, #f57c00); 
-  color: white; 
-  box-shadow: 0 2px 6px rgba(255,152,0,0.25); 
+.btn-view:active {
+  background: #007575;
+  transform: scale(0.94);
 }
-.btn-edit:active { 
-  background: linear-gradient(135deg, #f57c00, #e65100); 
-  transform: scale(0.94); 
+.btn-edit {
+  background: #ff9800;
+  color: white;
+  box-shadow: 0 2px 6px rgba(255,152,0,0.25);
+}
+.btn-edit:hover {
+  background: #ffa726;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(255, 152, 0, 0.3);
+}
+.btn-edit:active {
+  background: #f57c00;
+  transform: scale(0.94);
 }
 
-/* İptal talebi butonu */
 .btn-iptal-talep {
-  width: 38px; 
-  height: 38px; 
+  width: 38px;
+  height: 38px;
   padding: 0;
-  background: #fff7ed; 
+  background: #fff7ed;
   border: 1px solid #fed7aa;
-  border-radius: 10px; 
-  cursor: pointer; 
+  border-radius: 10px;
+  cursor: pointer;
   font-size: 15px;
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   justify-content: center;
   transition: all 0.2s;
 }
-.btn-iptal-talep:active:not(:disabled) { 
-  background: #fee2e2; 
-  border-color: #fca5a5; 
-  transform: scale(0.94); 
+.btn-iptal-talep:hover:not(:disabled) {
+  background: #ffedd5;
+  border-color: #fdba74;
+  transform: translateY(-2px);
 }
-.btn-iptal-talep:disabled { 
-  opacity: 0.5; 
-  cursor: not-allowed; 
+.btn-iptal-talep:active:not(:disabled) {
+  background: #fed7aa;
+  border-color: #fb923c;
+  transform: scale(0.94);
+}
+.btn-iptal-talep:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* =============================================
    EMPTY / LOADING
    ============================================= */
-.empty-state { 
-  text-align: center; 
-  padding: 40px 20px; 
-  background: white; 
-  border-radius: 16px; 
-  box-shadow: 0 4px 20px rgba(0,0,0,0.08); 
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
 }
-.empty-state p { 
-  font-size: 15px; 
-  color: #6b7280; 
-  margin-bottom: 20px; 
-  font-weight: 500; 
+.empty-state p {
+  font-size: 15px;
+  color: #6b7280;
+  margin-bottom: 20px;
+  font-weight: 500;
 }
 
 .btn-primary {
-  padding: 14px 28px; 
-  background: linear-gradient(135deg, #009999, #007373);
-  color: white; 
-  border: none; 
-  border-radius: 40px; 
+  padding: 14px 28px;
+  background: #009999;
+  color: white;
+  border: none;
+  border-radius: 40px;
   cursor: pointer;
-  font-weight: 700; 
-  font-size: 14px; 
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 16px rgba(0,153,153,0.35); 
+  font-weight: 700;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(0,153,153,0.35);
   letter-spacing: 0.5px;
-  text-transform: uppercase; 
+  text-transform: uppercase;
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
 }
-.btn-primary:active { 
-  transform: scale(0.96); 
-  box-shadow: 0 2px 12px rgba(0,153,153,0.45); 
+.btn-primary:hover {
+  background: #00b3b3;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 153, 153, 0.4);
+}
+.btn-primary:active {
+  background: #007575;
+  transform: scale(0.96);
+  box-shadow: 0 2px 12px rgba(0,153,153,0.45);
 }
 
-.loading { 
-  text-align: center; 
-  padding: 40px 20px; 
-  font-size: 15px; 
-  color: #6b7280; 
-  background: white; 
-  border-radius: 16px; 
-  font-weight: 600; 
+.loading {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 15px;
+  color: #6b7280;
+  background: white;
+  border-radius: 16px;
+  font-weight: 600;
 }
 
 /* =============================================
    SAYFALAMA
    ============================================= */
 .pagination-container {
-  display: flex; 
-  justify-content: center; 
+  display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 6px; 
-  margin-top: 20px; 
-  padding: 16px; 
+  gap: 6px;
+  margin-top: 20px;
+  padding: 16px;
   background: white;
-  border-radius: 16px; 
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06); 
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   flex-wrap: wrap;
 }
 
 .pagination-btn {
-  padding: 8px 14px; 
-  background: white; 
+  padding: 8px 14px;
+  background: white;
   border: 2px solid #e5e7eb;
-  color: #374151; 
-  border-radius: 10px; 
-  cursor: pointer; 
+  color: #374151;
+  border-radius: 10px;
+  cursor: pointer;
   font-weight: 700;
-  font-size: 13px; 
-  transition: all 0.2s ease; 
-  min-width: 42px; 
-  text-align: center; 
+  font-size: 13px;
+  transition: all 0.2s ease;
+  min-width: 42px;
+  text-align: center;
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
 }
-.pagination-btn:active:not(:disabled) { 
-  border-color: #009999; 
-  color: #009999; 
-  background: #f0fafa; 
-  transform: scale(0.94); 
+.pagination-btn:hover:not(:disabled):not(.active) {
+  border-color: #009999;
+  color: #009999;
+  background: #f0fafa;
+  transform: translateY(-2px);
 }
-.pagination-btn.active { 
-  background: linear-gradient(135deg, #009999, #007373); 
-  border-color: #009999; 
-  color: white; 
-  box-shadow: 0 3px 10px rgba(0,153,153,0.3); 
+.pagination-btn:active:not(:disabled) {
+  border-color: #009999;
+  color: #009999;
+  background: #e8f8f8;
+  transform: scale(0.94);
 }
-.pagination-btn:disabled { 
-  opacity: 0.35; 
-  cursor: not-allowed; 
-  transform: none; 
+.pagination-btn.active {
+  background: #009999;
+  border-color: #009999;
+  color: white;
+  box-shadow: 0 3px 10px rgba(0,153,153,0.3);
 }
-.pagination-arrow { 
-  padding: 8px 16px; 
+.pagination-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
 }
-.pagination-dots { 
-  padding: 0 8px; 
-  color: #9ca3af; 
-  font-weight: 700; 
+.pagination-arrow {
+  padding: 8px 16px;
+}
+.pagination-dots {
+  padding: 0 8px;
+  color: #9ca3af;
+  font-weight: 700;
 }
 
 /* =============================================
@@ -788,53 +865,53 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
   }
-  
+
   .ozet-kart {
     padding: 16px 14px;
   }
-  
+
   .ozet-kart-ikon {
     width: 44px;
     height: 44px;
     font-size: 20px;
   }
-  
-  .ozet-kart-deger {
+
+  .ozet-kart-dever {
     font-size: 18px;
   }
-  
+
   .filtre-container {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 12px;
   }
-  
+
   .filtre-item {
     width: auto;
     flex: 1 1 140px;
   }
-  
+
   .filtre-item--wide {
     flex: 2 1 200px;
   }
-  
+
   .filtre-actions-group {
     width: auto;
     flex: 0 0 auto;
   }
-  
+
   .btn-sifirla, .dash-btn-excel {
     padding: 0 18px;
     font-size: 12px;
     height: 44px;
   }
-  
+
   .alarm-satir {
     flex-direction: row;
     align-items: center;
   }
-  
+
   .alarm-satir-sag {
     width: auto;
     justify-content: flex-end;
@@ -849,80 +926,80 @@
     grid-template-columns: repeat(5, 1fr);
     gap: 14px;
   }
-  
+
   .ozet-kart {
     padding: 18px 16px;
   }
-  
+
   .ozet-kart-ikon {
     width: 48px;
     height: 48px;
     font-size: 22px;
   }
-  
+
   .ozet-kart-baslik {
     font-size: 12px;
   }
-  
-  .ozet-kart-deger {
+
+  .ozet-kart-dever {
     font-size: 20px;
   }
-  
+
   .filtre-container {
     padding: 18px 20px;
   }
-  
+
   .filtre-item label {
     font-size: 11px;
   }
-  
+
   .filtre-select, .filtre-input, .search-input {
     padding: 10px 14px;
     height: 42px;
     font-size: 13px;
   }
-  
+
   .search-btn, .btn-sifirla, .dash-btn-excel {
     height: 42px;
   }
-  
+
   .btn-sifirla, .dash-btn-excel {
     padding: 0 20px;
     font-size: 12px;
   }
-  
+
   .sales-table-wrapper {
     margin: 0;
     padding: 0;
     width: 100%;
   }
-  
+
   .sales-table th {
     padding: 16px 16px;
     font-size: 12px;
   }
-  
+
   .sales-table td {
     padding: 16px;
     font-size: 14px;
   }
-  
+
   .action-buttons {
     gap: 10px;
   }
-  
+
   .btn-view, .btn-edit, .btn-iptal-talep {
     width: 36px;
     height: 36px;
     font-size: 14px;
   }
-  
+
   .btn-view:hover, .btn-edit:hover {
     transform: translateY(-2px);
   }
-  
+
   .btn-view:active, .btn-edit:active {
-    transform: translateY(0);
+    transform: scale(0.94);
   }
 }
 
@@ -930,19 +1007,19 @@
    BÜYÜK MASAÜSTÜ (1200px ve üzeri)
    ============================================= */
 @media (min-width: 1200px) {
-  .ozet-kart-deger {
+  .ozet-kart-dever {
     font-size: 22px;
   }
-  
+
   .sales-table-container {
     min-width: 900px;
   }
-  
+
   .sales-table th {
     padding: 18px 20px;
     font-size: 13px;
   }
-  
+
   .sales-table td {
     padding: 18px 20px;
   }
@@ -955,32 +1032,32 @@
   .ozet-kartlar {
     grid-template-columns: 1fr;
   }
-  
+
   .ozet-kart {
     padding: 12px 10px;
   }
-  
+
   .alarm-baslik-sol strong {
     font-size: 13px;
   }
-  
+
   .alarm-badge {
     font-size: 10px;
     padding: 3px 8px;
   }
-  
+
   .filtre-actions-group {
     flex-direction: column;
   }
-  
+
   .btn-sifirla, .dash-btn-excel {
     width: 100%;
   }
-  
+
   .action-buttons {
     justify-content: flex-end;
   }
-  
+
   .btn-view, .btn-edit, .btn-iptal-talep {
     width: 42px;
     height: 42px;
@@ -991,21 +1068,20 @@
    DOKUNMATİK EKRAN OPTİMİZASYONU
    ============================================= */
 @media (hover: none) and (pointer: coarse) {
-  .btn-view:hover, .btn-edit:hover, .btn-sifirla:hover, 
+  .btn-view:hover, .btn-edit:hover, .btn-sifirla:hover,
   .dash-btn-excel:hover, .search-btn:hover, .pagination-btn:hover {
     transform: none;
   }
-  
+
   .btn-view:active, .btn-edit:active, .btn-sifirla:active,
   .dash-btn-excel:active, .search-btn:active, .pagination-btn:active {
     transform: scale(0.96);
   }
-  
+
   .ozet-kart:hover {
     transform: none;
   }
-  
-  /* ✅ İptal kartı dokunmatik override */
+
   .ozet-iptal:hover {
     transform: none;
     box-shadow: 0 2px 12px rgba(0,0,0,0.06);
@@ -1014,16 +1090,16 @@
     transform: scale(0.98);
     box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
   }
-  
+
   .sales-table tbody tr:hover {
     background: none;
   }
-  
+
   .filtre-select:hover, .filtre-input:hover, .search-input:hover {
     border-color: #e2e8f0;
     background: #f8fafc;
   }
-  
+
   .filtre-select:focus, .filtre-input:focus, .search-input:focus {
     border-color: #009999;
   }
@@ -1036,16 +1112,16 @@
   .ozet-kartlar {
     grid-template-columns: repeat(3, 1fr);
   }
-  
+
   .alarm-satir {
     flex-direction: row;
   }
-  
+
   .filtre-container {
     flex-direction: row;
     flex-wrap: wrap;
   }
-  
+
   .filtre-item {
     flex: 1 1 120px;
   }

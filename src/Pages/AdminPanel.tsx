@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   collection, getDocs, doc, updateDoc, addDoc, setDoc, deleteDoc, Timestamp,
-  writeBatch
+  writeBatch, query, where, orderBy, limit
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -44,7 +44,44 @@ interface YesilEtiketAdmin {
   aciklama?: string;
   subeKodu: string;
 }
-
+interface SatisLog {
+  id: string;
+  satisKodu: string;
+  subeKodu: string;
+  subeAd?: string;
+  dbPath?: string;
+  musteriBilgileri?: {
+    isim: string;
+    cep?: string;
+    adres?: string;
+    faturaAdresi?: string;
+    vergiNumarasi?: string;
+    vkNo?: string;
+    vd?: string;
+  };
+  musteriIsim?: string;
+  musteriCep?: string;
+  urunler?: Array<{
+    kod: string;
+    ad: string;
+    adet: number;
+    alisFiyati: number;
+    bip?: number;
+    toplam?: number;
+  }>;
+  musteriTemsilcisiId?: string;
+  musteriTemsilcisiAd?: string;
+  musteriTemsilcisi?: string;
+  toplamTutar?: number;
+  manuelSatisTutari?: number;
+  olusturmaTarihi?: any;
+  odemeDurumu?: string;
+  acikHesap?: number;
+  pesinatlar?: any[];
+  havaleler?: any[];
+  kartOdemeler?: any[];
+  silindi?: boolean;
+}
 type Modul =
   | 'excel-fiyat'
   | 'banka-kesinti'
@@ -54,7 +91,8 @@ type Modul =
   | 'magaza-hedef'
   | 'kampanya'
   | 'yesil-etiket'
-  | 'email-guncelle';
+  | 'email-guncelle'
+  | 'satis-log';
 
 const AdminPanel: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -68,12 +106,10 @@ const AdminPanel: React.FC = () => {
     if (!isAdminUser) { navigate('/'); }
   }, [currentUser, navigate, isAdminUser]);
 
-  // Sidebar'ı path değişince kapat
   useEffect(() => {
     setSidebarOpen(false);
   }, [location.pathname]);
 
-  // Sidebar açıkken body scroll'u engelle
   useEffect(() => {
     if (sidebarOpen) {
       document.body.style.overflow = 'hidden';
@@ -85,10 +121,10 @@ const AdminPanel: React.FC = () => {
 
   const buAy = ayKey();
 
-  const [aktifModul,  setAktifModul]  = useState<Modul>('excel-fiyat');
-  const [mesaj,       setMesaj]       = useState<{ tip: 'ok' | 'hata'; text: string } | null>(null);
-  const [yukleniyor,  setYukleniyor]  = useState(false);
-  const [ilerleme,    setIlerleme]    = useState('');
+  const [aktifModul, setAktifModul] = useState<Modul>('excel-fiyat');
+  const [mesaj, setMesaj] = useState<{ tip: 'ok' | 'hata'; text: string } | null>(null);
+  const [yukleniyor, setYukleniyor] = useState(false);
+  const [ilerleme, setIlerleme] = useState('');
 
   const mesajGoster = (tip: 'ok' | 'hata', text: string) => {
     setMesaj({ tip, text });
@@ -109,7 +145,7 @@ const AdminPanel: React.FC = () => {
      1) EXCEL FİYAT
   ══════════════════════════════════════════════════════════ */
   const fiyatFileRef = useRef<HTMLInputElement>(null);
-  const [fiyatOnizleme,  setFiyatOnizleme]  = useState<{ kod: string; tur: string; alis: number; bip: number }[]>([]);
+  const [fiyatOnizleme, setFiyatOnizleme] = useState<{ kod: string; tur: string; alis: number; bip: number }[]>([]);
   const [fiyatOnizlemde, setFiyatOnizlemde] = useState(false);
 
   const handleFiyatExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,10 +156,10 @@ const AdminPanel: React.FC = () => {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(ws);
       const parsed = rows.map(r => ({
-        kod:  String(r['ÜRÜN KODU'] || r['Ürün Kodu'] || r['urunKodu'] || r['kod'] || '').trim(),
-        tur:  String(r['ÜRÜN TÜRÜ'] || r['Ürün Türü'] || r['tur'] || '').trim(),
+        kod: String(r['ÜRÜN KODU'] || r['Ürün Kodu'] || r['urunKodu'] || r['kod'] || '').trim(),
+        tur: String(r['ÜRÜN TÜRÜ'] || r['Ürün Türü'] || r['tur'] || '').trim(),
         alis: parseFloat(r['ALIŞ'] || r['Aliş'] || r['alis'] || r['fiyat'] || 0),
-        bip:  parseFloat(r['BİP']  || r['Bip']  || r['bip']  || 0),
+        bip: parseFloat(r['BİP'] || r['Bip'] || r['bip'] || 0),
       })).filter(r => r.kod && (r.alis > 0 || r.bip > 0));
       setFiyatOnizleme(parsed);
       setFiyatOnizlemde(true);
@@ -172,8 +208,8 @@ const AdminPanel: React.FC = () => {
      2) BANKA KESİNTİ
   ══════════════════════════════════════════════════════════ */
   const kesintiFileRef = useRef<HTMLInputElement>(null);
-  const [kesintiOnizleme,  setKesintiOnizleme]  = useState<BankaKesinti[]>([]);
-  const [kesintiYuklendi,  setKesintiYuklendi]  = useState(false);
+  const [kesintiOnizleme, setKesintiOnizleme] = useState<BankaKesinti[]>([]);
+  const [kesintiYuklendi, setKesintiYuklendi] = useState(false);
 
   const handleKesintiExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -272,10 +308,10 @@ const AdminPanel: React.FC = () => {
   const [yeniSatici, setYeniSatici] = useState<Satici & { sifre: string }>({
     ad: '', soyad: '', email: '', subeKodu: SUBELER[0].kod, aktif: true, sifre: ''
   });
-  const [sifreGoster,        setSifreGoster]        = useState(false);
-  const [tumSaticilar,       setTumSaticilar]       = useState<Satici[]>([]);
+  const [sifreGoster, setSifreGoster] = useState(false);
+  const [tumSaticilar, setTumSaticilar] = useState<Satici[]>([]);
   const [tumSaticilarYuklendi, setTumSaticilarYuklendi] = useState(false);
-  const [saticiSilOnay,      setSaticiSilOnay]      = useState<string | null>(null);
+  const [saticiSilOnay, setSaticiSilOnay] = useState<string | null>(null);
 
   const tumSaticilarGetir = async () => {
     try {
@@ -311,8 +347,8 @@ const AdminPanel: React.FC = () => {
       tumSaticilarGetir();
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') mesajGoster('hata', '❌ Bu e-posta zaten kayıtlı!');
-      else if (err.code === 'auth/invalid-email')   mesajGoster('hata', '❌ Geçersiz e-posta!');
-      else if (err.code === 'auth/weak-password')   mesajGoster('hata', '❌ Şifre çok zayıf!');
+      else if (err.code === 'auth/invalid-email') mesajGoster('hata', '❌ Geçersiz e-posta!');
+      else if (err.code === 'auth/weak-password') mesajGoster('hata', '❌ Şifre çok zayıf!');
       else mesajGoster('hata', `❌ Hata: ${err.message}`);
     } finally { setYukleniyor(false); }
   };
@@ -329,8 +365,8 @@ const AdminPanel: React.FC = () => {
   /* ══════════════════════════════════════════════════════════
      4) SATICI DİSABLE
   ══════════════════════════════════════════════════════════ */
-  const [disableSube,    setDisableSube]    = useState<string>(SUBELER[0].kod);
-  const [saticiListesi,  setSaticiListesi]  = useState<Satici[]>([]);
+  const [disableSube, setDisableSube] = useState<string>(SUBELER[0].kod);
+  const [saticiListesi, setSaticiListesi] = useState<Satici[]>([]);
   const [saticiYuklendi, setSaticiYuklendi] = useState(false);
 
   const saticiListeGetir = async () => {
@@ -358,10 +394,10 @@ const AdminPanel: React.FC = () => {
   /* ══════════════════════════════════════════════════════════
      5) SATICI HEDEF
   ══════════════════════════════════════════════════════════ */
-  const [hedefSube,       setHedefSube]       = useState<string>(SUBELER[0].kod);
-  const [hedefAy,         setHedefAy]         = useState<string>(buAy);
-  const [hedefSaticilar,  setHedefSaticilar]  = useState<Satici[]>([]);
-  const [hedefYuklendi,   setHedefYuklendi]   = useState(false);
+  const [hedefSube, setHedefSube] = useState<string>(SUBELER[0].kod);
+  const [hedefAy, setHedefAy] = useState<string>(buAy);
+  const [hedefSaticilar, setHedefSaticilar] = useState<Satici[]>([]);
+  const [hedefYuklendi, setHedefYuklendi] = useState(false);
 
   const hedefSaticiGetir = async () => {
     setYukleniyor(true);
@@ -393,8 +429,8 @@ const AdminPanel: React.FC = () => {
   /* ══════════════════════════════════════════════════════════
      6) MAĞAZA HEDEF
   ══════════════════════════════════════════════════════════ */
-  const [magazaAy,            setMagazaAy]            = useState<string>(buAy);
-  const [magazaHedefler,      setMagazaHedefler]      = useState<Record<string, number>>(
+  const [magazaAy, setMagazaAy] = useState<string>(buAy);
+  const [magazaHedefler, setMagazaHedefler] = useState<Record<string, number>>(
     Object.fromEntries(SUBELER.map(s => [s.kod, 0]))
   );
   const [magazaHedefYuklendi, setMagazaHedefYuklendi] = useState(false);
@@ -441,10 +477,10 @@ const AdminPanel: React.FC = () => {
   /* ══════════════════════════════════════════════════════════
      7) KAMPANYA
   ══════════════════════════════════════════════════════════ */
-  const [kampanyaSube,    setKampanyaSube]    = useState<string>('GENEL');
-  const [kampanyalar,     setKampanyalar]     = useState<KampanyaAdmin[]>([]);
+  const [kampanyaSube, setKampanyaSube] = useState<string>('GENEL');
+  const [kampanyalar, setKampanyalar] = useState<KampanyaAdmin[]>([]);
   const [kampanyaYuklendi, setKampanyaYuklendi] = useState(false);
-  const [yeniKampanya,    setYeniKampanya]    = useState<KampanyaAdmin>({ ad: '', aciklama: '', aktif: true, subeKodu: 'GENEL', tutar: 0 });
+  const [yeniKampanya, setYeniKampanya] = useState<KampanyaAdmin>({ ad: '', aciklama: '', aktif: true, subeKodu: 'GENEL', tutar: 0 });
 
   const kampanyaGetir = async () => {
     setYukleniyor(true);
@@ -490,12 +526,12 @@ const AdminPanel: React.FC = () => {
      8) YEŞİL ETİKET
   ══════════════════════════════════════════════════════════ */
   const yesilEtiketFileRef = useRef<HTMLInputElement>(null);
-  const [yesilEtiketSube,      setYesilEtiketSube]      = useState<string>(SUBELER[0].kod);
-  const [yesilEtiketler,       setYesilEtiketler]       = useState<YesilEtiketAdmin[]>([]);
-  const [yesilEtiketYuklendi,  setYesilEtiketYuklendi]  = useState(false);
-  const [yesilEtiketOnizleme,  setYesilEtiketOnizleme]  = useState<YesilEtiketAdmin[]>([]);
+  const [yesilEtiketSube, setYesilEtiketSube] = useState<string>(SUBELER[0].kod);
+  const [yesilEtiketler, setYesilEtiketler] = useState<YesilEtiketAdmin[]>([]);
+  const [yesilEtiketYuklendi, setYesilEtiketYuklendi] = useState(false);
+  const [yesilEtiketOnizleme, setYesilEtiketOnizleme] = useState<YesilEtiketAdmin[]>([]);
   const [yesilEtiketOnizlemde, setYesilEtiketOnizlemde] = useState(false);
-  const [yeniYesilEtiket,      setYeniYesilEtiket]      = useState<YesilEtiketAdmin>({ urunKodu: '', maliyet: 0, aciklama: '', subeKodu: SUBELER[0].kod });
+  const [yeniYesilEtiket, setYeniYesilEtiket] = useState<YesilEtiketAdmin>({ urunKodu: '', maliyet: 0, aciklama: '', subeKodu: SUBELER[0].kod });
 
   const handleYesilEtiketExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -586,12 +622,12 @@ const AdminPanel: React.FC = () => {
   /* ══════════════════════════════════════════════════════════
      9) EMAIL GÜNCELLE
   ══════════════════════════════════════════════════════════ */
-  const [emailSaticilar,     setEmailSaticilar]     = useState<Satici[]>([]);
+  const [emailSaticilar, setEmailSaticilar] = useState<Satici[]>([]);
   const [emailSaticiYuklendi, setEmailSaticiYuklendi] = useState(false);
   const [emailGuncelleSatici, setEmailGuncelleSatici] = useState<Satici | null>(null);
-  const [yeniEmail,           setYeniEmail]           = useState('');
-  const [yeniSifre,           setYeniSifre]           = useState('');
-  const [emailSifreGoster,    setEmailSifreGoster]    = useState(false);
+  const [yeniEmail, setYeniEmail] = useState('');
+  const [yeniSifre, setYeniSifre] = useState('');
+  const [emailSifreGoster, setEmailSifreGoster] = useState(false);
 
   const emailSaticilarGetir = async () => {
     setYukleniyor(true);
@@ -645,24 +681,201 @@ const AdminPanel: React.FC = () => {
       emailSaticilarGetir();
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') mesajGoster('hata', '❌ Bu email zaten başka bir hesapta kullanılıyor!');
-      else if (err.code === 'auth/invalid-email')   mesajGoster('hata', '❌ Geçersiz email formatı!');
+      else if (err.code === 'auth/invalid-email') mesajGoster('hata', '❌ Geçersiz email formatı!');
       else mesajGoster('hata', `❌ Hata: ${err.message}`);
     } finally { setYukleniyor(false); }
+  };
+
+  /* ══════════════════════════════════════════════════════════
+     10) SATIŞ LOGLARI
+  ══════════════════════════════════════════════════════════ */
+  const [satisLoglari, setSatisLoglari] = useState<SatisLog[]>([]);
+  const [satisLogYuklendi, setSatisLogYuklendi] = useState(false);
+  const [logFiltre, setLogFiltre] = useState({
+    baslangicTarih: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    bitisTarih: new Date(),
+    subeKodu: 'TUMU',
+    saticiId: 'TUMU',
+    musteriAdi: ''
+  });
+  const [logSaticilar, setLogSaticilar] = useState<Satici[]>([]);
+  const [logMesaj, setLogMesaj] = useState<{ text: string; tip: 'info' | 'success' | 'error' } | null>(null);
+
+  const satisLogGetir = async () => {
+    setYukleniyor(true);
+    setSatisLogYuklendi(false);
+    setLogMesaj(null);
+
+    try {
+      const subeler = logFiltre.subeKodu === 'TUMU'
+        ? SUBELER
+        : SUBELER.filter(s => s.kod === logFiltre.subeKodu);
+
+      let tumLoglar: SatisLog[] = [];
+
+      for (const sube of subeler) {
+        try {
+          const satislarRef = collection(db, `subeler/${sube.dbPath}/satislar`);
+
+          const baslangic = new Date(logFiltre.baslangicTarih);
+          baslangic.setHours(0, 0, 0, 0);
+
+          const bitis = new Date(logFiltre.bitisTarih);
+          bitis.setHours(23, 59, 59, 999);
+
+          const q = query(
+            satislarRef,
+            where('olusturmaTarihi', '>=', baslangic),
+            where('olusturmaTarihi', '<=', bitis)
+          );
+
+          const snap = await getDocs(q);
+
+          let subeLoglari = snap.docs.map(d => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              subeAd: sube.ad,
+              subeKodu: sube.kod,
+              dbPath: sube.dbPath
+            } as SatisLog;
+          });
+
+          if (logFiltre.saticiId !== 'TUMU') {
+            subeLoglari = subeLoglari.filter(log =>
+              log.musteriTemsilcisiId === logFiltre.saticiId
+            );
+          }
+
+          if (logFiltre.musteriAdi.trim() !== '') {
+            const aranan = logFiltre.musteriAdi.toLowerCase().trim();
+            subeLoglari = subeLoglari.filter(log => {
+              const isim = log.musteriBilgileri?.isim || log.musteriIsim || '';
+              return isim.toLowerCase().includes(aranan);
+            });
+          }
+
+          tumLoglar = [...tumLoglar, ...subeLoglari];
+
+        } catch (err: any) {
+          console.error(`${sube.ad} hatası:`, err);
+        }
+      }
+
+      tumLoglar.sort((a, b) => {
+        const tarihA = a.olusturmaTarihi?.toDate?.() || new Date(a.olusturmaTarihi || 0);
+        const tarihB = b.olusturmaTarihi?.toDate?.() || new Date(b.olusturmaTarihi || 0);
+        return tarihB.getTime() - tarihA.getTime();
+      });
+
+      setSatisLoglari(tumLoglar);
+      setSatisLogYuklendi(true);
+
+      if (tumLoglar.length > 0) {
+        setLogMesaj({ text: `✅ ${tumLoglar.length} satış bulundu`, tip: 'success' });
+      } else {
+        setLogMesaj({ text: 'ℹ️ Satış bulunamadı', tip: 'info' });
+      }
+
+    } catch (err: any) {
+      console.error('❌ Log hatası:', err);
+      setLogMesaj({ text: `❌ Hata: ${err.message}`, tip: 'error' });
+    } finally {
+      setYukleniyor(false);
+    }
+  };
+
+  const logSaticiGetir = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const liste = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Satici))
+        .filter(u => u.role?.toString().toUpperCase() !== 'ADMIN');
+
+      liste.sort((a, b) => (a.ad || '').localeCompare(b.ad || ''));
+      setLogSaticilar(liste);
+
+    } catch (err) {
+      console.error('Satıcılar çekilemedi:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (aktifModul === 'satis-log') {
+      logSaticiGetir();
+      satisLogGetir();
+    }
+  }, [aktifModul]);
+
+  const satisSil = async (satis: SatisLog) => {
+    if (!window.confirm(`"${satis.satisKodu}" kodlu satışı silmek istediğinize emin misiniz?`)) return;
+
+    try {
+      const satisRef = doc(db, `subeler/${satis.dbPath}/satislar`, satis.id);
+      await updateDoc(satisRef, {
+        silindi: true,
+        silinmeTarihi: new Date(),
+        silenAdmin: currentUser?.email || 'bilinmiyor'
+      });
+
+      setSatisLoglari(prev => prev.filter(s => s.id !== satis.id));
+      setLogMesaj({ text: `✅ Satış silindi`, tip: 'success' });
+
+    } catch (err: any) {
+      setLogMesaj({ text: `❌ Silinemedi: ${err.message}`, tip: 'error' });
+    }
+  };
+
+  const formatTarih = (tarih: any): string => {
+    if (!tarih) return '-';
+    try {
+      const date = tarih?.toDate ? tarih.toDate() : new Date(tarih);
+      return date.toLocaleString('tr-TR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    } catch {
+      return '-';
+    }
+  };
+
+  const getMusteriBilgi = (log: SatisLog): string => {
+    return log.musteriBilgileri?.isim || log.musteriIsim || '-';
+  };
+
+  const getMusteriTel = (log: SatisLog): string => {
+    return log.musteriBilgileri?.cep || log.musteriCep || '-';
+  };
+
+  const getSaticiAdi = (log: SatisLog): string => {
+    return log.musteriTemsilcisiAd || log.musteriTemsilcisi || '-';
+  };
+
+  const getOdemeDurumu = (log: SatisLog): { text: string; class: string } => {
+    if (log.odemeDurumu === 'ODENDI') {
+      return { text: '✅ Ödendi', class: 'green' };
+    }
+    if (log.acikHesap && log.acikHesap > 0) {
+      return { text: `⚠️ Açık: ₺${log.acikHesap.toLocaleString('tr-TR')}`, class: 'orange' };
+    }
+    return { text: '⏳ Beklemede', class: 'gray' };
   };
 
   /* ══════════════════════════════════════════════════════════
      MENÜ & YARDIMCILAR
   ══════════════════════════════════════════════════════════ */
   const menuler: { id: Modul; label: string; icon: string; desc: string }[] = [
-    { id: 'excel-fiyat',    label: 'Excel Fiyat',    icon: 'fa-file-excel',  desc: 'Toplu fiyat güncelle'   },
-    { id: 'banka-kesinti',  label: 'Banka Kesinti',  icon: 'fa-university',  desc: 'Kesinti oranları'       },
-    { id: 'satici-ekle',    label: 'Satıcı Ekle',    icon: 'fa-user-plus',   desc: 'Yeni satıcı ekle'      },
-    { id: 'satici-disable', label: 'Satıcı Disable', icon: 'fa-user-slash',  desc: 'Aktif / Deaktif'       },
-    { id: 'satici-hedef',   label: 'Satıcı Hedef',   icon: 'fa-bullseye',    desc: 'Aylık kişisel hedef'   },
-    { id: 'magaza-hedef',   label: 'Mağaza Hedef',   icon: 'fa-store',       desc: 'Aylık şube hedefleri'  },
-    { id: 'kampanya',       label: 'Kampanya',        icon: 'fa-tags',        desc: 'Kampanya yönet'        },
-    { id: 'yesil-etiket',  label: 'Yeşil Etiket',   icon: 'fa-tag',         desc: 'İndirimli eski ürünler' },
-    { id: 'email-guncelle', label: 'Email Güncelle', icon: 'fa-envelope',    desc: 'Kullanıcı email değiştir' },
+    { id: 'excel-fiyat', label: 'Excel Fiyat', icon: 'fa-file-excel', desc: 'Toplu fiyat güncelle' },
+    { id: 'banka-kesinti', label: 'Banka Kesinti', icon: 'fa-university', desc: 'Kesinti oranları' },
+    { id: 'satici-ekle', label: 'Satıcı Ekle', icon: 'fa-user-plus', desc: 'Yeni satıcı ekle' },
+    { id: 'satici-disable', label: 'Satıcı Disable', icon: 'fa-user-slash', desc: 'Aktif / Deaktif' },
+    { id: 'satici-hedef', label: 'Satıcı Hedef', icon: 'fa-bullseye', desc: 'Aylık kişisel hedef' },
+    { id: 'magaza-hedef', label: 'Mağaza Hedef', icon: 'fa-store', desc: 'Aylık şube hedefleri' },
+    { id: 'kampanya', label: 'Kampanya', icon: 'fa-tags', desc: 'Kampanya yönet' },
+    { id: 'yesil-etiket', label: 'Yeşil Etiket', icon: 'fa-tag', desc: 'İndirimli eski ürünler' },
+    { id: 'email-guncelle', label: 'Email Güncelle', icon: 'fa-envelope', desc: 'Kullanıcı email değiştir' },
+    { id: 'satis-log', label: 'Satış Logları', icon: 'fa-history', desc: 'Tüm satışları gör & sil' },
   ];
 
   const resetModulStates = () => {
@@ -675,6 +888,7 @@ const AdminPanel: React.FC = () => {
     setTumSaticilarYuklendi(false); setTumSaticilar([]);
     setEmailSaticiYuklendi(false); setEmailSaticilar([]);
     setEmailGuncelleSatici(null); setYeniEmail(''); setYeniSifre('');
+    setSatisLogYuklendi(false); setSatisLoglari([]);
   };
 
   const aktifMenu = menuler.find(m => m.id === aktifModul);
@@ -716,8 +930,8 @@ const AdminPanel: React.FC = () => {
       </div>
 
       {/* OVERLAY - mobilde sidebar açıkken */}
-      <div 
-        className={`ap-sidebar-overlay ${sidebarOpen ? 'active' : ''}`} 
+      <div
+        className={`ap-sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
         onClick={() => setSidebarOpen(false)}
       />
 
@@ -744,13 +958,13 @@ const AdminPanel: React.FC = () => {
         <nav className="ap-nav">
           <div className="ap-nav-section-label">YÖNETİM ALANLARI</div>
           {menuler.map(m => (
-            <button 
-              key={m.id} 
-              className={`ap-nav-item ${aktifModul === m.id ? 'active' : ''}`} 
-              onClick={() => { 
-                setAktifModul(m.id); 
-                resetModulStates(); 
-                setSidebarOpen(false); // Mobilde tıklayınca sidebar kapansın
+            <button
+              key={m.id}
+              className={`ap-nav-item ${aktifModul === m.id ? 'active' : ''}`}
+              onClick={() => {
+                setAktifModul(m.id);
+                resetModulStates();
+                setSidebarOpen(false);
               }}
             >
               <div className="ap-nav-icon"><i className={`fas ${m.icon}`} /></div>
@@ -1470,9 +1684,159 @@ const AdminPanel: React.FC = () => {
             </div>
           )}
 
-        </div>
-      </div>
-    </div>
+          {/* ══ 10) SATIŞ LOGLARI ══ */}
+          {aktifModul === 'satis-log' && (
+            <div className="ap-one-col" style={{ position: 'relative' }}>
+              
+              {/* SAĞ ALTA MESAJ */}
+              {logMesaj && (
+                <div style={{
+                  position: 'fixed',
+                  bottom: '20px',
+                  right: '20px',
+                  zIndex: 9999,
+                  padding: '12px 20px',
+                  borderRadius: '8px',
+                  backgroundColor: logMesaj.tip === 'success' ? '#10b981' : logMesaj.tip === 'error' ? '#ef4444' : '#3b82f6',
+                  color: 'white',
+                  fontWeight: '600',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  maxWidth: '400px'
+                }}>
+                  {logMesaj.text}
+                </div>
+              )}
+              
+              <div className="ap-panel">
+                <div className="ap-panel-header">
+                  <i className="fas fa-history" /><h3>Satış Logları</h3>
+                </div>
+                <div className="ap-panel-body">
+                  
+                  {/* Filtreler */}
+                  <div className="ap-filters-grid">
+                    <div className="ap-filter-group">
+                      <label>Başlangıç</label>
+                      <input 
+                        type="date" 
+                        value={logFiltre.baslangicTarih.toISOString().split('T')[0]} 
+                        onChange={e => setLogFiltre(prev => ({ ...prev, baslangicTarih: new Date(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="ap-filter-group">
+                      <label>Bitiş</label>
+                      <input 
+                        type="date" 
+                        value={logFiltre.bitisTarih.toISOString().split('T')[0]} 
+                        onChange={e => setLogFiltre(prev => ({ ...prev, bitisTarih: new Date(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="ap-filter-group">
+                      <label>Şube</label>
+                      <select 
+                        value={logFiltre.subeKodu} 
+                        onChange={e => setLogFiltre(prev => ({ ...prev, subeKodu: e.target.value, saticiId: 'TUMU' }))}
+                      >
+                        <option value="TUMU">Tüm Şubeler</option>
+                        {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
+                      </select>
+                    </div>
+                    <div className="ap-filter-group">
+                      <label>Satıcı</label>
+                      <select 
+                        value={logFiltre.saticiId} 
+                        onChange={e => setLogFiltre(prev => ({ ...prev, saticiId: e.target.value }))}
+                      >
+                        <option value="TUMU">Tüm Satıcılar</option>
+                        {logSaticilar
+                          .filter(s => logFiltre.subeKodu === 'TUMU' || s.subeKodu === logFiltre.subeKodu)
+                          .map(s => <option key={s.id} value={s.id}>{s.ad} {s.soyad}</option>)}
+                      </select>
+                    </div>
+                    <div className="ap-filter-group">
+                      <label>Müşteri</label>
+                      <input 
+                        type="text" 
+                        placeholder="İsim ara..." 
+                        value={logFiltre.musteriAdi} 
+                        onChange={e => setLogFiltre(prev => ({ ...prev, musteriAdi: e.target.value }))}
+                      />
+                    </div>
+                    <div className="ap-filter-group ap-filter-action">
+                      <button className="ap-btn-primary" onClick={satisLogGetir} disabled={yukleniyor}>
+                        <i className="fas fa-search" /> {yukleniyor ? 'Aranıyor...' : 'Filtrele'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sonuçlar */}
+                  {satisLogYuklendi && (
+                    <>
+                      <div className="ap-table-label">
+                        <i className="fas fa-list" /> {satisLoglari.length} satış
+                      </div>
+                      
+                      {satisLoglari.length === 0 ? (
+                        <div className="ap-empty"><p>Satış bulunamadı</p></div>
+                      ) : (
+                        <div className="ap-table-scroll">
+                          <table className="ap-table">
+                            <thead>
+                              <tr>
+                                <th>Tarih</th>
+                                <th>Şube</th>
+                                <th>Kod</th>
+                                <th>Müşteri</th>
+                                <th>Ürünler</th>
+                                <th>Satıcı</th>
+                                <th>Tutar</th>
+                                <th>Durum</th>
+                                <th></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {satisLoglari.map(satis => {
+                                const durum = getOdemeDurumu(satis);
+                                return (
+                                  <tr key={satis.id}>
+                                    <td>{formatTarih(satis.olusturmaTarihi)}</td>
+                                    <td>
+                                      <span className="ap-sube-badge" style={{ background: subeRenk(satis.subeKodu) + '20', color: subeRenk(satis.subeKodu) }}>
+                                        {satis.subeAd || satis.subeKodu}
+                                      </span>
+                                    </td>
+                                    <td><strong>{satis.satisKodu}</strong></td>
+                                    <td>{getMusteriBilgi(satis)}</td>
+                                    <td>
+                                      {satis.urunler?.map((u, idx) => (
+                                        <div key={idx} style={{ fontSize: 11 }}>{u.kod} x{u.adet}</div>
+                                      ))}
+                                    </td>
+                                    <td>{getSaticiAdi(satis)}</td>
+                                    <td>₺{(satis.toplamTutar || satis.manuelSatisTutari || 0).toLocaleString('tr-TR')}</td>
+                                    <td><span className={`ap-pill ${durum.class}`}>{durum.text}</span></td>
+                                    <td>
+                                      <button className="ap-delete-btn" onClick={() => satisSil(satis)} title="Sil">
+                                        <i className="fas fa-trash" />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div> {/* ap-content */}
+      </div> {/* ap-main */}
+    </div> /* ap-layout */
   );
 };
 
