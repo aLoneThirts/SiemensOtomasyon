@@ -69,7 +69,7 @@ const Layout: React.FC<LayoutProps> = ({ children, pageTitle, headerExtra }) => 
       {/* Sidebar - açık/kapalı state'e göre className alır */}
       <aside className={`layout-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <h1>TÜFEKÇİ HOME<span>SİEMENS</span></h1>
+          <h1>TÜFEKÇİ HOME<span>SIEMENS</span></h1>
         </div>
 
         <nav className="sidebar-nav">

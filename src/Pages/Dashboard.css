@@ -213,6 +213,35 @@
 .ozet-bekleyen .ozet-kart-ikon { background: linear-gradient(135deg, #e8eaf6, #c5cae9); color: #283593; }
 .ozet-zarar .ozet-kart-ikon    { background: linear-gradient(135deg, #fce4ec, #f8bbd0); color: #c62828; }
 
+/* ✅ DEĞİŞİKLİK 3: İptal kartı — kırmızı tema */
+.ozet-iptal {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  border: 1px solid #fecaca;
+  transition: all 0.2s ease;
+}
+.ozet-iptal:hover {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  border-color: #f87171;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.15);
+  transform: translateY(-2px);
+}
+.ozet-iptal:active {
+  background: linear-gradient(135deg, #fecaca, #fca5a5);
+  transform: scale(0.98) translateY(0);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+}
+.ozet-iptal .ozet-kart-ikon {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: white;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+.ozet-iptal .ozet-kart-baslik {
+  color: #991b1b;
+}
+.ozet-iptal .ozet-kart-deger {
+  color: #dc2626;
+}
+
 .ozet-kart-bilgi { 
   display: flex; 
   flex-direction: column; 
@@ -292,6 +321,25 @@
   border-color: #009999; 
   background: white; 
   box-shadow: 0 0 0 3px rgba(0,153,153,0.1); 
+}
+
+/* ✅ DEĞİŞİKLİK 2: Tarih aralığı hata stili */
+.filtre-input--hata {
+  border-color: #f87171 !important;
+  background: #fef2f2 !important;
+}
+.filtre-input--hata:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
+  border-color: #dc2626 !important;
+}
+
+.filtre-hata-mesaji {
+  font-size: 11px;
+  font-weight: 600;
+  color: #dc2626;
+  margin-top: 2px;
+  display: block;
+  line-height: 1.3;
 }
 
 .search-container { 
@@ -955,6 +1003,16 @@
   
   .ozet-kart:hover {
     transform: none;
+  }
+  
+  /* ✅ İptal kartı dokunmatik override */
+  .ozet-iptal:hover {
+    transform: none;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .ozet-iptal:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
   }
   
   .sales-table tbody tr:hover {

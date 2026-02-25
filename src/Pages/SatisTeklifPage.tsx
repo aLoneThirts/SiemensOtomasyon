@@ -532,7 +532,7 @@ const SatisTeklifPage: React.FC = () => {
               </div>
               {marsNo && <small style={{ color: isMarsNoGecerli() ? '#16a34a' : '#d97706' }}>{isMarsNoGecerli() ? '✅ Geçerli format' : `⚠️ ${marsNo.length}/10 hane`}</small>}
             </div>
-            <div className="form-field"><label>Mağaza</label><input value={magaza} onChange={e => setMagaza(e.target.value)} placeholder="Mağaza adı" /></div>
+            <div className="form-field"><label>Mağaza Teslimat</label><input value={magaza} onChange={e => setMagaza(e.target.value)} placeholder="Mağaza adı" /></div>
             <div className="form-field">
               <label>Fatura No *</label>
               <input value={faturaNo} onChange={handleFaturaNoChange} style={{ borderColor: faturaNoHata ? '#ef4444' : undefined }} required />
@@ -551,7 +551,7 @@ const SatisTeklifPage: React.FC = () => {
             <label className="checkbox-label"><input type="checkbox" checked={teslimEdildiMi} onChange={e => { setTeslimEdildiMi(e.target.checked); if (e.target.checked) setMarsNoHata(false); }} />Teslim Edildi</label>
             <label className="checkbox-label"><input type="checkbox" checked={fatura} onChange={e => setFatura(e.target.checked)} />Fatura Kesildi</label>
             <label className="checkbox-label"><input type="checkbox" checked={ileriTeslim} onChange={e => { setIleriTeslim(e.target.checked); if (!e.target.checked) setIleriTeslimTarihi(''); }} />İleri Teslim</label>
-            <label className="checkbox-label"><input type="checkbox" checked={servis} onChange={e => setServis(e.target.checked)} />Servis Gerekli</label>
+            <label className="checkbox-label"><input type="checkbox" checked={servis} onChange={e => setServis(e.target.checked)} />Servis</label>
           </div>
           {ileriTeslim && (
             <div className="form-field" style={{ marginTop: 12, maxWidth: 320, padding: '12px 16px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>

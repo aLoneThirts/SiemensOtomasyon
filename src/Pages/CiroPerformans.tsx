@@ -90,7 +90,7 @@ const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
 };
 
 // ----------------------------------------------------------------------------
-// KPI Kartı (7'li Grid için)
+// KPI Kartı (5'li Grid için)
 // ----------------------------------------------------------------------------
 const KpiCard: React.FC<{
   icon: string;
@@ -379,6 +379,7 @@ const CiroPerformansPage: React.FC = () => {
   // State'ler
   const [satislar, setSatislar] = useState<SatisTeklifFormu[]>([]);
   const [saticilar, setSaticilar] = useState<User[]>([]);
+  // ⚠️ urunler ve stoklar state'leri korunuyor - kasa stok sistemiyle bağlantılı
   const [urunler, setUrunler] = useState<any[]>([]);
   const [stoklar, setStoklar] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -411,7 +412,7 @@ const CiroPerformansPage: React.FC = () => {
   });
 
   // ==========================================================================
-  // VERİ ÇEKME
+  // VERİ ÇEKME (⚠️ Tüm fetch'ler korunuyor - kasa stok sistemi bağlantısı)
   // ==========================================================================
   useEffect(() => {
     if (!currentUser) {
@@ -434,14 +435,14 @@ const CiroPerformansPage: React.FC = () => {
             .catch(() => [] as SatisTeklifFormu[])
         );
         
-        // Ürünleri çek
+        // ⚠️ Ürünleri çek - kasa stok sistemiyle bağlantılı, korunuyor
         const urunPromises = SUBELER.map(sube =>
           getDocs(collection(db, `subeler/${sube.dbPath}/urunler`))
             .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data(), subeKodu: sube.kod })))
             .catch(() => [])
         );
         
-        // Stokları çek
+        // ⚠️ Stokları çek - kasa stok sistemiyle bağlantılı, korunuyor
         const stokPromises = SUBELER.map(sube =>
           getDocs(collection(db, `subeler/${sube.dbPath}/stoklar`))
             .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data(), subeKodu: sube.kod })))
@@ -542,7 +543,7 @@ const CiroPerformansPage: React.FC = () => {
   );
 
   // ==========================================================================
-  // KPI HESAPLAMALARI (7'li)
+  // KPI HESAPLAMALARI (5'li - Ürün Çeşidi ve Azalan Stok kartları kaldırıldı)
   // ==========================================================================
   const kpiList = useMemo((): any[] => {
     const ciro: number = filtreliSatislar.reduce((toplam, satis) => toplam + (satis.toplamTutar || 0), 0);
@@ -569,12 +570,6 @@ const CiroPerformansPage: React.FC = () => {
     
     // Aktif satıcı sayısı
     const aktifSaticiSayisi: number = filtreliSaticilar.length;
-    
-    // Toplam ürün çeşidi
-    const toplamUrun: number = urunler.length;
-    
-    // Azalan stok sayısı
-    const azalanStok: number = stoklar.filter(s => (s.adet || 0) < 10).length;
     
     // Bugünkü satış
     const bugunSatis: number = satislar.filter(s => {
@@ -613,20 +608,6 @@ const CiroPerformansPage: React.FC = () => {
         color: '#3b7b9c'
       },
       {
-        icon: '📦',
-        label: 'Ürün Çeşidi',
-        value: toplamUrun.toString(),
-        sub: 'farklı ürün',
-        color: '#8a6d3b'
-      },
-      {
-        icon: '⚠️',
-        label: 'Azalan Stok',
-        value: azalanStok.toString(),
-        sub: 'ürün kritik',
-        color: '#b34a5c'
-      },
-      {
         icon: '📅',
         label: 'Bugünkü Satış',
         value: bugunSatis.toString(),
@@ -634,7 +615,7 @@ const CiroPerformansPage: React.FC = () => {
         color: '#5e4b8c'
       }
     ];
-  }, [filtreliSatislar, satislar, filtreliSaticilar, urunler, stoklar, zaman, toDate]);
+  }, [filtreliSatislar, satislar, filtreliSaticilar, zaman, toDate]);
 
   // ==========================================================================
   // SATICI PIE VERİSİ
@@ -667,7 +648,7 @@ const saticiPieData = useMemo((): any[] => {
 }, [filtreliSaticilar, filtreliSatislar]);
 
   // ==========================================================================
-  // ÜRÜN ANALİZİ (TÜM ŞUBELER)
+  // ÜRÜN ANALİZİ (TÜM ŞUBELER) - ⚠️ Korunuyor, kasa stok bağlantısı
   // ==========================================================================
 // Ürün analizi - TL değerleri yüksek göster
 const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } => {
@@ -953,8 +934,8 @@ const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } =
           </div>
         )}
 
-        {/* 3. 7'Lİ KPI GRID */}
-        <div className="cp-kpi-7grid">
+        {/* 3. 5'Lİ KPI GRID (Ürün Çeşidi ve Azalan Stok kaldırıldı) */}
+        <div className="cp-kpi-5grid">
           {kpiList.map((kpi, index) => (
             <KpiCard
               key={index}

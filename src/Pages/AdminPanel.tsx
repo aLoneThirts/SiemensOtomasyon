@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   collection, getDocs, doc, updateDoc, addDoc, setDoc, deleteDoc, Timestamp,
@@ -59,6 +59,7 @@ type Modul =
 const AdminPanel: React.FC = () => {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isAdminUser = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
