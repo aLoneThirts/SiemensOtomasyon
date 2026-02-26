@@ -853,4 +853,862 @@
     max-height: 600px;
     overflow-y: auto;
   }
+  /* =============================================
+   SATIŞ LOGLARI - ADMIN PANEL UYUMLU
+   Siemens Otomasyon | Tüfekçi Home
+   ============================================= */
+
+.saleslog-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ===== FİLTRE PANELİ ===== */
+.saleslog-filters {
+  background: white;
+  border-radius: var(--r12);
+  border: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.saleslog-filters-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--gray-100);
+  background: white;
+}
+
+.saleslog-filters-header i {
+  font-size: 14px;
+  color: var(--teal);
+  width: 28px;
+  height: 28px;
+  background: var(--teal-light);
+  border-radius: var(--r4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.saleslog-filters-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-800);
+  flex: 1;
+}
+
+.saleslog-filters-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Filtre grid */
+.saleslog-filter-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.saleslog-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.saleslog-filter-item label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--gray-500);
+}
+
+.saleslog-filter-item input,
+.saleslog-filter-item select {
+  padding: 12px 14px;
+  border: 1.5px solid var(--gray-300);
+  border-radius: var(--r4);
+  font-size: 14px;
+  font-family: var(--font);
+  color: var(--gray-800);
+  background: white;
+  outline: none;
+  transition: all 0.15s;
+  width: 100%;
+  height: 44px;
+}
+
+.saleslog-filter-item input:focus,
+.saleslog-filter-item select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(0, 153, 153, 0.1);
+}
+
+.saleslog-filter-item select {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 40px;
+}
+
+/* Tarih aralığı */
+.saleslog-date-range {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saleslog-date-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Arama kutusu */
+.saleslog-search {
+  position: relative;
+  width: 100%;
+}
+
+.saleslog-search input {
+  width: 100%;
+  padding: 12px 40px 12px 40px;
+  border: 1.5px solid var(--gray-300);
+  border-radius: var(--r4);
+  font-size: 14px;
+  font-family: var(--font);
+  color: var(--gray-800);
+  background: white;
+  outline: none;
+  transition: all 0.15s;
+  height: 44px;
+}
+
+.saleslog-search input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(0, 153, 153, 0.1);
+}
+
+.saleslog-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gray-500);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.saleslog-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: var(--gray-100);
+  border-radius: 50%;
+  color: var(--gray-500);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.saleslog-search-clear:hover {
+  background: var(--gray-200);
+  color: var(--red);
+}
+
+/* Filtre butonları */
+.saleslog-filter-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.saleslog-btn-apply {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: var(--teal);
+  color: white;
+  border: none;
+  border-radius: var(--r4);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.saleslog-btn-apply:hover:not(:disabled) {
+  background: var(--teal-dark);
+}
+
+.saleslog-btn-apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.saleslog-btn-reset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 16px;
+  background: white;
+  color: var(--gray-600);
+  border: 1.5px solid var(--gray-300);
+  border-radius: var(--r4);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.saleslog-btn-reset:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: #fef2f2;
+}
+
+/* ===== ÖZET KARTLAR ===== */
+.saleslog-summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.saleslog-summary-card {
+  background: white;
+  border-radius: var(--r8);
+  border: 1px solid var(--gray-200);
+  padding: 14px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+.saleslog-summary-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.saleslog-summary-icon.ciro {
+  background: #e0f5f5;
+  color: var(--teal);
+}
+
+.saleslog-summary-icon.kar {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.saleslog-summary-icon.satis {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.saleslog-summary-icon.iptal {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.saleslog-summary-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.saleslog-summary-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--gray-500);
+  white-space: nowrap;
+}
+
+.saleslog-summary-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saleslog-summary-value.negatif {
+  color: var(--red);
+}
+
+/* ===== TABLO ===== */
+.saleslog-table-wrapper {
+  background: white;
+  border-radius: var(--r12);
+  border: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.saleslog-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--gray-100);
+  background: white;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.saleslog-table-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.saleslog-table-title i {
+  font-size: 14px;
+  color: var(--teal);
+  width: 28px;
+  height: 28px;
+  background: var(--teal-light);
+  border-radius: var(--r4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.saleslog-table-title h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-800);
+}
+
+.saleslog-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.saleslog-btn-excel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #1d6f42;
+  color: white;
+  border: none;
+  border-radius: var(--r4);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.saleslog-btn-excel:hover {
+  background: #155934;
+}
+
+.saleslog-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.saleslog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 900px;
+}
+
+.saleslog-table th {
+  background: var(--gray-900);
+  color: white;
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.saleslog-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--gray-100);
+  color: var(--gray-700);
+  white-space: nowrap;
+}
+
+.saleslog-table tbody tr:hover td {
+  background: var(--teal-soft);
+}
+
+.saleslog-table tbody tr.iptal-row td {
+  background: #fff5f5;
+  color: #991b1b;
+  text-decoration: line-through 1px rgba(153, 27, 27, 0.3);
+}
+
+.saleslog-table tbody tr.iptal-row:hover td {
+  background: #fee2e2;
+}
+
+/* Badge'ler */
+.saleslog-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.saleslog-badge.odendi {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.saleslog-badge.acik-hesap {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.saleslog-badge.iptal {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.saleslog-badge.teslim-edildi {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.saleslog-badge.teslim-bekliyor {
+  background: #fff0e0;
+  color: #c2410c;
+}
+
+/* Kar/Zarar badge */
+.saleslog-profit-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-block;
+}
+
+.saleslog-profit-badge.kar {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.saleslog-profit-badge.zarar {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* İşlem butonları */
+.saleslog-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.saleslog-btn-view,
+.saleslog-btn-edit,
+.saleslog-btn-delete {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--r4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.saleslog-btn-view {
+  background: var(--teal-light);
+  color: var(--teal);
+}
+
+.saleslog-btn-view:hover {
+  background: var(--teal);
+  color: white;
+}
+
+.saleslog-btn-edit {
+  background: #fff0e0;
+  color: #c2410c;
+}
+
+.saleslog-btn-edit:hover {
+  background: #c2410c;
+  color: white;
+}
+
+.saleslog-btn-delete {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.saleslog-btn-delete:hover {
+  background: #dc2626;
+  color: white;
+}
+
+/* ===== SAYFALAMA ===== */
+.saleslog-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-top: 1px solid var(--gray-100);
+  background: white;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.saleslog-pagination-info {
+  font-size: 11px;
+  color: var(--gray-500);
+  font-weight: 500;
+}
+
+.saleslog-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.saleslog-pagination-btn {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1.5px solid var(--gray-300);
+  background: white;
+  border-radius: var(--r4);
+  color: var(--gray-600);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.saleslog-pagination-btn:hover:not(:disabled) {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.saleslog-pagination-btn.active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: white;
+}
+
+.saleslog-pagination-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.saleslog-pagination-dots {
+  color: var(--gray-400);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+/* ===== YÜKLEME / BOŞ DURUM ===== */
+.saleslog-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--teal);
+  font-size: 14px;
+  font-weight: 600;
+  background: white;
+  border-radius: var(--r12);
+  border: 1px solid var(--gray-200);
+}
+
+.saleslog-loading i {
+  font-size: 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.saleslog-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  background: white;
+  border-radius: var(--r12);
+  border: 1px solid var(--gray-200);
+  text-align: center;
+  gap: 16px;
+}
+
+.saleslog-empty-icon {
+  font-size: 48px;
+  color: var(--gray-400);
+}
+
+.saleslog-empty-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-700);
+  margin: 0;
+}
+
+.saleslog-empty-text {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin: 0;
+  max-width: 300px;
+}
+
+.saleslog-empty-btn {
+  padding: 10px 20px;
+  background: var(--teal);
+  color: white;
+  border: none;
+  border-radius: var(--r4);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 8px;
+}
+
+.saleslog-empty-btn:hover {
+  background: var(--teal-dark);
+}
+
+/* ===== RESPONSIVE ===== */
+
+/* Tablet (≥768px) */
+@media (min-width: 768px) {
+  .saleslog-filter-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .saleslog-date-inputs {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .saleslog-date-inputs input {
+    flex: 1;
+  }
+
+  .saleslog-filter-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .saleslog-btn-apply,
+  .saleslog-btn-reset {
+    width: auto;
+    min-width: 140px;
+  }
+
+  .saleslog-summary {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+
+  .saleslog-summary-card {
+    padding: 16px;
+  }
+
+  .saleslog-summary-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 18px;
+  }
+
+  .saleslog-summary-value {
+    font-size: 18px;
+  }
+}
+
+/* Masaüstü (≥1024px) */
+@media (min-width: 1024px) {
+  .saleslog-filter-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .saleslog-table {
+    min-width: 1000px;
+    font-size: 13px;
+  }
+
+  .saleslog-table th,
+  .saleslog-table td {
+    padding: 14px 16px;
+  }
+
+  .saleslog-summary-value {
+    font-size: 20px;
+  }
+
+  .saleslog-pagination {
+    padding: 16px 24px;
+  }
+}
+
+/* Büyük masaüstü (≥1440px) */
+@media (min-width: 1440px) {
+  .saleslog-filter-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Çok küçük ekranlar (≤480px) */
+@media (max-width: 480px) {
+  .saleslog-filters-body {
+    padding: 12px;
+  }
+
+  .saleslog-filter-item input,
+  .saleslog-filter-item select,
+  .saleslog-search input {
+    padding: 10px 12px;
+    height: 42px;
+    font-size: 13px;
+  }
+
+  .saleslog-btn-apply,
+  .saleslog-btn-reset {
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .saleslog-summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .saleslog-summary-card {
+    padding: 12px 10px;
+  }
+
+  .saleslog-summary-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .saleslog-summary-label {
+    font-size: 9px;
+  }
+
+  .saleslog-summary-value {
+    font-size: 14px;
+  }
+
+  .saleslog-table-header {
+    padding: 12px;
+  }
+
+  .saleslog-table-title i {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .saleslog-table-title h3 {
+    font-size: 12px;
+  }
+
+  .saleslog-btn-excel {
+    padding: 6px 12px;
+    font-size: 10px;
+  }
+
+  .saleslog-pagination {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .saleslog-pagination-controls {
+    justify-content: center;
+  }
+}
+
+/* Mobil yatay (480px-767px) */
+@media (min-width: 481px) and (max-width: 767px) {
+  .saleslog-summary {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .saleslog-filter-actions {
+    flex-direction: row;
+  }
+
+  .saleslog-btn-apply,
+  .saleslog-btn-reset {
+    flex: 1;
+  }
+}
 }
