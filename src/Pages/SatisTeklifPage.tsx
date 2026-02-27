@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  collection, addDoc, query, orderBy, limit, getDocs
+  collection, addDoc, query, orderBy, limit, getDocs, runTransaction
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -13,7 +13,6 @@ import {
 } from '../types/satis';
 import { getSubeByKod, SubeKodu } from '../types/sube';
 import './SatisTeklif.css';
-// ✅ v6: Satış oluşturulunca tahsilatı kasaya yansıt
 import { kasaTahsilatEkle } from '../services/kasaService';
 
 interface Kullanici {
@@ -35,7 +34,6 @@ const HAVALE_BANKALARI = [
 interface YesilEtiketAdmin { id?: string; urunKodu: string; urunTuru?: string; maliyet: number; }
 interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: boolean; subeKodu: string; tutar?: number; }
 
-// ─── Tarih yardımcısı ────────────────────────────────────────────────────────
 const bugunStr = (): string => {
   const n = new Date();
   return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
@@ -87,6 +85,7 @@ const SatisTeklifPage: React.FC = () => {
 
   const [onayDurumu, setOnayDurumu] = useState(false);
   const [loading, setLoading] = useState(false);
+  // ✅ Satış kodu artık form açılırken değil, kaydet anında üretilecek
   const [satisKodu, setSatisKodu] = useState('');
   const [manuelSatisTutari, setManuelSatisTutari] = useState<number | null>(null);
   const [urunCache, setUrunCache] = useState<Record<string, { ad: string; alis: number; bip: number; urunTuru: string }>>({});
@@ -135,23 +134,21 @@ const SatisTeklifPage: React.FC = () => {
     return 0;
   };
 
-  const getSonSatisKodu = async (subeDbPath: string): Promise<string | null> => {
-    try {
-      const satisRef = collection(db, `subeler/${subeDbPath}/satislar`);
-      const q = query(satisRef, orderBy('satisKodu', 'desc'), limit(1));
-      const snapshot = await getDocs(q);
-      if (snapshot.empty) return null;
-      return snapshot.docs[0].data().satisKodu as string;
-    } catch { return null; }
-  };
+  // ✅ YENİ: Atomik satış kodu üretimi — Transaction ile çakışma imkansız
+  const atomikSatisKoduUret = async (subeDbPath: string, subePrefix: string): Promise<string> => {
+    const counterRef = doc(db, `subeler/${subeDbPath}/counters`, 'satisCounter');
 
-  const getSiraNumarasi = (sonKod: string | null, subePrefix: string): string => {
-    if (!sonKod) return `${subePrefix}-001`;
-    const parts = sonKod.split('-');
-    if (parts.length !== 2) return `${subePrefix}-001`;
-    const sonSayi = parseInt(parts[1], 10);
-    if (isNaN(sonSayi)) return `${subePrefix}-001`;
-    return `${subePrefix}-${(sonSayi + 1).toString().padStart(3, '0')}`;
+    const yeniKod = await runTransaction(db, async (transaction) => {
+      const counterDoc = await transaction.get(counterRef);
+      let newNumber = 1;
+      if (counterDoc.exists()) {
+        newNumber = (counterDoc.data().currentNumber || 0) + 1;
+      }
+      transaction.set(counterRef, { currentNumber: newNumber, lastUpdated: new Date() });
+      return `${subePrefix}-${newNumber.toString().padStart(3, '0')}`;
+    });
+
+    return yeniKod;
   };
 
   const formatPrice = (price: number): string => new Intl.NumberFormat('tr-TR', {
@@ -199,19 +196,6 @@ const SatisTeklifPage: React.FC = () => {
   const handleMarsNoChange = (e: React.ChangeEvent<HTMLInputElement>) => { setMarsNo(e.target.value.replace(/\D/g, '')); setMarsNoHata(false); };
   const fixMarsNo = () => { let val = marsNo.replace(/\D/g, ''); if (!val.startsWith('2026')) val = '2026' + val; if (val.length > 10) val = val.slice(0, 10); setMarsNo(val); setMarsNoHata(val.length !== 10); };
   const handleFaturaNoChange = (e: React.ChangeEvent<HTMLInputElement>) => { setFaturaNo(e.target.value); setFaturaNoHata(false); setFatura(e.target.value.trim() !== ''); };
-
-  const satisKoduOlustur = async (): Promise<string> => {
-    const sube = getSubeByKod(currentUser!.subeKodu);
-    if (!sube) return '';
-    try {
-      const counterRef = doc(db, `subeler/${sube.dbPath}/counters`, 'satisCounter');
-      const counterDoc = await getDoc(counterRef);
-      let newNumber = 1;
-      if (counterDoc.exists()) newNumber = (counterDoc.data().currentNumber || 0) + 1;
-      await setDoc(counterRef, { currentNumber: newNumber, lastUpdated: new Date() });
-      return newNumber.toString().padStart(3, '0');
-    } catch { return Date.now().toString().slice(-3); }
-  };
 
   const handleMusteriChange = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setMusteriBilgileri(prev => ({ ...prev, [name]: value })); };
 
@@ -306,14 +290,7 @@ const SatisTeklifPage: React.FC = () => {
 
   useEffect(() => {
     if (!currentUser) { navigate('/login'); return; }
-    const generateSatisKodu = async () => {
-      const sube = getSubeByKod(currentUser.subeKodu);
-      if (!sube) return;
-      const sonKod = await getSonSatisKodu(sube.dbPath);
-      const yeniKod = getSiraNumarasi(sonKod, String(sube.satisKoduPrefix));
-      setSatisKodu(yeniKod);
-    };
-    generateSatisKodu();
+    // ✅ Satış kodu artık burada üretilmiyor — kaydet anında atomik üretilecek
     kampanyalariCek();
     yesilEtiketleriCek();
     urunCacheYukle();
@@ -330,7 +307,6 @@ const SatisTeklifPage: React.FC = () => {
     if (marsNo && !isMarsNoGecerli()) { setMarsNoHata(true); alert('❌ MARS No 2026 ile başlayan 10 haneli olmalıdır!'); return; }
     if (!musteriTemsilcisiId) { alert('❌ Müşteri temsilcisi seçilmelidir!'); return; }
 
-    // ✅ Fazla ödeme kontrolü — toplam ödeme satış tutarını aşamaz
     const _odenen = toplamOdenenHesapla();
     const _tutar  = manuelSatisTutari ?? 0;
     if (_odenen > _tutar) {
@@ -341,13 +317,17 @@ const SatisTeklifPage: React.FC = () => {
     setLoading(true);
     try {
       const sube = getSubeByKod(currentUser!.subeKodu);
-      if (!sube) { alert('Şube bilgisi bulunamadı!'); return; }
+      if (!sube) { alert('Şube bilgisi bulunamadı!'); setLoading(false); return; }
+
+      // ✅ ATOMIK SATIŞ KODU ÜRETİMİ — Transaction ile çakışma imkansız
+      const yeniSatisKodu = await atomikSatisKoduUret(sube.dbPath, String(sube.satisKoduPrefix));
+      setSatisKodu(yeniSatisKodu);
 
       const seciliTemsilci = kullanicilar.find(k => k.id === musteriTemsilcisiId);
       const etiketler = eslesenYesilEtiketler();
 
       const satisTeklifi: any = {
-        satisKodu,
+        satisKodu: yeniSatisKodu,
         subeKodu: currentUser!.subeKodu,
         musteriBilgileri,
         musteriTemsilcisiId,
@@ -356,7 +336,6 @@ const SatisTeklifPage: React.FC = () => {
         musteriTemsilcisi: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
         urunler: urunler.map(u => ({
           ...u,
-          // ✅ Snapshot alanları — Excel güncellenince geçmiş satışlar değişmez
           alisFiyatSnapshot: u.alisFiyati,
           bipSnapshot: u.bip || 0,
           greenPriceSnapshot: (() => {
@@ -377,7 +356,6 @@ const SatisTeklifPage: React.FC = () => {
         havaleler,
         kartOdemeler: kartOdemeler.map(k => ({
           ...k,
-          // ✅ Komisyon snapshot — tarifeye göre yeni Excel yüklenince değişmez
           commissionRateSnapshot: k.kesintiOrani || 0,
           commissionAmountSnapshot: (k.tutar * (k.kesintiOrani || 0)) / 100,
           netAmountSnapshot: k.tutar - (k.tutar * (k.kesintiOrani || 0)) / 100,
@@ -407,16 +385,14 @@ const SatisTeklifPage: React.FC = () => {
         assignedUserRole: seciliTemsilci?.role || ''
       };
 
-      // ── Satışı Firestore'a kaydet ────────────────────────────────────────
       const satisDocRef = await addDoc(collection(db, `subeler/${sube.dbPath}/satislar`), satisTeklifi);
 
-      // ✅ v6: Ödeme varsa kasaya tahsilat hareketi ekle
+      // ✅ Kasaya tahsilat ekle
       const nakitTutar  = pesinatToplamHesapla();
       const havaleTutar = havaleToplamHesapla();
       const kartTutar   = kartBrutToplamHesapla();
 
       if (nakitTutar > 0 || havaleTutar > 0 || kartTutar > 0) {
-        // Banka adlarını çıkar
         const ilkKart   = kartOdemeler.find(k => k.tutar > 0);
         const ilkHavale = havaleler.find(h => h.tutar > 0);
         const gun = bugunStr();
@@ -425,15 +401,15 @@ const SatisTeklifPage: React.FC = () => {
           subeKodu: currentUser!.subeKodu,
           gun,
           satisId: satisDocRef.id,
-          satisKodu,
+          satisKodu: yeniSatisKodu,
           musteriIsim: musteriBilgileri.isim || '—',
           nakitTutar,
           kartTutar,
           havaleTutar,
           yapan: `${currentUser!.ad} ${currentUser!.soyad}`,
           yapanId: currentUser!.uid || '',
-          aciklama: `Yeni satış — ${satisKodu}`,
-          satisTarihi: gun,          // aynı gün → Tahsilatlara düşmesin
+          aciklama: `Yeni satış — ${yeniSatisKodu}`,
+          satisTarihi: gun,
           kartBanka:   ilkKart?.banka   ?? undefined,
           havaleBanka: ilkHavale?.banka ?? undefined,
         });
@@ -442,7 +418,7 @@ const SatisTeklifPage: React.FC = () => {
       if (!onayDurumu) {
         for (const urun of urunler) {
           await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), {
-            satisKodu, subeKodu: currentUser!.subeKodu,
+            satisKodu: yeniSatisKodu, subeKodu: currentUser!.subeKodu,
             urunKodu: urun.kod, urunAdi: urun.ad, adet: urun.adet,
             musteriIsmi: musteriBilgileri.isim,
             siparisTarihi: new Date(),
@@ -452,14 +428,14 @@ const SatisTeklifPage: React.FC = () => {
         }
       }
 
-      await logKaydet(satisKodu, 'YENİ_SATIS',
+      await logKaydet(yeniSatisKodu, 'YENİ_SATIS',
         `Yeni satış. Müşteri: ${musteriBilgileri.isim}, Tutar: ${manuelSatisTutari} TL, Temsilci: ${seciliTemsilci?.ad} ${seciliTemsilci?.soyad}`);
 
-      alert('✅ Satış teklifi başarıyla oluşturuldu!');
+      alert(`✅ Satış başarıyla oluşturuldu!\n\nSatış Kodu: ${yeniSatisKodu}`);
       navigate('/dashboard');
     } catch (error) {
       console.error(error);
-      alert('❌ Bir hata oluştu!');
+      alert('❌ Bir hata oluştu! Lütfen tekrar deneyin.');
     } finally {
       setLoading(false);
     }
@@ -470,12 +446,21 @@ const SatisTeklifPage: React.FC = () => {
     return temsilci ? temsilci.displayName || `${temsilci.ad} ${temsilci.soyad}` : '';
   };
 
+  // ✅ Şube prefix'ini al — başlıkta göstermek için
+  const subePrefix = (() => {
+    const sube = getSubeByKod(currentUser?.subeKodu as SubeKodu);
+    return sube ? String(sube.satisKoduPrefix) : '';
+  })();
+
   return (
     <div className="satis-form-container">
       <div className="satis-form-header">
         <button onClick={() => navigate('/dashboard')} className="btn-back">← Geri</button>
       </div>
-      <h2 className="form-title">Yeni Satış Teklif Formu — {satisKodu}</h2>
+      {/* ✅ Satış kodu kaydet anında atanacak — başlıkta bilgi göster */}
+      <h2 className="form-title">
+        Yeni Satış Teklif Formu — {satisKodu || <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '0.85em' }}>{subePrefix ? `${subePrefix}-***` : 'Otomatik atanacak'}</span>}
+      </h2>
 
       <form onSubmit={handleSubmit}>
 
@@ -711,7 +696,6 @@ const SatisTeklifPage: React.FC = () => {
             </div>
           </div>
 
-          {/* ✅ Canlı ödeme doğrulama banner'ı */}
           {(() => {
             const odenen = toplamOdenenHesapla();
             const tutar  = manuelSatisTutari ?? 0;

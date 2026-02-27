@@ -87,8 +87,9 @@ const KontrolEt: React.FC = () => {
     satislar.filter(s => (s as any).iptalTalebi === true && (s as any).satisDurumu !== 'IPTAL')
   );
 
+  // isAdmin kısıtı kaldırıldı — her kullanıcı durum değiştirebilir (yanlış onayı geri alma için)
   const onayToggle = async (satis: SatisTeklifFormu) => {
-    if (!isAdmin || !satis.id) return;
+    if (!satis.id) return;
     const sube = getSubeByKod(satis.subeKodu);
     if (!sube) return;
     setGuncellemeyorum(satis.id);
@@ -103,6 +104,7 @@ const KontrolEt: React.FC = () => {
         s.id === satis.id ? { ...s, onayDurumu: yeniDurum, satisDurumu: yeniDurum ? 'ONAYLI' : 'BEKLEMEDE' } as any : s
       ));
       setBekleyenSayfa(1);
+      alert('✅ Durum güncellendi!');
     } catch {
       alert('❌ Güncelleme başarısız!');
     } finally {
@@ -212,12 +214,16 @@ const KontrolEt: React.FC = () => {
                 <td>{formatDate(satis.tarih)}</td>
                 <td>{formatDate((satis as any).yeniTeslimatTarihi || satis.teslimatTarihi)}</td>
                 <td>
-                  {tip === 'bekleyen' && isAdmin ? (
-                    <button className={`onay-btn ${satis.onayDurumu ? 'onayli' : 'bekleyen'}`} onClick={() => onayToggle(satis)} disabled={yukleniyor}>
+                  {tip === 'iptal' ? (
+                    <span className="onay-badge iptal-badge">🚫 İPTAL TALEBİ</span>
+                  ) : (tip === 'bekleyen' || tip === 'onaylandi') ? (
+                    <button
+                      className={`onay-btn ${satis.onayDurumu ? 'onayli' : 'bekleyen'}`}
+                      onClick={() => onayToggle(satis)}
+                      disabled={yukleniyor}
+                    >
                       {yukleniyor ? '...' : satis.onayDurumu ? '✅ ONAYLI' : '⏳ BEKLEMEDE'}
                     </button>
-                  ) : tip === 'iptal' ? (
-                    <span className="onay-badge iptal-badge">🚫 İPTAL TALEBİ</span>
                   ) : (
                     <span className={`onay-badge ${satis.onayDurumu ? 'onayli' : 'bekleyen'}`}>
                       {satis.onayDurumu ? '✅ ONAYLI' : '⏳ BEKLEMEDE'}

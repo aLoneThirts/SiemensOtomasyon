@@ -6,6 +6,7 @@ import { SatisTeklifFormu, Kampanya, Urun, KartOdeme, YesilEtiket, BANKALAR, TAK
 import { getSubeByKod } from '../types/sube';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
+import { writeSatisAuditLog } from '../services/satisLogService';
 import './SatisDuzenle.css';
 // ✅ v6: kasaTahsilatEkle + kasaIadeEkle (kasaIptalService artık kullanılmıyor)
 import { kasaTahsilatEkle, kasaIadeEkle } from '../services/kasaService';
@@ -536,6 +537,10 @@ const SatisDuzenlePage: React.FC = () => {
       const sonGiris = [...marsListesi].reverse().find(m => m.marsNo || m.teslimatTarihi) || orijinal;
       const etiketler = eslesenYesilEtiketler();
 
+      // ✅ Audit Log: Güncelleme öncesi eski veriyi al
+      const oldSnap = await getDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!));
+      const oldData = oldSnap.exists() ? oldSnap.data() : {};
+
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!), {
         urunler: urunler.map(u => ({
           ...u,
@@ -573,6 +578,24 @@ const SatisDuzenlePage: React.FC = () => {
         marsGirisleri: marsListesi,
         guncellemeTarihi: new Date()
       });
+
+
+      // ✅ Audit Log: Değişiklikleri kaydet
+      try {
+        const newSnap = await getDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!));
+        const newData = newSnap.exists() ? newSnap.data() : {};
+        await writeSatisAuditLog({
+          saleId: id!,
+          satisKodu: satis.satisKodu || '',
+          dbPath: sube.dbPath,
+          branchId: subeKodu || '',
+          branchName: sube.ad,
+          oldData,
+          newData,
+          userId: currentUser?.uid || '',
+          userName: `${currentUser?.ad || ''} ${currentUser?.soyad || ''}`.trim(),
+        });
+      } catch (logErr) { console.error('Audit log yazılamadı:', logErr); }
 
       alert('✅ Satış başarıyla güncellendi!');
       navigate('/dashboard');

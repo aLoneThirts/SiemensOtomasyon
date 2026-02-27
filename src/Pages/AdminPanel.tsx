@@ -10,6 +10,7 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { secondaryAuth } from '../firebase/config';
 import { SUBELER, getSubeByKod, SubeKodu } from '../types/sube';
 import * as XLSX from 'xlsx';
+import AuditLogSection from '../components/AuditLogSection';
 import './AdminPanel.css';
 
 // ─── YARDIMCI ────────────────────────────────────────────────
@@ -888,7 +889,7 @@ const AdminPanel: React.FC = () => {
     setTumSaticilarYuklendi(false); setTumSaticilar([]);
     setEmailSaticiYuklendi(false); setEmailSaticilar([]);
     setEmailGuncelleSatici(null); setYeniEmail(''); setYeniSifre('');
-    setSatisLogYuklendi(false); setSatisLoglari([]);
+    // Modül 10 artık AuditLogSection içinde yönetiliyor
   };
 
   const aktifMenu = menuler.find(m => m.id === aktifModul);
@@ -1684,154 +1685,9 @@ const AdminPanel: React.FC = () => {
             </div>
           )}
 
-          {/* ══ 10) SATIŞ LOGLARI ══ */}
+          {/* ══ 10) SATIŞ LOGLARI + AUDIT LOG ══ */}
           {aktifModul === 'satis-log' && (
-            <div className="ap-one-col" style={{ position: 'relative' }}>
-              
-              {/* SAĞ ALTA MESAJ */}
-              {logMesaj && (
-                <div style={{
-                  position: 'fixed',
-                  bottom: '20px',
-                  right: '20px',
-                  zIndex: 9999,
-                  padding: '12px 20px',
-                  borderRadius: '8px',
-                  backgroundColor: logMesaj.tip === 'success' ? '#10b981' : logMesaj.tip === 'error' ? '#ef4444' : '#3b82f6',
-                  color: 'white',
-                  fontWeight: '600',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  maxWidth: '400px'
-                }}>
-                  {logMesaj.text}
-                </div>
-              )}
-              
-              <div className="ap-panel">
-                <div className="ap-panel-header">
-                  <i className="fas fa-history" /><h3>Satış Logları</h3>
-                </div>
-                <div className="ap-panel-body">
-                  
-                  {/* Filtreler */}
-                  <div className="ap-filters-grid">
-                    <div className="ap-filter-group">
-                      <label>Başlangıç</label>
-                      <input 
-                        type="date" 
-                        value={logFiltre.baslangicTarih.toISOString().split('T')[0]} 
-                        onChange={e => setLogFiltre(prev => ({ ...prev, baslangicTarih: new Date(e.target.value) }))}
-                      />
-                    </div>
-                    <div className="ap-filter-group">
-                      <label>Bitiş</label>
-                      <input 
-                        type="date" 
-                        value={logFiltre.bitisTarih.toISOString().split('T')[0]} 
-                        onChange={e => setLogFiltre(prev => ({ ...prev, bitisTarih: new Date(e.target.value) }))}
-                      />
-                    </div>
-                    <div className="ap-filter-group">
-                      <label>Şube</label>
-                      <select 
-                        value={logFiltre.subeKodu} 
-                        onChange={e => setLogFiltre(prev => ({ ...prev, subeKodu: e.target.value, saticiId: 'TUMU' }))}
-                      >
-                        <option value="TUMU">Tüm Şubeler</option>
-                        {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
-                      </select>
-                    </div>
-                    <div className="ap-filter-group">
-                      <label>Satıcı</label>
-                      <select 
-                        value={logFiltre.saticiId} 
-                        onChange={e => setLogFiltre(prev => ({ ...prev, saticiId: e.target.value }))}
-                      >
-                        <option value="TUMU">Tüm Satıcılar</option>
-                        {logSaticilar
-                          .filter(s => logFiltre.subeKodu === 'TUMU' || s.subeKodu === logFiltre.subeKodu)
-                          .map(s => <option key={s.id} value={s.id}>{s.ad} {s.soyad}</option>)}
-                      </select>
-                    </div>
-                    <div className="ap-filter-group">
-                      <label>Müşteri</label>
-                      <input 
-                        type="text" 
-                        placeholder="İsim ara..." 
-                        value={logFiltre.musteriAdi} 
-                        onChange={e => setLogFiltre(prev => ({ ...prev, musteriAdi: e.target.value }))}
-                      />
-                    </div>
-                    <div className="ap-filter-group ap-filter-action">
-                      <button className="ap-btn-primary" onClick={satisLogGetir} disabled={yukleniyor}>
-                        <i className="fas fa-search" /> {yukleniyor ? 'Aranıyor...' : 'Filtrele'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Sonuçlar */}
-                  {satisLogYuklendi && (
-                    <>
-                      <div className="ap-table-label">
-                        <i className="fas fa-list" /> {satisLoglari.length} satış
-                      </div>
-                      
-                      {satisLoglari.length === 0 ? (
-                        <div className="ap-empty"><p>Satış bulunamadı</p></div>
-                      ) : (
-                        <div className="ap-table-scroll">
-                          <table className="ap-table">
-                            <thead>
-                              <tr>
-                                <th>Tarih</th>
-                                <th>Şube</th>
-                                <th>Kod</th>
-                                <th>Müşteri</th>
-                                <th>Ürünler</th>
-                                <th>Satıcı</th>
-                                <th>Tutar</th>
-                                <th>Durum</th>
-                                <th></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {satisLoglari.map(satis => {
-                                const durum = getOdemeDurumu(satis);
-                                return (
-                                  <tr key={satis.id}>
-                                    <td>{formatTarih(satis.olusturmaTarihi)}</td>
-                                    <td>
-                                      <span className="ap-sube-badge" style={{ background: subeRenk(satis.subeKodu) + '20', color: subeRenk(satis.subeKodu) }}>
-                                        {satis.subeAd || satis.subeKodu}
-                                      </span>
-                                    </td>
-                                    <td><strong>{satis.satisKodu}</strong></td>
-                                    <td>{getMusteriBilgi(satis)}</td>
-                                    <td>
-                                      {satis.urunler?.map((u, idx) => (
-                                        <div key={idx} style={{ fontSize: 11 }}>{u.kod} x{u.adet}</div>
-                                      ))}
-                                    </td>
-                                    <td>{getSaticiAdi(satis)}</td>
-                                    <td>₺{(satis.toplamTutar || satis.manuelSatisTutari || 0).toLocaleString('tr-TR')}</td>
-                                    <td><span className={`ap-pill ${durum.class}`}>{durum.text}</span></td>
-                                    <td>
-                                      <button className="ap-delete-btn" onClick={() => satisSil(satis)} title="Sil">
-                                        <i className="fas fa-trash" />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+            <AuditLogSection currentUser={currentUser} />
           )}
 
         </div> {/* ap-content */}

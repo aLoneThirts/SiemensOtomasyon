@@ -114,7 +114,7 @@ const Dashboard: React.FC = () => {
     return{bugunSatislar,yarinSatislar};
   },[satislar]);
 
-  const excelExport=()=>{const data=filtreliSatislar.map(s=>({'Satış Kodu':s.satisKodu,'Şube':getSubeByKod(s.subeKodu as SubeKodu)?.ad||'','Müşteri':s.musteriBilgileri?.isim||'','Toplam Tutar':s.toplamTutar,'Kar/Zarar':s.zarar??0,'Satış Tarihi':formatDate(s.tarih),'Teslimat Tarihi':formatDate(s.teslimatTarihi),'Durum':(s as any).satisDurumu==='IPTAL'?'İptal':s.onayDurumu?'Onaylı':'Beklemede','Ödeme':s.odemeDurumu,'Fatura No':s.faturaNo||''}));const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Satışlar');ws['!cols']=[{wch:15},{wch:20},{wch:25},{wch:15},{wch:15},{wch:15},{wch:15},{wch:12},{wch:15},{wch:15}];XLSX.writeFile(wb,`Satislar_${new Date().toLocaleDateString('tr-TR').replace(/\./g,'-')}.xlsx`);};
+  const excelExport=()=>{const data=filtreliSatislar.map(s=>({"Satış Kodu":s.satisKodu,"Şube":getSubeByKod(s.subeKodu as SubeKodu)?.ad||'',"Müşteri":s.musteriBilgileri?.isim||'',"Toplam Tutar":s.toplamTutar,"Kar/Zarar":s.zarar??0,"Satış Tarihi":formatDate(s.tarih),"Teslimat Tarihi":formatDate(s.teslimatTarihi),"Durum":(s as any).satisDurumu==='IPTAL'?'İptal':s.onayDurumu?'Onaylı':'Beklemede',"Ödeme":s.odemeDurumu,"Fatura No":s.faturaNo||''}));const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Satışlar');ws['!cols']=[{wch:15},{wch:20},{wch:25},{wch:15},{wch:15},{wch:15},{wch:15},{wch:12},{wch:15},{wch:15}];XLSX.writeFile(wb,`Satislar_${new Date().toLocaleDateString('tr-TR').replace(/\./g,'-')}.xlsx`);};
 
   const totalPages=Math.ceil(filtreliSatislar.length/itemsPerPage);
   const startIndex=(currentPage-1)*itemsPerPage;
@@ -172,7 +172,7 @@ const Dashboard: React.FC = () => {
         <div className="filtre-item"><label>AÇIK HESAP</label><select value={acikHesap} onChange={e=>setAcikHesap(e.target.value)} className="filtre-select"><option value="all">Tümü</option><option value="acik">Açık Hesaplar</option><option value="kapali">Kapalı Hesaplar</option></select></div>
         <div className="filtre-item"><label>SATIŞ TARİHİ (BAŞLANGIÇ)</label><input type="date" value={satisTarihiBaslangic} onChange={e=>setSatisTarihiBaslangic(e.target.value)} className="filtre-input" /></div>
         <div className="filtre-item"><label>SATIŞ TARİHİ (BİTİŞ)</label><input type="date" value={satisTarihiBitis} onChange={e=>setSatisTarihiBitis(e.target.value)} className={`filtre-input ${tarihAralikHatasi?'filtre-input--hata':''}`} min={satisTarihiBaslangic||undefined} />{tarihAralikHatasi&&<span className="filtre-hata-mesaji">⚠️ {tarihAralikHatasi}</span>}</div>
-        <div className="filtre-item filtre-item--wide"><label>SATIŞ KODU / MÜŞTERİ</label><div className="search-container"><input type="text" placeholder="Satış kodu veya müşteri adı..." value={aramaMetni} onChange={e=>setAramaMetni(e.target.value)} className="search-input" /><button className="search-btn" onClick={filtreyiUygula}><i className="fas fa-search"></i></button></div></div>
+        <div className="filtre-item filtre-item--wide"><label>SATIŞ KODU / MÜŞTERİ</label><div className="search-container"><input type="text" placeholder="Satış kodu veya müşteri adı..." value={aramaMetni} onChange={e=>setAramaMetni(e.target.value)} className="search-input" /><button className="search-btn" onClick={filtreyiUygula}><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button></div></div>
         <div className="filtre-item filtre-item--actions"><label>&nbsp;</label><button onClick={filtreleriSifirla} className="btn-sifirla"><i className="fas fa-undo"></i> Sıfırla</button></div>
       </div>
 
@@ -193,9 +193,7 @@ const Dashboard: React.FC = () => {
                 const isIptal = (satis as any).satisDurumu === 'IPTAL';
                 const iptalTalebiVar = (satis as any).iptalTalebi === true;
 
-                // ✅ YETKİ: Normal user + ONAYLI satış = düzenleme KAPALI
                 const onayliVeNormalUser = !isAdmin && isOnaylandi && !isIptal;
-                // Düzenle butonu: Admin her zaman, normal user sadece BEKLEMEDE + İPTAL DEĞİLSE
                 const duzenleGorunur = isAdmin || (!isIptal && !onayliVeNormalUser);
 
                 return (
@@ -219,20 +217,13 @@ const Dashboard: React.FC = () => {
                     <td><span className={`status-badge ${isOdendi ? 'odendi' : 'acik-hesap'}`}>{isOdendi ? 'ÖDENDİ' : 'AÇIK HESAP'}</span></td>
                     <td>
                       <div className="action-buttons">
-                        {/* 👁️ Detay — her zaman */}
                         <button onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)} className="btn-view" title="Detay Görüntüle">👁️</button>
-
-                        {/* ✏️ Düzenle — ONAYLI + normal user = GİZLİ */}
                         {duzenleGorunur && (
                           <button onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)} className="btn-edit" title="Düzenle">✏️</button>
                         )}
-
-                        {/* 🔒 Onaylı satışlarda kilit ikonu (normal user bilgilendirme) */}
                         {onayliVeNormalUser && (
                           <span title="Onaylı satışlar düzenlenemez" style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', color: '#9ca3af', fontSize: 15, cursor: 'not-allowed', border: '1px solid #e5e7eb' }}>🔒</span>
                         )}
-
-                        {/* 🚫 İptal talebi — normal user, iptal değil, talep yok (ONAYLI'da da çalışır) */}
                         {!isAdmin && !isIptal && !iptalTalebiVar && (
                           iptalOnayBekleyen === satis.id ? (
                             <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
