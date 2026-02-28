@@ -54,7 +54,6 @@ const SatisDetayPage: React.FC = () => {
     return satis.kampanyalar.reduce((sum: number, k: any) => sum + (k.tutar || 0), 0);
   };
 
-  // ✅ Snapshot'tan oku — yoksa alisFiyati/bip'e düş (geriye dönük uyumlu)
   const urunAlis = (u: any): number => u.alisFiyatSnapshot ?? u.alisFiyati ?? 0;
   const urunBip  = (u: any): number => u.bipSnapshot    ?? u.bip         ?? 0;
 
@@ -71,17 +70,11 @@ const SatisDetayPage: React.FC = () => {
   const yesilEtiketToplamHesapla = () =>
     satis?.yesilEtiketler?.reduce((sum, e) => sum + (e.tutar || 0), 0) || 0;
 
-  // ✅ Normal Toplam Maliyet: SADECE alış × adet kullanılır.
-  // Yeşil etiket özel fiyatı bu hesaba HİÇ girmez.
-  // Formül: Σ(tüm ürün alış × adet) − Σ(tüm ürün BİP × adet) − kampanya
   const toplamMaliyetHesapla = () => {
     if (!satis) return 0;
     return Math.max(0, alisToplamHesapla() - bipToplamHesapla() - kampanyaToplamiHesapla());
   };
 
-  // ✅ Yeşil Etiket Kontrol Maliyeti: SADECE bilgi amaçlı, ayrı alan.
-  // Yeşil ürünlerde alış yerine özel fiyat kullanılır.
-  // Bu değer kâr/zarar hesabına KARIŞMAZ.
   const yesilEtiketKontrolMaliyeti = () => {
     if (!satis) return 0;
     const yesilEtiketler: YesilEtiket[] = satis.yesilEtiketler || [];
@@ -89,13 +82,10 @@ const SatisDetayPage: React.FC = () => {
     const yesilKodlar = new Set(
       yesilEtiketler.map(e => (e.urunKodu || '').trim().toLowerCase())
     );
-    // Yeşil olmayan ürünlerin alış toplamı
     const normalAlis = (satis.urunler || [])
       .filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase()))
       .reduce((s: number, u: any) => s + urunAlis(u) * u.adet, 0);
-    // Yeşil ürünlerin özel fiyat toplamı
     const yesilOzel = yesilEtiketler.reduce((s, e) => s + (e.tutar || 0), 0);
-    // Kontrol maliyeti = yeşil özel + normal alış − BİP − kampanya
     return Math.max(0, yesilOzel + normalAlis - bipToplamHesapla() - kampanyaToplamiHesapla());
   };
 
@@ -151,6 +141,12 @@ const SatisDetayPage: React.FC = () => {
     return acik > 0 ? acik : 0;
   };
 
+  // ✅ #6 Ünvan + Teslim Alan Kişi birleşik gösterimi
+  const unvanVeTeslimatGoster = () => {
+    const unvan = (satis as any)?.musteriBilgileri?.unvan || '';
+    return unvan || null;
+  };
+
   const printBtn = (
     <button onClick={() => window.print()} className="btn-print no-print">
       <i className="fas fa-print"></i> Yazdır
@@ -171,6 +167,12 @@ const SatisDetayPage: React.FC = () => {
       </Layout>
     );
   }
+
+  // ✅ Yardımcı değişkenler
+  const unvanGosterim = unvanVeTeslimatGoster();
+  const faturaAdresi = satis?.musteriBilgileri?.faturaAdresi || '';
+  const teslimatAdresi = satis?.musteriBilgileri?.adres || '';
+  const teslimEdildi = satis.teslimEdildiMi;
 
   return (
     <Layout pageTitle={`Satış: ${satis.satisKodu}`} headerExtra={printBtn}>
@@ -208,11 +210,28 @@ const SatisDetayPage: React.FC = () => {
           <div className="alt-satir">
             <div className="sol-kolon">
               <div className="baslik-alt">MÜŞTERİ BİLGİLERİ</div>
-              <div className="satir-item">ÖNVAN: {satis.musteriBilgileri?.isim}</div>
+              <div className="satir-item">ÜNVAN: {satis.musteriBilgileri?.isim}</div>
+              {/* ✅ #4/#6 Ünvan + Teslim alan kişi */}
+              {unvanGosterim && (
+                <div className="satir-item" style={{ color: '#0369a1', fontWeight: 600 }}>
+                  ŞİRKET ÜNVANI: {unvanGosterim}
+                </div>
+              )}
               <div className="satir-item">V.K NO: {satis.musteriBilgileri?.vkNo || '-'}</div>
               <div className="satir-item">V.D: {satis.musteriBilgileri?.vd || '-'}</div>
               <div className="satir-item">CEP: {satis.musteriBilgileri?.cep || '-'}</div>
-              <div className="satir-item">ADRES: {satis.musteriBilgileri?.adres}</div>
+
+              {/* ✅ #7 Adresler ayrı gösterim */}
+              {faturaAdresi ? (
+                <>
+                  <div className="satir-item">FATURA ADRESİ: {faturaAdresi}</div>
+                  {teslimatAdresi && teslimatAdresi !== faturaAdresi && (
+                    <div className="satir-item">TESLİMAT ADRESİ: {teslimatAdresi}</div>
+                  )}
+                </>
+              ) : (
+                <div className="satir-item">ADRES: {satis.musteriBilgileri?.adres || '-'}</div>
+              )}
             </div>
             <div className="sag-kolon">
               {(() => {
@@ -236,7 +255,19 @@ const SatisDetayPage: React.FC = () => {
               <div className="satir-item">MAĞAZA: {satis.magaza || '-'}</div>
               <div className="satir-item">FATURA NO: {satis.faturaNo || '-'}</div>
               <div className="satir-item">SERVİS: {satis.servisNotu || '-'}</div>
-              <div className="satir-item">TESLİM EDİLDİ Mİ?: {satis.teslimEdildiMi ? 'EVET' : 'HAYIR'}</div>
+
+              {/* ✅ #5 Teslim Edildi renk gösterimi: Evet = sarı zemin */}
+              <div className="satir-item" style={teslimEdildi ? {
+                background: '#fef08a',
+                color: '#854d0e',
+                fontWeight: 700,
+                padding: '3px 8px',
+                borderRadius: 6,
+                display: 'inline-block',
+                marginTop: 2,
+              } : {}}>
+                TESLİM EDİLDİ Mİ?: {teslimEdildi ? '✅ EVET' : 'HAYIR'}
+              </div>
             </div>
           </div>
         </div>
@@ -247,7 +278,7 @@ const SatisDetayPage: React.FC = () => {
             <table className="urun-tablo">
               <thead>
                 <tr>
-                  <th>ÜRN KODU</th><th>ADET</th><th>ALIŞ</th><th>BİP</th>
+                  <th>ÜRÜN KODU</th><th>ADET</th><th>ALIŞ</th><th>BİP</th>
                 </tr>
               </thead>
               <tbody>
@@ -357,7 +388,6 @@ const SatisDetayPage: React.FC = () => {
                     </tbody>
                   </table>
                   {(() => {
-                    // ✅ Yeşil Etiket Kontrol Maliyeti (bilgi amaçlı, kâr/zarara karışmaz)
                     const yesilKodlar2 = new Set(
                       satis.yesilEtiketler!.map(e => (e.urunKodu || '').trim().toLowerCase())
                     );

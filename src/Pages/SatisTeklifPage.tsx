@@ -15,49 +15,38 @@ import { getSubeByKod, SubeKodu } from '../types/sube';
 import './SatisTeklif.css';
 import { kasaTahsilatEkle } from '../services/kasaService';
 
-interface Kullanici {
-  id: string;
-  ad: string;
-  soyad: string;
-  email: string;
-  role: string;
-  subeKodu: string;
-  displayName?: string;
-}
-
-const HAVALE_BANKALARI = [
-  'Ziraat Bankası', 'Halkbank', 'Vakıfbank', 'İş Bankası', 'Garanti BBVA',
-  'Yapı Kredi', 'Akbank', 'QNB Finansbank', 'Denizbank', 'TEB',
-  'ING Bank', 'HSBC', 'Şekerbank', 'Fibabanka', 'Alternatifbank',
-];
-
+interface Kullanici { id: string; ad: string; soyad: string; email: string; role: string; subeKodu: string; displayName?: string; }
+const HAVALE_BANKALARI = ['Ziraat Bankası', 'Halkbank', 'Vakıfbank', 'İş Bankası', 'Garanti BBVA', 'Yapı Kredi', 'Akbank', 'QNB Finansbank', 'Denizbank', 'TEB', 'ING Bank', 'HSBC', 'Şekerbank', 'Fibabanka', 'Alternatifbank'];
 interface YesilEtiketAdmin { id?: string; urunKodu: string; urunTuru?: string; maliyet: number; }
 interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: boolean; subeKodu: string; tutar?: number; }
 
-const bugunStr = (): string => {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-};
+const bugunStr = (): string => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
+
+// ✅ Fatura No validasyon
+const FATURA_NO_REGEX = /^(\d{4}|Kesilmedi)$/;
+const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
+const isFaturaNoGecerli = (val: string): boolean => FATURA_NO_REGEX.test(val);
+
+// ✅ #3 Mars No validasyon — tam 10 hane, 2026 ile başlar, sadece rakam
+const MARS_NO_REGEX = /^2026\d{6}$/;
+const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
 
 const SatisTeklifPage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
   const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
   const [musteriTemsilcisiId, setMusteriTemsilcisiId] = useState<string>('');
 
+  // ✅ Ünvan eklendi, teslimatAlacakKisi KALDIRILDI (isim alanına yazılır)
   const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>({
     isim: '', adres: '', faturaAdresi: '', isAdresi: '',
-    vergiNumarasi: '', vkNo: '', vd: '', cep: ''
+    vergiNumarasi: '', vkNo: '', vd: '', cep: '', unvan: ''
   });
   const [musteriTemsilcisiTel, setMusteriTemsilcisiTel] = useState('');
 
-  const [urunler, setUrunler] = useState<Urun[]>([
-    { id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }
-  ]);
-
+  const [urunler, setUrunler] = useState<Urun[]>([{ id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }]);
   const [tarih, setTarih] = useState(new Date().toISOString().split('T')[0]);
   const [teslimatTarihi, setTeslimatTarihi] = useState('');
   const [marsNo, setMarsNo] = useState('');
@@ -65,6 +54,7 @@ const SatisTeklifPage: React.FC = () => {
   const [magaza, setMagaza] = useState('');
   const [faturaNo, setFaturaNo] = useState('');
   const [faturaNoHata, setFaturaNoHata] = useState(false);
+  const [faturaNoHataMesaj, setFaturaNoHataMesaj] = useState('');
   const [servisNotu, setServisNotu] = useState('');
   const [teslimEdildiMi, setTeslimEdildiMi] = useState(false);
   const [cevap, setCevap] = useState('');
@@ -85,7 +75,6 @@ const SatisTeklifPage: React.FC = () => {
 
   const [onayDurumu, setOnayDurumu] = useState(false);
   const [loading, setLoading] = useState(false);
-  // ✅ Satış kodu artık form açılırken değil, kaydet anında üretilecek
   const [satisKodu, setSatisKodu] = useState('');
   const [manuelSatisTutari, setManuelSatisTutari] = useState<number | null>(null);
   const [urunCache, setUrunCache] = useState<Record<string, { ad: string; alis: number; bip: number; urunTuru: string }>>({});
@@ -98,7 +87,6 @@ const SatisTeklifPage: React.FC = () => {
         const data = doc.data();
         return { id: doc.id, ad: data.ad || '', soyad: data.soyad || '', email: data.email || '', role: data.role || '', subeKodu: data.subeKodu || '' } as Kullanici;
       });
-
       const adminler = tumKullanicilar.filter(k => k.role?.toString().trim().toUpperCase() === 'ADMIN');
       const subeSatıcıları = tumKullanicilar.filter(k => k.subeKodu === currentUser?.subeKodu && k.role?.toString().trim().toUpperCase() !== 'ADMIN');
       const birlesikKullanicilar = [...adminler, ...subeSatıcıları];
@@ -134,26 +122,19 @@ const SatisTeklifPage: React.FC = () => {
     return 0;
   };
 
-  // ✅ YENİ: Atomik satış kodu üretimi — Transaction ile çakışma imkansız
   const atomikSatisKoduUret = async (subeDbPath: string, subePrefix: string): Promise<string> => {
     const counterRef = doc(db, `subeler/${subeDbPath}/counters`, 'satisCounter');
-
     const yeniKod = await runTransaction(db, async (transaction) => {
       const counterDoc = await transaction.get(counterRef);
       let newNumber = 1;
-      if (counterDoc.exists()) {
-        newNumber = (counterDoc.data().currentNumber || 0) + 1;
-      }
+      if (counterDoc.exists()) { newNumber = (counterDoc.data().currentNumber || 0) + 1; }
       transaction.set(counterRef, { currentNumber: newNumber, lastUpdated: new Date() });
       return `${subePrefix}-${newNumber.toString().padStart(3, '0')}`;
     });
-
     return yeniKod;
   };
 
-  const formatPrice = (price: number): string => new Intl.NumberFormat('tr-TR', {
-    style: 'currency', currency: 'TRY', minimumFractionDigits: 0, maximumFractionDigits: 0
-  }).format(price);
+  const formatPrice = (price: number): string => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(price);
 
   const alisToplamHesapla = (): number => urunler.reduce((t, u) => t + u.adet * u.alisFiyati, 0);
   const bipToplamHesapla = (): number => urunler.reduce((t, u) => t + (u.bip || 0) * u.adet, 0);
@@ -165,10 +146,7 @@ const SatisTeklifPage: React.FC = () => {
     const etiketler = eslesenYesilEtiketler();
     if (etiketler.length === 0) return normalMaliyet;
     let yesilEtiketliAlis = 0;
-    for (const e of etiketler) {
-      const urun = urunler.find(u => u.kod.trim().toLowerCase() === e.urunKodu.trim().toLowerCase());
-      if (urun) yesilEtiketliAlis += urun.alisFiyati * urun.adet;
-    }
+    for (const e of etiketler) { const urun = urunler.find(u => u.kod.trim().toLowerCase() === e.urunKodu.trim().toLowerCase()); if (urun) yesilEtiketliAlis += urun.alisFiyati * urun.adet; }
     return Math.max(0, normalMaliyet - yesilEtiketliAlis + yesilEtiketToplamHesapla());
   };
   const kartNetTutarHesapla = (kart: KartOdeme): number => kart.tutar - (kart.tutar * (kart.kesintiOrani || 0)) / 100;
@@ -192,10 +170,29 @@ const SatisTeklifPage: React.FC = () => {
     return result;
   };
 
-  const isMarsNoGecerli = (): boolean => { if (!marsNo) return true; return marsNo.length === 10 && marsNo.startsWith('2026'); };
-  const handleMarsNoChange = (e: React.ChangeEvent<HTMLInputElement>) => { setMarsNo(e.target.value.replace(/\D/g, '')); setMarsNoHata(false); };
-  const fixMarsNo = () => { let val = marsNo.replace(/\D/g, ''); if (!val.startsWith('2026')) val = '2026' + val; if (val.length > 10) val = val.slice(0, 10); setMarsNo(val); setMarsNoHata(val.length !== 10); };
-  const handleFaturaNoChange = (e: React.ChangeEvent<HTMLInputElement>) => { setFaturaNo(e.target.value); setFaturaNoHata(false); setFatura(e.target.value.trim() !== ''); };
+  const isTeslimatTarihiGecerli = (): boolean => { if (!teslimatTarihi) return true; return teslimatTarihi >= tarih; };
+
+  // ✅ #3 Mars No: sadece rakam, 10 hane, 2026 başlangıç
+  const handleMarsNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sadeceSayi = e.target.value.replace(/\D/g, '');
+    setMarsNo(sadeceSayi);
+    setMarsNoHata(false);
+  };
+
+  const handleFaturaNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const normalized = normalizeFaturaNo(e.target.value);
+    setFaturaNo(normalized);
+    setFaturaNoHata(false);
+    setFaturaNoHataMesaj('');
+    setFatura(normalized.trim() !== '' && normalized !== 'Kesilmedi');
+  };
+
+  const handleFaturaNoBlur = () => {
+    if (faturaNo && !isFaturaNoGecerli(faturaNo)) {
+      setFaturaNoHata(true);
+      setFaturaNoHataMesaj("Fatura No yalnızca 4 haneli rakam veya 'Kesilmedi' olabilir.");
+    }
+  };
 
   const handleMusteriChange = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setMusteriBilgileri(prev => ({ ...prev, [name]: value })); };
 
@@ -203,10 +200,7 @@ const SatisTeklifPage: React.FC = () => {
     try {
       const snap = await getDocs(collection(db, 'urunler'));
       const cache: Record<string, { ad: string; alis: number; bip: number; urunTuru: string }> = {};
-      snap.docs.forEach(d => {
-        const data = d.data();
-        if (data.kod) cache[data.kod.trim()] = { ad: data.ad || data.urunAdi || '', alis: parseFloat(data.alis || data.alisFiyati || 0), bip: parseFloat(data.bip || 0), urunTuru: data.urunTuru || '' };
-      });
+      snap.docs.forEach(d => { const data = d.data(); if (data.kod) cache[data.kod.trim()] = { ad: data.ad || data.urunAdi || '', alis: parseFloat(data.alis || data.alisFiyati || 0), bip: parseFloat(data.bip || 0), urunTuru: data.urunTuru || '' }; });
       setUrunCache(cache);
     } catch (err) { console.error('Ürün cache yüklenemedi:', err); }
   };
@@ -236,17 +230,12 @@ const SatisTeklifPage: React.FC = () => {
 
   const urunEkle = () => setUrunler(prev => [...prev, { id: Date.now().toString(), kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }]);
   const urunSil = (index: number) => { if (urunler.length > 1) setUrunler(prev => prev.filter((_, i) => i !== index)); };
-
   const kartEkle = () => setKartOdemeler(prev => [...prev, { id: Date.now().toString(), banka: BANKALAR[0], taksitSayisi: 1, tutar: 0, kesintiOrani: 0 }]);
   const kartSil = (index: number) => setKartOdemeler(prev => prev.filter((_, i) => i !== index));
   const handleKartChange = (index: number, field: keyof KartOdeme, value: any) => {
     const yeniKartlar = [...kartOdemeler];
     const yeniKart = { ...yeniKartlar[index], [field]: field === 'tutar' ? (value === '' ? 0 : parseFloat(value) || 0) : field === 'taksitSayisi' ? parseInt(value) || 1 : value };
-    if (field === 'banka' || field === 'taksitSayisi') {
-      const banka = field === 'banka' ? value : yeniKartlar[index].banka;
-      const taksit = field === 'taksitSayisi' ? (parseInt(value) || 1) : yeniKartlar[index].taksitSayisi;
-      yeniKart.kesintiOrani = getKesintiOrani(banka, taksit);
-    }
+    if (field === 'banka' || field === 'taksitSayisi') { const banka = field === 'banka' ? value : yeniKartlar[index].banka; const taksit = field === 'taksitSayisi' ? (parseInt(value) || 1) : yeniKartlar[index].taksitSayisi; yeniKart.kesintiOrani = getKesintiOrani(banka, taksit); }
     yeniKartlar[index] = yeniKart;
     setKartOdemeler(yeniKartlar);
   };
@@ -254,7 +243,6 @@ const SatisTeklifPage: React.FC = () => {
   const pesinatEkle = () => setPesinatlar(prev => [...prev, { id: Date.now().toString(), tutar: 0, aciklama: '' }]);
   const pesinatSil = (id: string) => setPesinatlar(prev => prev.filter(p => p.id !== id));
   const handlePesinatChange = (id: string, field: 'tutar' | 'aciklama', value: any) => { setPesinatlar(prev => prev.map(p => p.id === id ? { ...p, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : p)); };
-
   const havaleEkle = () => setHavaleler(prev => [...prev, { id: Date.now().toString(), tutar: 0, banka: HAVALE_BANKALARI[0] }]);
   const havaleSil = (id: string) => setHavaleler(prev => prev.filter(h => h.id !== id));
   const handleHavaleChange = (id: string, field: 'tutar' | 'banka', value: any) => { setHavaleler(prev => prev.map(h => h.id === id ? { ...h, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : h)); };
@@ -281,16 +269,11 @@ const SatisTeklifPage: React.FC = () => {
   const logKaydet = async (kod: string, islem: string, detay: string) => {
     const sube = getSubeByKod(currentUser!.subeKodu);
     if (!sube) return;
-    await addDoc(collection(db, `subeler/${sube.dbPath}/loglar`), {
-      satisKodu: kod, subeKodu: currentUser!.subeKodu, islem,
-      kullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
-      tarih: new Date(), detay
-    });
+    await addDoc(collection(db, `subeler/${sube.dbPath}/loglar`), { satisKodu: kod, subeKodu: currentUser!.subeKodu, islem, kullanici: `${currentUser!.ad} ${currentUser!.soyad}`, tarih: new Date(), detay });
   };
 
   useEffect(() => {
     if (!currentUser) { navigate('/login'); return; }
-    // ✅ Satış kodu artık burada üretilmiyor — kaydet anında atomik üretilecek
     kampanyalariCek();
     yesilEtiketleriCek();
     urunCacheYukle();
@@ -301,16 +284,31 @@ const SatisTeklifPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!faturaNo.trim()) { setFaturaNoHata(true); alert('❌ Fatura numarası zorunludur!'); return; }
+    if (!faturaNo.trim()) { setFaturaNoHata(true); setFaturaNoHataMesaj('Fatura numarası zorunludur!'); alert('❌ Fatura numarası zorunludur!'); return; }
+    if (!isFaturaNoGecerli(faturaNo)) {
+      setFaturaNoHata(true);
+      setFaturaNoHataMesaj("Fatura No yalnızca 4 haneli rakam veya 'Kesilmedi' olabilir.");
+      alert("❌ Fatura No yalnızca 4 haneli rakam veya 'Kesilmedi' olabilir.");
+      return;
+    }
     if (!manuelSatisTutari || manuelSatisTutari <= 0) { alert('❌ Satış tutarı girilmelidir!'); return; }
     if (ileriTeslim && !ileriTeslimTarihi) { alert('❌ İleri teslim seçildiğinde müşteriyle anlaşılan teslim tarihi zorunludur!'); return; }
-    if (marsNo && !isMarsNoGecerli()) { setMarsNoHata(true); alert('❌ MARS No 2026 ile başlayan 10 haneli olmalıdır!'); return; }
+
+    // ✅ #3 Mars No validasyon — 2026 başlangıç, 10 hane, sadece rakam
+    if (marsNo && !isMarsNoGecerli(marsNo)) {
+      setMarsNoHata(true);
+      alert(`❌ Mars No geçersiz!\n2026 ile başlayan tam 10 haneli sayı olmalıdır.\nGirilen: ${marsNo} (${marsNo.length} hane)\nGeçerli örnek: 2026123456`);
+      return;
+    }
+
     if (!musteriTemsilcisiId) { alert('❌ Müşteri temsilcisi seçilmelidir!'); return; }
+    if (teslimatTarihi && !isTeslimatTarihiGecerli()) { alert('❌ Teslimat tarihi, satış tarihinden önce olamaz.'); return; }
+    if (teslimatTarihi && !marsNo.trim()) { setMarsNoHata(true); alert('❌ Teslimat tarihi girildiğinde Mars numarası zorunludur.'); return; }
 
     const _odenen = toplamOdenenHesapla();
     const _tutar  = manuelSatisTutari ?? 0;
     if (_odenen > _tutar) {
-      alert(`❌ Toplam ödeme (${formatPrice(_odenen)}) satış tutarını (${formatPrice(_tutar)}) aşıyor!\n\nFazla: ${formatPrice(_odenen - _tutar)}\n\nLütfen ödeme kalemlerini düzeltin.`);
+      alert(`❌ Toplam ödeme (${formatPrice(_odenen)}) satış tutarını (${formatPrice(_tutar)}) aşıyor!`);
       return;
     }
 
@@ -319,7 +317,6 @@ const SatisTeklifPage: React.FC = () => {
       const sube = getSubeByKod(currentUser!.subeKodu);
       if (!sube) { alert('Şube bilgisi bulunamadı!'); setLoading(false); return; }
 
-      // ✅ ATOMIK SATIŞ KODU ÜRETİMİ — Transaction ile çakışma imkansız
       const yeniSatisKodu = await atomikSatisKoduUret(sube.dbPath, String(sube.satisKoduPrefix));
       setSatisKodu(yeniSatisKodu);
 
@@ -329,7 +326,8 @@ const SatisTeklifPage: React.FC = () => {
       const satisTeklifi: any = {
         satisKodu: yeniSatisKodu,
         subeKodu: currentUser!.subeKodu,
-        musteriBilgileri,
+        // ✅ Ünvan kaydediliyor, teslimatAlacakKisi KALDIRILDI
+        musteriBilgileri: { ...musteriBilgileri, unvan: (musteriBilgileri as any).unvan || '' },
         musteriTemsilcisiId,
         musteriTemsilcisiAd: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
         musteriTemsilcisiTel,
@@ -338,10 +336,7 @@ const SatisTeklifPage: React.FC = () => {
           ...u,
           alisFiyatSnapshot: u.alisFiyati,
           bipSnapshot: u.bip || 0,
-          greenPriceSnapshot: (() => {
-            const ye = yesilEtiketAdminList.find(y => y.urunKodu.trim().toLowerCase() === u.kod.trim().toLowerCase());
-            return ye ? ye.maliyet : null;
-          })(),
+          greenPriceSnapshot: (() => { const ye = yesilEtiketAdminList.find(y => y.urunKodu.trim().toLowerCase() === u.kod.trim().toLowerCase()); return ye ? ye.maliyet : null; })(),
           snapshotTarihi: new Date().toISOString(),
         })),
         toplamTutar: manuelSatisTutari,
@@ -352,28 +347,17 @@ const SatisTeklifPage: React.FC = () => {
         notlar: notlar.trim() || null,
         kampanyalar: seciliKampanyalar.map(k => ({ id: k.id!, ad: k.ad, tutar: k.tutar || 0 })),
         yesilEtiketler: etiketler.map(e => ({ id: Date.now().toString(), urunKodu: e.urunKodu, ad: e.urunAdi, alisFiyati: e.maliyet, tutar: e.maliyet * e.adet })),
-        pesinatlar,
-        havaleler,
-        kartOdemeler: kartOdemeler.map(k => ({
-          ...k,
-          commissionRateSnapshot: k.kesintiOrani || 0,
-          commissionAmountSnapshot: (k.tutar * (k.kesintiOrani || 0)) / 100,
-          netAmountSnapshot: k.tutar - (k.tutar * (k.kesintiOrani || 0)) / 100,
-          snapshotTarihi: new Date().toISOString(),
-        })),
-        pesinatToplam: pesinatToplamHesapla(),
-        havaleToplam: havaleToplamHesapla(),
-        kartBrutToplam: kartBrutToplamHesapla(),
-        kartKesintiToplam: kartKesintiToplamHesapla(),
-        kartNetToplam: kartNetToplamHesapla(),
-        toplamOdenen: toplamOdenenHesapla(),
-        hesabaGecenToplam: hesabaGecenToplamHesapla(),
-        acikHesap: acikHesapHesapla(),
+        pesinatlar, havaleler,
+        kartOdemeler: kartOdemeler.map(k => ({ ...k, commissionRateSnapshot: k.kesintiOrani || 0, commissionAmountSnapshot: (k.tutar * (k.kesintiOrani || 0)) / 100, netAmountSnapshot: k.tutar - (k.tutar * (k.kesintiOrani || 0)) / 100, snapshotTarihi: new Date().toISOString() })),
+        pesinatToplam: pesinatToplamHesapla(), havaleToplam: havaleToplamHesapla(),
+        kartBrutToplam: kartBrutToplamHesapla(), kartKesintiToplam: kartKesintiToplamHesapla(),
+        kartNetToplam: kartNetToplamHesapla(), toplamOdenen: toplamOdenenHesapla(),
+        hesabaGecenToplam: hesabaGecenToplamHesapla(), acikHesap: acikHesapHesapla(),
         odemeDurumu: getOdemeDurumu(),
-        pesinatTutar: pesinatToplamHesapla(),
-        havaleTutar: havaleToplamHesapla(),
+        pesinatTutar: pesinatToplamHesapla(), havaleTutar: havaleToplamHesapla(),
         fatura, ileriTeslim,
         ileriTeslimTarihi: ileriTeslim && ileriTeslimTarihi ? new Date(ileriTeslimTarihi) : null,
+        ileriTeslimOnay: false, // ✅ Yeni alan — ileri teslim onayı ayrı tutulur
         servis,
         odemeYontemi: OdemeYontemi.PESINAT,
         onayDurumu,
@@ -387,7 +371,6 @@ const SatisTeklifPage: React.FC = () => {
 
       const satisDocRef = await addDoc(collection(db, `subeler/${sube.dbPath}/satislar`), satisTeklifi);
 
-      // ✅ Kasaya tahsilat ekle
       const nakitTutar  = pesinatToplamHesapla();
       const havaleTutar = havaleToplamHesapla();
       const kartTutar   = kartBrutToplamHesapla();
@@ -396,41 +379,16 @@ const SatisTeklifPage: React.FC = () => {
         const ilkKart   = kartOdemeler.find(k => k.tutar > 0);
         const ilkHavale = havaleler.find(h => h.tutar > 0);
         const gun = bugunStr();
-
-        await kasaTahsilatEkle({
-          subeKodu: currentUser!.subeKodu,
-          gun,
-          satisId: satisDocRef.id,
-          satisKodu: yeniSatisKodu,
-          musteriIsim: musteriBilgileri.isim || '—',
-          nakitTutar,
-          kartTutar,
-          havaleTutar,
-          yapan: `${currentUser!.ad} ${currentUser!.soyad}`,
-          yapanId: currentUser!.uid || '',
-          aciklama: `Yeni satış — ${yeniSatisKodu}`,
-          satisTarihi: gun,
-          kartBanka:   ilkKart?.banka   ?? undefined,
-          havaleBanka: ilkHavale?.banka ?? undefined,
-        });
+        await kasaTahsilatEkle({ subeKodu: currentUser!.subeKodu, gun, satisId: satisDocRef.id, satisKodu: yeniSatisKodu, musteriIsim: musteriBilgileri.isim || '—', nakitTutar, kartTutar, havaleTutar, yapan: `${currentUser!.ad} ${currentUser!.soyad}`, yapanId: currentUser!.uid || '', aciklama: `Yeni satış — ${yeniSatisKodu}`, satisTarihi: gun, kartBanka: ilkKart?.banka ?? undefined, havaleBanka: ilkHavale?.banka ?? undefined });
       }
 
       if (!onayDurumu) {
         for (const urun of urunler) {
-          await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), {
-            satisKodu: yeniSatisKodu, subeKodu: currentUser!.subeKodu,
-            urunKodu: urun.kod, urunAdi: urun.ad, adet: urun.adet,
-            musteriIsmi: musteriBilgileri.isim,
-            siparisTarihi: new Date(),
-            beklenenTeslimTarihi: teslimatTarihi ? new Date(teslimatTarihi) : new Date(),
-            durum: 'BEKLEMEDE', notlar: servisNotu || '', guncellemeTarihi: new Date()
-          });
+          await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), { satisKodu: yeniSatisKodu, subeKodu: currentUser!.subeKodu, urunKodu: urun.kod, urunAdi: urun.ad, adet: urun.adet, musteriIsmi: musteriBilgileri.isim, siparisTarihi: new Date(), beklenenTeslimTarihi: teslimatTarihi ? new Date(teslimatTarihi) : new Date(), durum: 'BEKLEMEDE', notlar: servisNotu || '', guncellemeTarihi: new Date() });
         }
       }
 
-      await logKaydet(yeniSatisKodu, 'YENİ_SATIS',
-        `Yeni satış. Müşteri: ${musteriBilgileri.isim}, Tutar: ${manuelSatisTutari} TL, Temsilci: ${seciliTemsilci?.ad} ${seciliTemsilci?.soyad}`);
-
+      await logKaydet(yeniSatisKodu, 'YENİ_SATIS', `Yeni satış. Müşteri: ${musteriBilgileri.isim}, Tutar: ${manuelSatisTutari} TL`);
       alert(`✅ Satış başarıyla oluşturuldu!\n\nSatış Kodu: ${yeniSatisKodu}`);
       navigate('/dashboard');
     } catch (error) {
@@ -441,23 +399,14 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  const seciliTemsilciAdi = () => {
-    const temsilci = kullanicilar.find(k => k.id === musteriTemsilcisiId);
-    return temsilci ? temsilci.displayName || `${temsilci.ad} ${temsilci.soyad}` : '';
-  };
-
-  // ✅ Şube prefix'ini al — başlıkta göstermek için
-  const subePrefix = (() => {
-    const sube = getSubeByKod(currentUser?.subeKodu as SubeKodu);
-    return sube ? String(sube.satisKoduPrefix) : '';
-  })();
+  const seciliTemsilciAdi = () => { const temsilci = kullanicilar.find(k => k.id === musteriTemsilcisiId); return temsilci ? temsilci.displayName || `${temsilci.ad} ${temsilci.soyad}` : ''; };
+  const subePrefix = (() => { const sube = getSubeByKod(currentUser?.subeKodu as SubeKodu); return sube ? String(sube.satisKoduPrefix) : ''; })();
 
   return (
     <div className="satis-form-container">
       <div className="satis-form-header">
         <button onClick={() => navigate('/dashboard')} className="btn-back">← Geri</button>
       </div>
-      {/* ✅ Satış kodu kaydet anında atanacak — başlıkta bilgi göster */}
       <h2 className="form-title">
         Yeni Satış Teklif Formu — {satisKodu || <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '0.85em' }}>{subePrefix ? `${subePrefix}-***` : 'Otomatik atanacak'}</span>}
       </h2>
@@ -469,12 +418,18 @@ const SatisTeklifPage: React.FC = () => {
           <h3 className="section-title">Müşteri Bilgileri</h3>
           <div className="form-grid-4">
             <div className="form-field"><label>İsim/Adı *</label><input name="isim" value={musteriBilgileri.isim} onChange={handleMusteriChange} required /></div>
+            {/* ✅ Ünvan alanı */}
+            <div className="form-field"><label>Ünvan</label><input name="unvan" value={(musteriBilgileri as any).unvan || ''} onChange={handleMusteriChange} placeholder="Şirket ünvanı" /></div>
             <div className="form-field"><label>VK No</label><input name="vkNo" value={musteriBilgileri.vkNo} onChange={handleMusteriChange} /></div>
             <div className="form-field"><label>Adres</label><input name="adres" value={musteriBilgileri.adres} onChange={handleMusteriChange} /></div>
             <div className="form-field"><label>VD</label><input name="vd" value={musteriBilgileri.vd} onChange={handleMusteriChange} /></div>
             <div className="form-field"><label>Fatura Adresi</label><input name="faturaAdresi" value={musteriBilgileri.faturaAdresi} onChange={handleMusteriChange} /></div>
             <div className="form-field"><label>Cep Tel</label><input name="cep" value={musteriBilgileri.cep} onChange={handleMusteriChange} /></div>
+            {/* ✅ teslimatAlacakKisi KALDIRILDI — isim alanına yazılır */}
           </div>
+          <small style={{ color: '#9ca3af', fontSize: 11, marginTop: 4, display: 'block' }}>
+            💡 Teslim alacak kişi bilgisi "İsim" alanına yazılabilir.
+          </small>
         </section>
 
         {/* SATIŞ BİLGİLERİ */}
@@ -485,22 +440,19 @@ const SatisTeklifPage: React.FC = () => {
               <label>Müşteri Temsilcisi *</label>
               <select value={musteriTemsilcisiId} onChange={e => setMusteriTemsilcisiId(e.target.value)} required style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, width: '100%', backgroundColor: '#fff' }}>
                 <option value="">Temsilci Seçin</option>
-                {kullanicilar.map(kullanici => (
-                  <option key={kullanici.id} value={kullanici.id}>{kullanici.displayName || `${kullanici.ad} ${kullanici.soyad}`}</option>
-                ))}
+                {kullanicilar.map(k => <option key={k.id} value={k.id}>{k.displayName || `${k.ad} ${k.soyad}`}</option>)}
               </select>
               {musteriTemsilcisiId && <small style={{ color: '#6b7280', marginTop: 4, display: 'block' }}>Seçilen: {seciliTemsilciAdi()}</small>}
             </div>
             <div className="form-field">
-              <label>Teslimat Tarihi *</label>
-              <input type="date" value={teslimatTarihi} onChange={e => setTeslimatTarihi(e.target.value)} required={!ileriTeslim} />
+              <label>Teslimat Tarihi</label>
+              <input type="date" value={teslimatTarihi} min={tarih} onChange={e => setTeslimatTarihi(e.target.value)} style={{ borderColor: teslimatTarihi && !isTeslimatTarihiGecerli() ? '#ef4444' : undefined }} />
+              {teslimatTarihi && !isTeslimatTarihiGecerli() && <small style={{ color: '#ef4444' }}>Teslimat tarihi, satış tarihinden önce olamaz.</small>}
+              {teslimatTarihi && !marsNo && <small style={{ color: '#d97706' }}>⚠️ Teslimat tarihi girildiğinde Mars No zorunludur.</small>}
             </div>
             <div className="form-field">
               <label>Satış Tutarı *</label>
               <input type="number" min="0" value={manuelSatisTutari ?? ''} onChange={e => setManuelSatisTutari(e.target.value === '' ? null : parseFloat(e.target.value) || 0)} placeholder="Satış tutarını girin" style={{ fontWeight: 700, color: '#1d4ed8', borderColor: '#93c5fd' }} required />
-              {manuelSatisTutari !== null && alisToplamHesapla() > 0 && (
-                <small style={{ color: '#6b7280' }}>Alış toplamı: {formatPrice(alisToplamHesapla())}</small>
-              )}
             </div>
           </div>
         </section>
@@ -511,17 +463,35 @@ const SatisTeklifPage: React.FC = () => {
           <div className="form-grid-4">
             <div className="form-field">
               <label>MARS No</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input value={marsNo} onChange={handleMarsNoChange} placeholder="2026XXXXXXXX" maxLength={10} style={{ flex: 1, borderColor: marsNoHata ? '#ef4444' : undefined }} />
-                <button type="button" onClick={fixMarsNo} className="btn-fix">✏️ Düzelt</button>
-              </div>
-              {marsNo && <small style={{ color: isMarsNoGecerli() ? '#16a34a' : '#d97706' }}>{isMarsNoGecerli() ? '✅ Geçerli format' : `⚠️ ${marsNo.length}/10 hane`}</small>}
+              {/* ✅ #3 Mars No: sadece rakam, 10 hane, 2026 başlangıcı */}
+              <input
+                value={marsNo}
+                onChange={handleMarsNoChange}
+                placeholder="2026XXXXXX"
+                maxLength={10}
+                style={{ borderColor: marsNoHata ? '#ef4444' : (marsNo && isMarsNoGecerli(marsNo) ? '#16a34a' : undefined) }}
+              />
+              {marsNo && (
+                <small style={{ color: isMarsNoGecerli(marsNo) ? '#16a34a' : '#ef4444' }}>
+                  {isMarsNoGecerli(marsNo)
+                    ? '✅ Geçerli Mars No'
+                    : marsNo.length < 10
+                      ? `⚠️ ${marsNo.length}/10 hane — 2026 ile başlayan 10 hane gerekli`
+                      : !marsNo.startsWith('2026')
+                        ? '❌ 2026 ile başlamalıdır'
+                        : '❌ Geçersiz format'
+                  }
+                </small>
+              )}
+              <small style={{ color: '#9ca3af', fontSize: 11 }}>2026 ile başlayan 10 haneli sayı (örn: 2026123456)</small>
             </div>
             <div className="form-field"><label>Mağaza Teslimat</label><input value={magaza} onChange={e => setMagaza(e.target.value)} placeholder="Mağaza adı" /></div>
             <div className="form-field">
               <label>Fatura No *</label>
-              <input value={faturaNo} onChange={handleFaturaNoChange} style={{ borderColor: faturaNoHata ? '#ef4444' : undefined }} required />
-              {faturaNoHata && <small style={{ color: '#ef4444' }}>Fatura numarası zorunludur!</small>}
+              <input value={faturaNo} onChange={handleFaturaNoChange} onBlur={handleFaturaNoBlur} placeholder="0001 veya Kesilmedi" style={{ borderColor: faturaNoHata ? '#ef4444' : undefined }} required />
+              {faturaNoHata && <small style={{ color: '#ef4444' }}>{faturaNoHataMesaj}</small>}
+              {!faturaNoHata && faturaNo && isFaturaNoGecerli(faturaNo) && <small style={{ color: '#16a34a' }}>✅ Geçerli format</small>}
+              <small style={{ color: '#9ca3af', fontSize: 11 }}>4 haneli rakam (ör: 0001) veya "Kesilmedi"</small>
             </div>
             <div className="form-field">
               <label>Servis Notu</label>
@@ -563,10 +533,7 @@ const SatisTeklifPage: React.FC = () => {
                 {urunCache[urun.kod?.trim().toUpperCase()] && <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, background: '#dcfce7', color: '#15803d', padding: '2px 7px', borderRadius: 10, fontWeight: 700, pointerEvents: 'none' }}>✓</span>}
                 {urunAramaDropdown?.index === index && urunAramaDropdown.sonuclar.length > 0 && (
                   <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: '#fff', border: '1px solid #d1fae5', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: 220, overflowY: 'auto' }}>
-                    {urunAramaDropdown.sonuclar.map(kod => {
-                      const info = urunCache[kod];
-                      return <div key={kod} onMouseDown={() => urunSecDropdown(index, kod)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f0fdf4', display: 'flex', justifyContent: 'space-between', fontSize: 13 }} onMouseEnter={e => (e.currentTarget.style.background = '#f0fdf4')} onMouseLeave={e => (e.currentTarget.style.background = '')}><span style={{ fontWeight: 700, color: '#065f46' }}>{kod}</span><span style={{ color: '#15803d', fontWeight: 600, fontSize: 12 }}>₺{info?.alis?.toLocaleString('tr-TR') || 0}</span></div>;
-                    })}
+                    {urunAramaDropdown.sonuclar.map(kod => { const info = urunCache[kod]; return <div key={kod} onMouseDown={() => urunSecDropdown(index, kod)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f0fdf4', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ fontWeight: 700, color: '#065f46' }}>{kod}</span><span style={{ color: '#15803d', fontWeight: 600, fontSize: 12 }}>₺{info?.alis?.toLocaleString('tr-TR') || 0}</span></div>; })}
                   </div>
                 )}
               </div>
@@ -584,25 +551,12 @@ const SatisTeklifPage: React.FC = () => {
             {yesilEtiketToplamHesapla() > 0 && <div style={{ color: '#15803d' }}>Yeşil Etiket: +{formatPrice(yesilEtiketToplamHesapla())}</div>}
             <div style={{ fontWeight: 700 }}>TOPLAM MALİYET = {formatPrice(toplamMaliyetHesapla())}</div>
           </div>
-          {eslesenYesilEtiketler().length > 0 && (
-            <div className="yesil-etiket-ozet">
-              <div className="yesil-etiket-ozet-title">🟢 Yeşil Etiket Özel Fiyatları</div>
-              {eslesenYesilEtiketler().map((e, i) => (
-                <div key={i} className="yesil-etiket-ozet-row">
-                  <span>{e.urunKodu}{e.urunAdi ? ` — ${e.urunAdi}` : ''}</span>
-                  <span style={{ color: '#15803d', fontWeight: 600 }}>Özel: {formatPrice(e.maliyet)} × {e.adet} = {formatPrice(e.maliyet * e.adet)}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </section>
 
         {/* KAMPANYALAR */}
         <section className="form-section">
           <h3 className="section-title">Kampanyalar</h3>
-          {kampanyaListesi.length === 0 ? (
-            <div className="empty-state"><span>Aktif kampanya bulunamadı.</span></div>
-          ) : (
+          {kampanyaListesi.length === 0 ? <div className="empty-state">Aktif kampanya bulunamadı.</div> : (
             <div className="kampanya-secim-grid">
               {kampanyaListesi.map(k => (
                 <label key={k.id} className={`kampanya-secim-item ${seciliKampanyaIds.includes(k.id!) ? 'selected' : ''}`}>
@@ -616,22 +570,13 @@ const SatisTeklifPage: React.FC = () => {
               ))}
             </div>
           )}
-          {seciliKampanyalar.length > 0 && (
-            <div className="secili-kampanya-ozet">
-              ✅ {seciliKampanyalar.map(k => k.ad).join(', ')}
-              {kampanyaToplamiHesapla() > 0 && <span style={{ marginLeft: 12, color: '#15803d', fontWeight: 700 }}>| −{formatPrice(kampanyaToplamiHesapla())}</span>}
-            </div>
-          )}
         </section>
 
         {/* ÖDEME BİLGİLERİ */}
         <section className="form-section">
           <h3 className="section-title">💳 Ödeme Bilgileri</h3>
           <div className="odeme-blok">
-            <div className="odeme-blok-header">
-              <div className="odeme-blok-title">💵 Peşinat — Kasaya Yansır</div>
-              <button type="button" onClick={pesinatEkle} className="btn-add-sm">+ Peşinat Ekle</button>
-            </div>
+            <div className="odeme-blok-header"><div className="odeme-blok-title">💵 Peşinat</div><button type="button" onClick={pesinatEkle} className="btn-add-sm">+ Peşinat Ekle</button></div>
             {pesinatlar.map(p => (
               <div key={p.id} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'center' }}>
                 <input type="number" min="0" placeholder="Tutar (TL)" value={p.tutar || ''} onChange={e => handlePesinatChange(p.id, 'tutar', e.target.value)} className="odeme-input" style={{ flex: 1 }} />
@@ -644,15 +589,10 @@ const SatisTeklifPage: React.FC = () => {
           </div>
 
           <div className="odeme-blok">
-            <div className="odeme-blok-header">
-              <div className="odeme-blok-title">🏦 Havale — Kasaya Yansımaz</div>
-              <button type="button" onClick={havaleEkle} className="btn-add-sm">+ Havale Ekle</button>
-            </div>
+            <div className="odeme-blok-header"><div className="odeme-blok-title">🏦 Havale</div><button type="button" onClick={havaleEkle} className="btn-add-sm">+ Havale Ekle</button></div>
             {havaleler.map(h => (
               <div key={h.id} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'center' }}>
-                <select value={h.banka} onChange={e => handleHavaleChange(h.id, 'banka', e.target.value)} className="odeme-input" style={{ flex: 2 }}>
-                  {HAVALE_BANKALARI.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
+                <select value={h.banka} onChange={e => handleHavaleChange(h.id, 'banka', e.target.value)} className="odeme-input" style={{ flex: 2 }}>{HAVALE_BANKALARI.map(b => <option key={b} value={b}>{b}</option>)}</select>
                 <input type="number" min="0" placeholder="Tutar" value={h.tutar || ''} onChange={e => handleHavaleChange(h.id, 'tutar', e.target.value)} className="odeme-input" style={{ flex: 1 }} />
                 <button type="button" onClick={() => havaleSil(h.id)} className="btn-remove">Sil</button>
               </div>
@@ -662,10 +602,7 @@ const SatisTeklifPage: React.FC = () => {
           </div>
 
           <div className="odeme-blok">
-            <div className="odeme-blok-header">
-              <div className="odeme-blok-title">💳 Kart Ödemeleri</div>
-              <button type="button" onClick={kartEkle} className="btn-add-sm">+ Kart Ekle</button>
-            </div>
+            <div className="odeme-blok-header"><div className="odeme-blok-title">💳 Kart Ödemeleri</div><button type="button" onClick={kartEkle} className="btn-add-sm">+ Kart Ekle</button></div>
             {kartOdemeler.map((kart, index) => {
               const kesintiOrani = kart.kesintiOrani || 0;
               const net = kart.tutar - (kart.tutar * kesintiOrani) / 100;
@@ -700,28 +637,8 @@ const SatisTeklifPage: React.FC = () => {
             const odenen = toplamOdenenHesapla();
             const tutar  = manuelSatisTutari ?? 0;
             const fark   = odenen - tutar;
-            if (tutar > 0 && fark > 0) {
-              return (
-                <div style={{
-                  margin: '8px 0', padding: '10px 14px', borderRadius: 8,
-                  background: '#fef2f2', border: '2px solid #dc2626',
-                  color: '#dc2626', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-                }}>
-                  🚫 Toplam ödeme ({formatPrice(odenen)}) satış tutarını ({formatPrice(tutar)}) <strong>{formatPrice(fark)}</strong> aşıyor! Kayıt engellenmiştir.
-                </div>
-              );
-            }
-            if (tutar > 0 && odenen > 0 && fark === 0) {
-              return (
-                <div style={{
-                  margin: '8px 0', padding: '8px 14px', borderRadius: 8,
-                  background: '#f0fdf4', border: '1px solid #86efac',
-                  color: '#15803d', fontWeight: 600, fontSize: 13,
-                }}>
-                  ✅ Ödeme tam — satış tutarı karşılandı.
-                </div>
-              );
-            }
+            if (tutar > 0 && fark > 0) return <div style={{ margin: '8px 0', padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '2px solid #dc2626', color: '#dc2626', fontWeight: 700, fontSize: 13 }}>🚫 Toplam ödeme ({formatPrice(odenen)}) satış tutarını ({formatPrice(tutar)}) <strong>{formatPrice(fark)}</strong> aşıyor!</div>;
+            if (tutar > 0 && odenen > 0 && fark === 0) return <div style={{ margin: '8px 0', padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', fontWeight: 600, fontSize: 13 }}>✅ Ödeme tam — satış tutarı karşılandı.</div>;
             return null;
           })()}
 
@@ -741,12 +658,7 @@ const SatisTeklifPage: React.FC = () => {
 
         <div className="form-actions">
           <button type="button" onClick={() => navigate('/dashboard')} className="btn-cancel">İptal</button>
-          <button
-            type="submit"
-            className="btn-submit"
-            disabled={loading || toplamOdenenHesapla() > (manuelSatisTutari ?? 0)}
-            title={toplamOdenenHesapla() > (manuelSatisTutari ?? 0) ? 'Toplam ödeme satış tutarını aşıyor' : ''}
-          >
+          <button type="submit" className="btn-submit" disabled={loading || toplamOdenenHesapla() > (manuelSatisTutari ?? 0)}>
             {loading ? 'Kaydediliyor...' : 'Kaydet'}
           </button>
         </div>

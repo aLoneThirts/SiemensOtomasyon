@@ -27,9 +27,8 @@ const ZAMAN_OPTIONS = [
 
 type ZamanType = typeof ZAMAN_OPTIONS[number]['value'];
 
-// Renk paleti
 const PIE_COLORS = [
-  '#0d6e9c', '#2e7d5e', '#c28f2e', '#b34a5c', '#3b7b9c', 
+  '#0d6e9c', '#2e7d5e', '#c28f2e', '#b34a5c', '#3b7b9c',
   '#7e8b9c', '#8a6d3b', '#5e4b8c', '#d97706', '#059669'
 ];
 
@@ -50,13 +49,11 @@ const SUBE_RENKLER: Record<string, string> = {
   SOGANLIK: '#b34a5c',
 };
 
-// Yardımcı fonksiyonlar
 const getSubeRenk = (kod: string): string => SUBE_RENKLER[kod] || '#7e8b9c';
 const isAdmin = (role: any): boolean => role && String(role).toUpperCase().trim() === 'ADMIN';
 const ayKey = (d: Date = new Date()): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const magazaDocId = (subeKod: string, ay: string): string => `${subeKod}-${ay}`;
 
-// Formatlama fonksiyonları
 const formatTL = (n: number): string =>
   new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n);
 
@@ -71,10 +68,6 @@ const formatKisa = (n: number): string => {
 // ============================================================================
 // BİLEŞENLER
 // ============================================================================
-
-// ----------------------------------------------------------------------------
-// Custom Tooltip
-// ----------------------------------------------------------------------------
 const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -89,9 +82,6 @@ const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
   );
 };
 
-// ----------------------------------------------------------------------------
-// KPI Kartı (5'li Grid için)
-// ----------------------------------------------------------------------------
 const KpiCard: React.FC<{
   icon: string;
   label: string;
@@ -117,37 +107,29 @@ const KpiCard: React.FC<{
   </div>
 );
 
-// ----------------------------------------------------------------------------
-// Satıcı Pie Chart
-// ----------------------------------------------------------------------------
-// ─── SATICI PERFORMANS PIE CHART (DÜZELTİLDİ) ──────────────────────────────
 const SaticiPieChart: React.FC<{ data: any[] }> = ({ data }) => {
   const [activeIndex, setActiveIndex] = useState<number>(-1);
   const [activeItem, setActiveItem] = useState<any>(null);
-  
+
   const onPieEnter = (_: any, index: number): void => {
     setActiveIndex(index);
     setActiveItem(data[index]);
   };
-  
+
   const onPieLeave = (): void => {
     setActiveIndex(-1);
     setActiveItem(null);
   };
-  
+
   if (data.length === 0) {
     return <div className="cp-empty-state">Satıcı verisi bulunamadı</div>;
   }
-  
+
   const toplamCiro: number = data.reduce((sum, item) => sum + item.value, 0);
-  
-  // Aktif item yoksa toplam göster, varsa o satıcının bilgilerini göster
   const displayName = activeItem ? activeItem.name : 'Toplam Ciro';
   const displayValue = activeItem ? activeItem.value : toplamCiro;
-  const displaySub = activeItem 
-    ? `${activeItem.satisSayisi} satış` 
-    : `${data.length} satıcı`;
-  
+  const displaySub = activeItem ? `${activeItem.satisSayisi} satış` : `${data.length} satıcı`;
+
   return (
     <div className="cp-pie-container">
       <ResponsiveContainer width="100%" height={320}>
@@ -166,49 +148,31 @@ const SaticiPieChart: React.FC<{ data: any[] }> = ({ data }) => {
             onMouseLeave={onPieLeave}
           >
             {data.map((entry, index) => (
-              <Cell 
-                key={`cell-${index}`} 
+              <Cell
+                key={`cell-${index}`}
                 fill={entry.renk || PIE_COLORS[index % PIE_COLORS.length]}
                 opacity={activeIndex === -1 || activeIndex === index ? 1 : 0.7}
               />
             ))}
           </Pie>
-          <Tooltip 
-            formatter={(value: any, name: any, props: any) => {
-              // Tooltip'te de isim ve para göster
-              return [`${formatTL(value)}`, props.payload.name];
-            }}
-            contentStyle={{
-              background: 'white',
-              border: '1px solid #e2e8f0',
-              borderRadius: 8,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-            }}
+          <Tooltip
+            formatter={(value: any, name: any, props: any) => [`${formatTL(value)}`, props.payload.name]}
+            contentStyle={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
           />
         </PieChart>
       </ResponsiveContainer>
-      
-      {/* Merkezde - Hoverda satıcı adı ve parası, normalde toplam */}
       <div className="cp-pie-center">
         <div className="cp-pie-center-label">{displayName}</div>
         <div className="cp-pie-center-value">{formatKisa(displayValue)}</div>
         <div className="cp-pie-center-sub">{displaySub}</div>
       </div>
-      
-      {/* Legend */}
       <div className="cp-pie-legend">
         {data.slice(0, 5).map((item, i) => (
-          <div 
-            key={i} 
+          <div
+            key={i}
             className={`cp-legend-item ${activeIndex === i ? 'active' : ''}`}
-            onMouseEnter={() => {
-              setActiveIndex(i);
-              setActiveItem(item);
-            }}
-            onMouseLeave={() => {
-              setActiveIndex(-1);
-              setActiveItem(null);
-            }}
+            onMouseEnter={() => { setActiveIndex(i); setActiveItem(item); }}
+            onMouseLeave={() => { setActiveIndex(-1); setActiveItem(null); }}
           >
             <span className="cp-legend-dot" style={{ background: item.renk || PIE_COLORS[i] }} />
             <span className="cp-legend-label">{item.name}</span>
@@ -219,9 +183,7 @@ const SaticiPieChart: React.FC<{ data: any[] }> = ({ data }) => {
     </div>
   );
 };
-// ----------------------------------------------------------------------------
-// Hedef Item
-// ----------------------------------------------------------------------------
+
 const HedefItem: React.FC<{
   kod: string;
   ad: string;
@@ -239,7 +201,6 @@ const HedefItem: React.FC<{
   kaydediliyor: boolean;
 }> = ({ kod, ad, renk, ciro, hedef, yuzde, isAdmin, duzenle, onDuzenle, girdi, onGirdi, onKaydet, onIptal, kaydediliyor }) => {
   const editing = duzenle === kod;
-  
   return (
     <div className="cp-hedef-item">
       <div className="cp-hedef-top">
@@ -270,11 +231,7 @@ const HedefItem: React.FC<{
           ) : (
             <button
               className={`cp-hedef-btn ${hedef > 0 ? 'dolu' : 'bos'}`}
-              onClick={() => {
-                if (!isAdmin) return;
-                onDuzenle(kod);
-                onGirdi(hedef > 0 ? String(hedef) : '');
-              }}
+              onClick={() => { if (!isAdmin) return; onDuzenle(kod); onGirdi(hedef > 0 ? String(hedef) : ''); }}
               style={{ cursor: isAdmin ? 'pointer' : 'default' }}
             >
               {hedef > 0 ? formatKisa(hedef) : (isAdmin ? '+ Hedef Gir' : '—')}
@@ -286,47 +243,29 @@ const HedefItem: React.FC<{
       <div className="cp-hedef-progress">
         <div
           className="cp-hedef-fill"
-          style={{
-            width: `${yuzde}%`,
-            background: `linear-gradient(90deg, ${renk}80, ${renk})`,
-          }}
+          style={{ width: `${yuzde}%`, background: `linear-gradient(90deg, ${renk}80, ${renk})` }}
         />
       </div>
-      {hedef > 0 && (
-        <div className="cp-hedef-yuzde">
-          %{yuzde.toFixed(0)} tamamlandı
-        </div>
-      )}
+      {hedef > 0 && <div className="cp-hedef-yuzde">%{yuzde.toFixed(0)} tamamlandı</div>}
     </div>
   );
 };
 
-// ----------------------------------------------------------------------------
-// Satıcı Satırı (Liste için)
-// ----------------------------------------------------------------------------
 const SaticiRow: React.FC<{ satici: any; rank: number }> = ({ satici, rank }) => {
   const initials = satici.ad.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
   const rankEmoji = ['🥇', '🥈', '🥉'];
-  
   return (
     <div className={`cp-satici-row ${rank === 0 ? 'cp-satici-row--top' : ''}`}>
       <div className="cp-satici-rank">
-        {rank < 3 ? (
-          <span className="cp-rank-emoji">{rankEmoji[rank]}</span>
-        ) : (
-          <span className="cp-rank-sayi">#{rank + 1}</span>
-        )}
+        {rank < 3 ? <span className="cp-rank-emoji">{rankEmoji[rank]}</span> : <span className="cp-rank-sayi">#{rank + 1}</span>}
       </div>
-      
       <div className="cp-satici-avatar" style={{ background: AVATAR_GRADIENTS[rank % AVATAR_GRADIENTS.length] }}>
         {initials}
       </div>
-      
       <div className="cp-satici-info">
         <div className="cp-satici-ad">{satici.ad}</div>
         <div className="cp-satici-sube">{satici.subeAd}</div>
       </div>
-      
       <div className="cp-satici-stats">
         <div className="cp-satici-stat">
           <span className="cp-stat-label">Ciro</span>
@@ -343,20 +282,12 @@ const SaticiRow: React.FC<{ satici: any; rank: number }> = ({ satici, rank }) =>
           <span className="cp-stat-value">{satici.satisSayisi}</span>
         </div>
       </div>
-      
       <div className="cp-satici-hedef">
         <div className="cp-hedef-bar">
-          <div
-            className="cp-hedef-bar-fill"
-            style={{
-              width: `${satici.yuzde}%`,
-              background: `linear-gradient(90deg, #0d6e9c, #3b7b9c)`,
-            }}
-          />
+          <div className="cp-hedef-bar-fill" style={{ width: `${satici.yuzde}%`, background: 'linear-gradient(90deg, #0d6e9c, #3b7b9c)' }} />
         </div>
         <div className="cp-hedef-oran">{satici.yuzde.toFixed(0)}%</div>
       </div>
-      
       <div className="cp-satici-yildiz">
         <div className="cp-yildizlar">
           {[...Array(5)].map((_, i) => (
@@ -376,23 +307,19 @@ const CiroPerformansPage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
-  // State'ler
   const [satislar, setSatislar] = useState<SatisTeklifFormu[]>([]);
   const [saticilar, setSaticilar] = useState<User[]>([]);
-  // ⚠️ urunler ve stoklar state'leri korunuyor - kasa stok sistemiyle bağlantılı
   const [urunler, setUrunler] = useState<any[]>([]);
   const [stoklar, setStoklar] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [zaman, setZaman] = useState<ZamanType>('aylik');
   const [seciliSube, setSeciliSube] = useState<SubeKodu | 'tumu'>('tumu');
-  
-  // Hedef state'leri
+
   const [magazaHedefler, setMagazaHedefler] = useState<Record<string, number>>({});
   const [hedefDuzenle, setHedefDuzenle] = useState<string | null>(null);
   const [hedefGirdi, setHedefGirdi] = useState<string>('');
   const [hedefKaydediliyor, setHedefKaydediliyor] = useState<boolean>(false);
 
-  // Hesaplanan değerler
   const userIsAdmin: boolean = useMemo(() => isAdmin(currentUser?.role), [currentUser]);
   const simdi: Date = useMemo(() => new Date(), []);
   const buAy: string = useMemo(() => ayKey(simdi), [simdi]);
@@ -402,53 +329,29 @@ const CiroPerformansPage: React.FC = () => {
     return seciliSube === 'tumu' ? null : seciliSube as SubeKodu;
   }, [userIsAdmin, seciliSube, currentUser]);
 
-  // Hoş geldin mesajı
-  const userName: string = currentUser ? `${currentUser.ad || 'Berat'} ${currentUser.soyad || ''}` : 'Berat';
-  const today: string = new Date().toLocaleDateString('tr-TR', { 
-    day: 'numeric', 
-    month: 'long', 
-    year: 'numeric',
-    weekday: 'long'
-  });
+  const userName: string = currentUser ? `${currentUser.ad || 'Kullanıcı'} ${currentUser.soyad || ''}` : 'Kullanıcı';
+  const today: string = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
 
-  // ==========================================================================
-  // VERİ ÇEKME (⚠️ Tüm fetch'ler korunuyor - kasa stok sistemi bağlantısı)
-  // ==========================================================================
   useEffect(() => {
-    if (!currentUser) {
-      navigate('/login');
-      return;
-    }
-    
+    if (!currentUser) { navigate('/login'); return; }
     const fetchData = async (): Promise<void> => {
       setLoading(true);
       try {
-        // Tüm şubelerden satışları çek
         const satisPromises = SUBELER.map(sube =>
           getDocs(collection(db, `subeler/${sube.dbPath}/satislar`))
-            .then(snap => snap.docs.map(d => ({ 
-              id: d.id, 
-              ...d.data(), 
-              subeKodu: sube.kod,
-              tarih: d.data().tarih?.toDate?.() || new Date()
-            } as SatisTeklifFormu)))
+            .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data(), subeKodu: sube.kod, tarih: d.data().tarih?.toDate?.() || new Date() } as SatisTeklifFormu)))
             .catch(() => [] as SatisTeklifFormu[])
         );
-        
-        // ⚠️ Ürünleri çek - kasa stok sistemiyle bağlantılı, korunuyor
         const urunPromises = SUBELER.map(sube =>
           getDocs(collection(db, `subeler/${sube.dbPath}/urunler`))
             .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data(), subeKodu: sube.kod })))
             .catch(() => [])
         );
-        
-        // ⚠️ Stokları çek - kasa stok sistemiyle bağlantılı, korunuyor
         const stokPromises = SUBELER.map(sube =>
           getDocs(collection(db, `subeler/${sube.dbPath}/stoklar`))
             .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data(), subeKodu: sube.kod })))
             .catch(() => [])
         );
-        
         const [satisResults, usersSnap, magazaSnap, urunResults, stokResults] = await Promise.all([
           Promise.all(satisPromises),
           getDocs(collection(db, 'users')),
@@ -456,78 +359,47 @@ const CiroPerformansPage: React.FC = () => {
           Promise.all(urunPromises),
           Promise.all(stokPromises),
         ]);
-        
         setSatislar(satisResults.flat());
         setUrunler(urunResults.flat());
         setStoklar(stokResults.flat());
-        
-        // Kullanıcıları çek
         const users = usersSnap.docs.map(d => {
           const data = d.data();
-          return { 
-            uid: d.id, 
-            ...data, 
-            hedefler: data.hedefler || {}, 
-            hedef: data.hedef || 0 
-          } as User;
+          return { uid: d.id, ...data, hedefler: data.hedefler || {}, hedef: data.hedef || 0 } as User;
         });
         setSaticilar(users.filter(u => !isAdmin(u.role)));
-        
-        // Mağaza hedeflerini çek
         const mh: Record<string, number> = {};
-        magazaSnap.forEach(d => {
-          mh[d.id] = d.data().hedef || 0;
-        });
+        magazaSnap.forEach(d => { mh[d.id] = d.data().hedef || 0; });
         setMagazaHedefler(mh);
-        
       } catch (err) {
         console.error('Veri çekme hatası:', err);
       } finally {
         setLoading(false);
       }
     };
-    
     fetchData();
   }, [currentUser, navigate]);
 
-  // ==========================================================================
-  // YARDIMCI FONKSİYONLAR
-  // ==========================================================================
   const toDate = useCallback((d: any): Date => {
     try {
       if (!d) return new Date(0);
       if (typeof d.toDate === 'function') return d.toDate();
       if (d?.seconds) return new Date(d.seconds * 1000);
       return new Date(d);
-    } catch {
-      return new Date(0);
-    }
+    } catch { return new Date(0); }
   }, []);
 
-  // ==========================================================================
-  // FİLTRELENMİŞ VERİLER
-  // ==========================================================================
   const zamanFiltreliSatislar = useMemo((): SatisTeklifFormu[] => {
     const now = new Date();
     return satislar.filter(s => {
       if (!s.tarih) return false;
       const t = toDate(s.tarih);
       if (isNaN(t.getTime())) return false;
-      
       switch (zaman) {
-        case 'gunluk':
-          return t.toDateString() === now.toDateString();
-        case 'haftalik': {
-          const haftaOnce = new Date(now);
-          haftaOnce.setDate(now.getDate() - 7);
-          return t >= haftaOnce;
-        }
-        case 'aylik':
-          return t.getMonth() === now.getMonth() && t.getFullYear() === now.getFullYear();
-        case 'yillik':
-          return t.getFullYear() === now.getFullYear();
-        default:
-          return true;
+        case 'gunluk': return t.toDateString() === now.toDateString();
+        case 'haftalik': { const h = new Date(now); h.setDate(now.getDate() - 7); return t >= h; }
+        case 'aylik': return t.getMonth() === now.getMonth() && t.getFullYear() === now.getFullYear();
+        case 'yillik': return t.getFullYear() === now.getFullYear();
+        default: return true;
       }
     });
   }, [satislar, zaman, toDate]);
@@ -542,197 +414,74 @@ const CiroPerformansPage: React.FC = () => {
     [saticilar, aktifSube]
   );
 
-  // ==========================================================================
-  // KPI HESAPLAMALARI (5'li - Ürün Çeşidi ve Azalan Stok kartları kaldırıldı)
-  // ==========================================================================
   const kpiList = useMemo((): any[] => {
-    const ciro: number = filtreliSatislar.reduce((toplam, satis) => toplam + (satis.toplamTutar || 0), 0);
-    const kar: number = filtreliSatislar.reduce((toplam, satis) => toplam + (satis.zarar ?? 0), 0);
-    const adet: number = filtreliSatislar.length;
-    
-    // Geçen dönem karşılaştırması
+    const ciro = filtreliSatislar.reduce((t, s) => t + (s.toplamTutar || 0), 0);
+    const kar = filtreliSatislar.reduce((t, s) => t + (s.zarar ?? 0), 0);
+    const adet = filtreliSatislar.length;
     const oncekiDonemSatislar = satislar.filter(s => {
       const t = toDate(s.tarih);
       const now = new Date();
-      if (zaman === 'aylik') {
-        return t.getMonth() === now.getMonth() - 1 && t.getFullYear() === now.getFullYear();
-      }
+      if (zaman === 'aylik') return t.getMonth() === now.getMonth() - 1 && t.getFullYear() === now.getFullYear();
       return false;
     });
-    const oncekiCiro: number = oncekiDonemSatislar.reduce((toplam, s) => toplam + (s.toplamTutar || 0), 0);
-    const ciroDegisim: number = oncekiCiro > 0 ? ((ciro - oncekiCiro) / oncekiCiro) * 100 : 0;
-    
-    // Ortalama satış tutarı
-    const ortalamaSatis: number = adet > 0 ? ciro / adet : 0;
-    
-    // Karlılık oranı
-    const karMarji: number = ciro > 0 ? (kar / ciro) * 100 : 0;
-    
-    // Aktif satıcı sayısı
-    const aktifSaticiSayisi: number = filtreliSaticilar.length;
-    
-    // Bugünkü satış
-    const bugunSatis: number = satislar.filter(s => {
-      const t = toDate(s.tarih);
-      return t.toDateString() === new Date().toDateString();
-    }).length;
-    
+    const oncekiCiro = oncekiDonemSatislar.reduce((t, s) => t + (s.toplamTutar || 0), 0);
+    const ciroDegisim = oncekiCiro > 0 ? ((ciro - oncekiCiro) / oncekiCiro) * 100 : 0;
+    const ortalamaSatis = adet > 0 ? ciro / adet : 0;
+    const karMarji = ciro > 0 ? (kar / ciro) * 100 : 0;
+    const aktifSaticiSayisi = filtreliSaticilar.length;
+    const bugunSatis = satislar.filter(s => { const t = toDate(s.tarih); return t.toDateString() === new Date().toDateString(); }).length;
     return [
-      {
-        icon: '💰',
-        label: 'Toplam Ciro',
-        value: formatTL(ciro),
-        sub: `${adet} satış`,
-        trend: ciroDegisim,
-        color: '#0d6e9c'
-      },
-      {
-        icon: kar >= 0 ? '📈' : '📉',
-        label: 'Net Kâr/Zarar',
-        value: formatTL(kar),
-        sub: `%${karMarji.toFixed(1)} marj`,
-        color: kar >= 0 ? '#2e7d5e' : '#b34a5c'
-      },
-      {
-        icon: '🛒',
-        label: 'Ortalama Satış',
-        value: formatTL(ortalamaSatis),
-        sub: 'işlem başına',
-        color: '#c28f2e'
-      },
-      {
-        icon: '👥',
-        label: 'Aktif Satıcı',
-        value: aktifSaticiSayisi.toString(),
-        sub: 'kişi',
-        color: '#3b7b9c'
-      },
-      {
-        icon: '📅',
-        label: 'Bugünkü Satış',
-        value: bugunSatis.toString(),
-        sub: 'işlem',
-        color: '#5e4b8c'
-      }
+      { icon: '💰', label: 'Toplam Ciro', value: formatTL(ciro), sub: `${adet} satış`, trend: ciroDegisim, color: '#0d6e9c' },
+      { icon: kar >= 0 ? '📈' : '📉', label: 'Net Kâr/Zarar', value: formatTL(kar), sub: `%${karMarji.toFixed(1)} marj`, color: kar >= 0 ? '#2e7d5e' : '#b34a5c' },
+      { icon: '🛒', label: 'Ortalama Satış', value: formatTL(ortalamaSatis), sub: 'işlem başına', color: '#c28f2e' },
+      { icon: '👥', label: 'Aktif Satıcı', value: aktifSaticiSayisi.toString(), sub: 'kişi', color: '#3b7b9c' },
+      { icon: '📅', label: 'Bugünkü Satış', value: bugunSatis.toString(), sub: 'işlem', color: '#5e4b8c' },
     ];
   }, [filtreliSatislar, satislar, filtreliSaticilar, zaman, toDate]);
 
-  // ==========================================================================
-  // SATICI PIE VERİSİ
-  // ==========================================================================
-// ─── SATICI PIE VERİSİ (DÜZELTİLDİ) ────────────────────────────────────────
-const saticiPieData = useMemo((): any[] => {
-  return filtreliSaticilar
-    .map(satici => {
-      const ad: string = `${satici.ad} ${satici.soyad}`;
-      const satislari: SatisTeklifFormu[] = filtreliSatislar.filter(s => 
-        s.musteriTemsilcisiId === satici.uid || 
-        s.musteriTemsilcisiAd === ad || 
-        s.olusturanKullanici === ad
-      );
-      
-      const ciro: number = satislari.reduce((toplam, s) => toplam + (s.toplamTutar || 0), 0);
-      const kar: number = satislari.reduce((toplam, s) => toplam + (s.zarar ?? 0), 0);
-      
-      return {
-        name: satici.ad,  // Sadece isim
-        fullName: ad,      // Tam ad
-        value: ciro,
-        renk: PIE_COLORS[filtreliSaticilar.indexOf(satici) % PIE_COLORS.length],
-        satisSayisi: satislari.length,
-        kar: kar
-      };
-    })
-    .filter(item => item.value > 0)
-    .sort((a, b) => b.value - a.value);
-}, [filtreliSaticilar, filtreliSatislar]);
+  const saticiPieData = useMemo((): any[] => {
+    return filtreliSaticilar.map(satici => {
+      const ad = `${satici.ad} ${satici.soyad}`;
+      const satislari = filtreliSatislar.filter(s => s.musteriTemsilcisiId === satici.uid || s.musteriTemsilcisiAd === ad || s.olusturanKullanici === ad);
+      const ciro = satislari.reduce((t, s) => t + (s.toplamTutar || 0), 0);
+      const kar = satislari.reduce((t, s) => t + (s.zarar ?? 0), 0);
+      return { name: satici.ad, fullName: ad, value: ciro, renk: PIE_COLORS[filtreliSaticilar.indexOf(satici) % PIE_COLORS.length], satisSayisi: satislari.length, kar };
+    }).filter(item => item.value > 0).sort((a, b) => b.value - a.value);
+  }, [filtreliSaticilar, filtreliSatislar]);
 
-  // ==========================================================================
-  // ÜRÜN ANALİZİ (TÜM ŞUBELER) - ⚠️ Korunuyor, kasa stok bağlantısı
-  // ==========================================================================
-// Ürün analizi - TL değerleri yüksek göster
-const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } => {
-  // En çok satan ürünler
-  const urunSatis: Record<string, { 
-    ad: string; 
-    adet: number; 
-    ciro: number;
-    sube: string;
-    urunKodu: string;
-  }> = {};
-  
-  filtreliSatislar.forEach(satis => {
-    if (satis.urunler && Array.isArray(satis.urunler)) {
-      satis.urunler.forEach((urun: any) => {
-        const kod: string = urun.urunKodu || urun.kod || 'bilinmeyen';
-        const urunAdi: string = urun.urunAdi || urun.ad || urun.isim || urun.urunKodu || urun.kod || 'Ürün';
-        const birimFiyat: number = urun.fiyat || urun.birimFiyat || 0;
-        const adet: number = urun.adet || 1;
-        
-        if (!urunSatis[kod]) {
-          urunSatis[kod] = { 
-            ad: urunAdi, 
-            adet: 0, 
-            ciro: 0,
-            sube: satis.subeKodu || '',
-            urunKodu: kod
-          };
-        }
-        urunSatis[kod].adet += adet;
-        urunSatis[kod].ciro += birimFiyat * adet;
-      });
-    }
-  });
-    
-  const enCokSatanlar = Object.values(urunSatis)
-    .filter(item => item.adet > 0)
-    .sort((a, b) => b.ciro - a.ciro)
-    .slice(0, 5)
-    .map((item, index) => ({
-      ...item,
-      sira: index + 1,
-      subeAd: getSubeByKod(item.sube as SubeKodu)?.ad?.replace(' Şubesi', '') || item.sube,
-      // TL formatını önceden hesapla
-      ciroTL: formatTL(item.ciro),
-      ciroKisa: formatKisa(item.ciro)
-    }));
-      console.log('🔥 En çok satanlar:', enCokSatanlar);
-    // TÜM ŞUBELERDEKİ AZALAN STOKLAR
-     const azalanStoklar: any[] = [];
-  
-  SUBELER.forEach(sube => {
-    const subeStoklari = stoklar.filter(s => s.subeKodu === sube.kod);
-    
-    subeStoklari.forEach(stok => {
-      const adet: number = stok.adet || 0;
-      const kritikSeviye: number = stok.kritikSeviye || 10;
-      
-      if (adet < kritikSeviye) {
-        azalanStoklar.push({
-          sube: sube.ad.replace(' Şubesi', ''),
-          subeKod: sube.kod,
-          urunKodu: stok.urunKodu || stok.id,
-          urunAdi: stok.urunAdi || stok.urunKodu || 'Ürün',
-          adet: adet,
-          kritikSeviye: kritikSeviye,
-          renk: SUBE_RENKLER[sube.kod] || '#64748b'
+  const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } => {
+    const urunSatis: Record<string, { ad: string; adet: number; ciro: number; sube: string; urunKodu: string }> = {};
+    filtreliSatislar.forEach(satis => {
+      if (satis.urunler && Array.isArray(satis.urunler)) {
+        satis.urunler.forEach((urun: any) => {
+          const kod = urun.urunKodu || urun.kod || 'bilinmeyen';
+          const urunAdi = urun.urunAdi || urun.ad || urun.isim || urun.urunKodu || urun.kod || 'Ürün';
+          const birimFiyat = urun.fiyat || urun.birimFiyat || 0;
+          const adet = urun.adet || 1;
+          if (!urunSatis[kod]) urunSatis[kod] = { ad: urunAdi, adet: 0, ciro: 0, sube: satis.subeKodu || '', urunKodu: kod };
+          urunSatis[kod].adet += adet;
+          urunSatis[kod].ciro += birimFiyat * adet;
         });
       }
     });
-  });
-  
-  azalanStoklar.sort((a, b) => a.adet - b.adet);
-  
-  return { enCokSatanlar, azalanStoklar };
-}, [filtreliSatislar, stoklar]);
-  // ==========================================================================
-  // GÜNLÜK SATIŞ VERİSİ
-  // ==========================================================================
+    const enCokSatanlar = Object.values(urunSatis).filter(item => item.adet > 0).sort((a, b) => b.ciro - a.ciro).slice(0, 5)
+      .map((item, index) => ({ ...item, sira: index + 1, subeAd: getSubeByKod(item.sube as SubeKodu)?.ad?.replace(' Şubesi', '') || item.sube, ciroTL: formatTL(item.ciro), ciroKisa: formatKisa(item.ciro) }));
+    const azalanStoklar: any[] = [];
+    SUBELER.forEach(sube => {
+      stoklar.filter(s => s.subeKodu === sube.kod).forEach(stok => {
+        const adet = stok.adet || 0;
+        const kritikSeviye = stok.kritikSeviye || 10;
+        if (adet < kritikSeviye) azalanStoklar.push({ sube: sube.ad.replace(' Şubesi', ''), subeKod: sube.kod, urunKodu: stok.urunKodu || stok.id, urunAdi: stok.urunAdi || stok.urunKodu || 'Ürün', adet, kritikSeviye, renk: SUBE_RENKLER[sube.kod] || '#64748b' });
+      });
+    });
+    azalanStoklar.sort((a, b) => a.adet - b.adet);
+    return { enCokSatanlar, azalanStoklar };
+  }, [filtreliSatislar, stoklar]);
+
   const gunlukSatisVerisi = useMemo((): any[] => {
-    const gunSayisi: number = new Date(simdi.getFullYear(), simdi.getMonth() + 1, 0).getDate();
-    
+    const gunSayisi = new Date(simdi.getFullYear(), simdi.getMonth() + 1, 0).getDate();
     return Array.from({ length: gunSayisi }, (_, i) => {
-      const gun: number = i + 1;
+      const gun = i + 1;
       const gunSatislari = satislar.filter(s => {
         if (!s.tarih) return false;
         try {
@@ -740,106 +489,47 @@ const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } =
           if (isNaN(t.getTime())) return false;
           if (aktifSube && s.subeKodu !== aktifSube) return false;
           return t.getDate() === gun && t.getMonth() === simdi.getMonth() && t.getFullYear() === simdi.getFullYear();
-        } catch {
-          return false;
-        }
+        } catch { return false; }
       });
-      
-      return {
-        gun: `${gun}`,
-        ciro: gunSatislari.reduce((toplam, s) => toplam + (s.toplamTutar || 0), 0),
-        kar: gunSatislari.reduce((toplam, s) => toplam + (s.zarar ?? 0), 0),
-        adet: gunSatislari.length,
-      };
+      return { gun: `${gun}`, ciro: gunSatislari.reduce((t, s) => t + (s.toplamTutar || 0), 0), kar: gunSatislari.reduce((t, s) => t + (s.zarar ?? 0), 0), adet: gunSatislari.length };
     });
   }, [satislar, aktifSube, simdi, toDate]);
 
-  // ==========================================================================
-  // SATICI PERFORMANS LİSTESİ
-  // ==========================================================================
   const saticiPerformans = useMemo((): any[] => {
-    return filtreliSaticilar
-      .map(s => {
-        const ad: string = `${s.ad} ${s.soyad}`;
-        const satislari = filtreliSatislar.filter(x =>
-          x.musteriTemsilcisiId === s.uid || 
-          x.musteriTemsilcisiAd === ad || 
-          x.olusturanKullanici === ad
-        );
-        
-        const ciro: number = satislari.reduce((toplam, x) => toplam + (x.toplamTutar || 0), 0);
-        const kar: number = satislari.reduce((toplam, x) => toplam + (x.zarar ?? 0), 0);
-        const satisSayisi: number = satislari.length;
-        
-        // Hedef hesaplama
-        const hedeflerMap = s.hedefler as Record<string, number> | undefined;
-        const hedefAy = hedeflerMap?.[buAy];
-        const hedefEski = s.hedef as number | undefined;
-        const hedef: number = hedefAy && hedefAy > 0 ? hedefAy : (hedefEski && hedefEski > 0 ? hedefEski : FALLBACK_HEDEF);
-        
-        const yuzde: number = Math.min((ciro / hedef) * 100, 100);
-        const yildiz: number = Math.min(Math.round((ciro / hedef) * 10), 10);
-        
-        return {
-          ad,
-          uid: s.uid,
-          subeAd: getSubeByKod(s.subeKodu as SubeKodu)?.ad || '',
-          ciro,
-          kar,
-          hedef,
-          satisSayisi,
-          yuzde,
-          yildiz,
-        };
-      })
-      .sort((a, b) => b.ciro - a.ciro);
+    return filtreliSaticilar.map(s => {
+      const ad = `${s.ad} ${s.soyad}`;
+      const satislari = filtreliSatislar.filter(x => x.musteriTemsilcisiId === s.uid || x.musteriTemsilcisiAd === ad || x.olusturanKullanici === ad);
+      const ciro = satislari.reduce((t, x) => t + (x.toplamTutar || 0), 0);
+      const kar = satislari.reduce((t, x) => t + (x.zarar ?? 0), 0);
+      const satisSayisi = satislari.length;
+      const hedeflerMap = s.hedefler as Record<string, number> | undefined;
+      const hedefAy = hedeflerMap?.[buAy];
+      const hedefEski = s.hedef as number | undefined;
+      const hedef = hedefAy && hedefAy > 0 ? hedefAy : (hedefEski && hedefEski > 0 ? hedefEski : FALLBACK_HEDEF);
+      const yuzde = Math.min((ciro / hedef) * 100, 100);
+      const yildiz = Math.min(Math.round((ciro / hedef) * 10), 10);
+      return { ad, uid: s.uid, subeAd: getSubeByKod(s.subeKodu as SubeKodu)?.ad || '', ciro, kar, hedef, satisSayisi, yuzde, yildiz };
+    }).sort((a, b) => b.ciro - a.ciro);
   }, [filtreliSaticilar, filtreliSatislar, buAy]);
 
-  // ==========================================================================
-  // MAĞAZA HEDEFLERİ
-  // ==========================================================================
   const magazaHedefListesi = useMemo((): any[] => {
-    return SUBELER
-      .filter(sube => (aktifSube ? sube.kod === aktifSube : true))
-      .map(sube => {
-        const subeSatislar = zamanFiltreliSatislar.filter(s => s.subeKodu === sube.kod);
-        const ciro: number = subeSatislar.reduce((toplam, s) => toplam + (s.toplamTutar || 0), 0);
-        const docId: string = magazaDocId(sube.kod, buAy);
-        const hedef: number = magazaHedefler[docId] || magazaHedefler[sube.kod] || 0;
-        const yuzde: number = hedef > 0 ? Math.min((ciro / hedef) * 100, 100) : 0;
-        
-        return {
-          kod: sube.kod,
-          ad: sube.ad,
-          ciro,
-          hedef,
-          yuzde,
-          renk: getSubeRenk(sube.kod),
-        };
-      });
+    return SUBELER.filter(sube => (aktifSube ? sube.kod === aktifSube : true)).map(sube => {
+      const subeSatislar = zamanFiltreliSatislar.filter(s => s.subeKodu === sube.kod);
+      const ciro = subeSatislar.reduce((t, s) => t + (s.toplamTutar || 0), 0);
+      const docId = magazaDocId(sube.kod, buAy);
+      const hedef = magazaHedefler[docId] || magazaHedefler[sube.kod] || 0;
+      const yuzde = hedef > 0 ? Math.min((ciro / hedef) * 100, 100) : 0;
+      return { kod: sube.kod, ad: sube.ad, ciro, hedef, yuzde, renk: getSubeRenk(sube.kod) };
+    });
   }, [zamanFiltreliSatislar, magazaHedefler, aktifSube, buAy]);
 
-  // ==========================================================================
-  // HEDEF KAYDET
-  // ==========================================================================
   const hedefKaydet = async (subeKod: string): Promise<void> => {
-    const yeniHedef: number = parseFloat(hedefGirdi) || 0;
-    if (yeniHedef <= 0) {
-      alert('Lütfen geçerli bir hedef girin!');
-      return;
-    }
-    
+    const yeniHedef = parseFloat(hedefGirdi) || 0;
+    if (yeniHedef <= 0) { alert('Lütfen geçerli bir hedef girin!'); return; }
     setHedefKaydediliyor(true);
     try {
-      const docId: string = magazaDocId(subeKod, buAy);
-      await setDoc(doc(db, 'magazaHedefler', docId), {
-        hedef: yeniHedef,
-        subeKod,
-        ay: buAy,
-        guncellemeTarihi: Timestamp.now(),
-        guncelleyen: currentUser?.uid || '',
-      });
-      
+      const docId = magazaDocId(subeKod, buAy);
+      await setDoc(doc(db, 'magazaHedefler', docId), { hedef: yeniHedef, subeKod, ay: buAy, guncellemeTarihi: Timestamp.now(), guncelleyen: currentUser?.uid || '' });
       setMagazaHedefler(prev => ({ ...prev, [docId]: yeniHedef }));
       setHedefDuzenle(null);
       setHedefGirdi('');
@@ -851,39 +541,23 @@ const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } =
     }
   };
 
-  const zamanLabel: string = 
-    zaman === 'gunluk' ? 'Bugün' : 
-    zaman === 'haftalik' ? 'Bu Hafta' : 
-    zaman === 'aylik' ? 'Bu Ay' : 'Bu Yıl';
+  const zamanLabel = zaman === 'gunluk' ? 'Bugün' : zaman === 'haftalik' ? 'Bu Hafta' : zaman === 'aylik' ? 'Bu Ay' : 'Bu Yıl';
 
-  // ==========================================================================
-  // LOADING
-  // ==========================================================================
   if (loading) {
     return (
       <Layout pageTitle="Ciro & Performans">
-        <div className="cp-loading">
-          <div className="cp-spinner" />
-          <span>Veriler yükleniyor...</span>
-        </div>
+        <div className="cp-loading"><div className="cp-spinner" /><span>Veriler yükleniyor...</span></div>
       </Layout>
     );
   }
 
-  // ==========================================================================
-  // RENDER
-  // ==========================================================================
   return (
     <Layout
       pageTitle="Ciro & Performans"
       headerExtra={
         <div className="cp-zaman-toggle">
           {ZAMAN_OPTIONS.map(z => (
-            <button
-              key={z.value}
-              className={`cp-toggle-btn ${zaman === z.value ? 'active' : ''}`}
-              onClick={() => setZaman(z.value)}
-            >
+            <button key={z.value} className={`cp-toggle-btn ${zaman === z.value ? 'active' : ''}`} onClick={() => setZaman(z.value)}>
               {z.label}
             </button>
           ))}
@@ -891,19 +565,14 @@ const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } =
       }
     >
       <div className="cp-root">
-        
+
         {/* 1. HOŞ GELDİN KARTI */}
         <div className="cp-welcome-card">
           <div className="cp-welcome-left">
-            <div className="cp-welcome-avatar">
-              <span>👋</span>
-            </div>
+            <div className="cp-welcome-avatar"><span>👋</span></div>
             <div className="cp-welcome-text">
               <h1>Hoş geldin, {userName}!</h1>
-              <p>
-                <span>{today}</span>
-                <span className="cp-welcome-badge">Aktif Oturum</span>
-              </p>
+              <p><span>{today}</span><span className="cp-welcome-badge">Aktif Oturum</span></p>
             </div>
           </div>
           <div className="cp-welcome-date">
@@ -915,47 +584,26 @@ const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } =
         {userIsAdmin && (
           <div className="cp-sube-filtre">
             <span className="cp-sube-label">Şube:</span>
-            <button
-              className={`cp-sube-btn ${seciliSube === 'tumu' ? 'active' : ''}`}
-              onClick={() => setSeciliSube('tumu')}
-            >
-              Tümü
-            </button>
+            <button className={`cp-sube-btn ${seciliSube === 'tumu' ? 'active' : ''}`} onClick={() => setSeciliSube('tumu')}>Tümü</button>
             {SUBELER.map(sube => (
-              <button
-                key={sube.kod}
-                className={`cp-sube-btn ${seciliSube === sube.kod ? 'active' : ''}`}
-                onClick={() => setSeciliSube(sube.kod as SubeKodu)}
-                style={seciliSube === sube.kod ? { background: getSubeRenk(sube.kod) } : {}}
-              >
+              <button key={sube.kod} className={`cp-sube-btn ${seciliSube === sube.kod ? 'active' : ''}`} onClick={() => setSeciliSube(sube.kod as SubeKodu)} style={seciliSube === sube.kod ? { background: getSubeRenk(sube.kod) } : {}}>
                 {sube.ad.replace(' Şubesi', '')}
               </button>
             ))}
           </div>
         )}
 
-        {/* 3. 5'Lİ KPI GRID (Ürün Çeşidi ve Azalan Stok kaldırıldı) */}
+        {/* 3. KPI GRID */}
         <div className="cp-kpi-5grid">
           {kpiList.map((kpi, index) => (
-            <KpiCard
-              key={index}
-              icon={kpi.icon}
-              label={kpi.label}
-              value={kpi.value}
-              sub={kpi.sub}
-              trend={kpi.trend}
-              color={kpi.color}
-            />
+            <KpiCard key={index} icon={kpi.icon} label={kpi.label} value={kpi.value} sub={kpi.sub} trend={kpi.trend} color={kpi.color} />
           ))}
         </div>
 
-        {/* 4. SATICI PERFORMANS PIE CHART */}
+        {/* 4. SATICI PIE CHART */}
         <div className="cp-satici-pie-section">
           <div className="cp-section-header">
-            <h2>
-              <span className="cp-section-icon">🥧</span>
-              Satıcı Performans Dağılımı
-            </h2>
+            <h2><span className="cp-section-icon">🥧</span>Satıcı Performans Dağılımı</h2>
             <span className="cp-section-badge">{zamanLabel}</span>
           </div>
           <SaticiPieChart data={saticiPieData} />
@@ -964,51 +612,92 @@ const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } =
         {/* 5. 4'LÜ ALT GRID */}
         <div className="cp-bottom-4grid">
 
-          
+          {/* ── SATICI KENDİ HEDEFİ — sadece normal kullanıcılar ── */}
+          {!userIsAdmin && (() => {
+            const mevcutSatici = saticiPerformans.find(s => s.uid === currentUser?.uid);
+            if (!mevcutSatici) return null;
+            const yuzde = Math.min(mevcutSatici.yuzde, 100);
+            const renk = yuzde >= 100 ? '#16a34a' : yuzde >= 70 ? '#d97706' : '#0d6e9c';
+            return (
+              <div className="cp-card" style={{ gridColumn: '1 / -1' }}>
+                <div className="cp-card-header">
+                  <h3><span className="cp-card-icon">🎯</span> Hedefim</h3>
+                  <span className="cp-card-badge">Bu Ay</span>
+                </div>
+                <div className="cp-card-content" style={{ padding: '16px 20px' }}>
+                  {/* Üst bilgi satırı */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 3 }}>Mevcut Ciro</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: renk, fontFamily: 'IBM Plex Mono, monospace' }}>
+                        {formatTL(mevcutSatici.ciro)}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 28, fontWeight: 800, color: renk, lineHeight: 1 }}>
+                        %{yuzde.toFixed(0)}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>tamamlandı</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 3 }}>Hedef</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: '#374151', fontFamily: 'IBM Plex Mono, monospace' }}>
+                        {formatTL(mevcutSatici.hedef)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Donate bar */}
+                  <div style={{ position: 'relative', height: 24, borderRadius: 12, background: '#e2e8f0', overflow: 'hidden' }}>
+                    <div style={{
+                      position: 'absolute', left: 0, top: 0, bottom: 0,
+                      width: `${yuzde}%`,
+                      background: `linear-gradient(90deg, ${renk}88, ${renk})`,
+                      borderRadius: 12,
+                      transition: 'width 1s ease',
+                      display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 10
+                    }}>
+                      {yuzde > 12 && (
+                        <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>%{yuzde.toFixed(0)}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Alt bilgi */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 12, color: '#64748b' }}>
+                    <span style={{ color: yuzde >= 100 ? '#16a34a' : '#64748b', fontWeight: yuzde >= 100 ? 700 : 400 }}>
+                      {yuzde >= 100 ? '🎉 Hedefe ulaştın!' : `Hedefe ${formatTL(mevcutSatici.hedef - mevcutSatici.ciro)} kaldı`}
+                    </span>
+                    <span>{mevcutSatici.satisSayisi} satış yapıldı</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* GÜNLÜK SATIŞ GRAFİĞİ */}
           <div className="cp-card">
             <div className="cp-card-header">
-              <h3>
-                <span className="cp-card-icon">📊</span>
-                Günlük Satış
-              </h3>
-              <span className="cp-card-badge">
-                {simdi.toLocaleString('tr-TR', { month: 'long' })}
-              </span>
+              <h3><span className="cp-card-icon">📊</span>Günlük Satış</h3>
+              <span className="cp-card-badge">{simdi.toLocaleString('tr-TR', { month: 'long' })}</span>
             </div>
             <div className="cp-card-content">
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={gunlukSatisVerisi.slice(-7)} barGap={4}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis 
-                    dataKey="gun" 
-                    tick={{ fontSize: 9, fill: '#64748b' }}
-                    axisLine={{ stroke: '#e2e8f0' }}
-                    tickLine={false}
-                  />
-                  <YAxis 
-                    tickFormatter={formatKisa}
-                    tick={{ fontSize: 9, fill: '#64748b' }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={40}
-                  />
+                  <XAxis dataKey="gun" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                  <YAxis tickFormatter={formatKisa} tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} width={40} />
                   <Tooltip content={<CustomTooltip />} />
                   <Bar dataKey="ciro" fill="#0d6e9c" radius={[4, 4, 0, 0]} maxBarSize={16} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
-          
-         
-          
-          {/* MAĞAZA HEDEFLERİ (Özet) */}
+
+          {/* MAĞAZA HEDEFLERİ */}
           <div className="cp-card">
             <div className="cp-card-header">
-              <h3>
-                <span className="cp-card-icon">🎯</span>
-                Hedefler
-              </h3>
+              <h3><span className="cp-card-icon">🎯</span>Hedefler</h3>
               <span className="cp-card-badge">{buAy}</span>
             </div>
             <div className="cp-card-content">
@@ -1027,15 +716,13 @@ const urunAnalizi = useMemo((): { enCokSatanlar: any[]; azalanStoklar: any[] } =
               </div>
             </div>
           </div>
+
         </div>
 
         {/* 6. SATICI PERFORMANS LİSTESİ */}
         <div className="cp-card cp-satici-liste-karti">
           <div className="cp-card-header">
-            <h3>
-              <span className="cp-card-icon">👥</span>
-              Satıcı Performans Sıralaması
-            </h3>
+            <h3><span className="cp-card-icon">👥</span>Satıcı Performans Sıralaması</h3>
             <span className="cp-card-badge">{zamanLabel}</span>
           </div>
           <div className="cp-card-content">

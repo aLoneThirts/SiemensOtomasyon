@@ -9,6 +9,7 @@ export interface MusteriBilgileri {
   vkNo?: string;
   vd?: string;
   cep?: string;
+  unvan?: string;
 }
 
 export interface Urun {
