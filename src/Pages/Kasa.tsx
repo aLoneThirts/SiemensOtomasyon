@@ -441,7 +441,7 @@ const Kasa: React.FC = () => {
         `${currentUser.ad} ${currentUser.soyad}`,
       );
       setKasaGun(gun);
-      const gecmisData = await getKasaGecmisi(aktifSubeKodu, 365);
+      const gecmisData = await getKasaGecmisi(aktifSubeKodu, 90); // Batch 2-3: 365 → 90 gün
       setGecmis(gecmisData.filter(g => g.gun !== gun?.gun));
     } catch (err) {
       console.error('Kasa yüklenemedi:', err);
@@ -707,8 +707,9 @@ const Kasa: React.FC = () => {
     const subeKoduAnlik = aktifSubeKodu;
     const sube = getSubeByKod(subeKoduAnlik as any);
 
-    // DEBUG — hangi path kullanıldığını görmek için
-    console.log('🔍 STOK DEBUG:', { subeKoduAnlik, sube, dbPath: sube?.dbPath });
+    // ✅ P0-6: Debug log kaldırıldı
+
+
 
     if (!sube) {
       setStokHata(`Şube bulunamadı! (kod: ${subeKoduAnlik})`);
@@ -742,14 +743,14 @@ const Kasa: React.FC = () => {
 
       // 2. Kalıcı stok — runTransaction ile atomic güncelleme
       const magazaStokPath = `subeler/${sube.dbPath}/magazaStok`;
-      console.log('📦 magazaStok path:', magazaStokPath, '| kod:', kod);
+      // ✅ P0-6: Debug log kaldırıldı
 
       await runTransaction(db, async (transaction) => {
         const mevcut = await transaction.get(stokRef);
         const mevcutAdet = mevcut.exists() ? (mevcut.data().adet ?? 0) : 0;
         const mevcutAd   = mevcut.exists() ? (mevcut.data().urunAdi ?? '') : '';
         const yeniAdet = tipAnlik === 'GELEN' ? mevcutAdet + adetAnlik : mevcutAdet - adetAnlik;
-        console.log('💾 Transaction:', { mevcutAdet, yeniAdet, tipAnlik, adetAnlik });
+        // ✅ P0-6: Debug log kaldırıldı
         transaction.set(stokRef, {
           urunKodu: kod,
           urunAdi: adAnlik || mevcutAd,

@@ -27,8 +27,9 @@ const FATURA_NO_REGEX = /^(\d{4}|Kesilmedi)$/;
 const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
 const isFaturaNoGecerli = (val: string): boolean => FATURA_NO_REGEX.test(val);
 
-// ✅ #3 Mars No validasyon — tam 10 hane, 2026 ile başlar, sadece rakam
-const MARS_NO_REGEX = /^2026\d{6}$/;
+// ✅ P1-1 FIX: Mars No validasyon — tam 10 hane, güncel yıl ile başlar, sadece rakam
+const CURRENT_YEAR = new Date().getFullYear().toString();
+const MARS_NO_REGEX = new RegExp(`^${CURRENT_YEAR}\\d{6}$`);
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
 
 const SatisTeklifPage: React.FC = () => {

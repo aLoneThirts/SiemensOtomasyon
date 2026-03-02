@@ -162,7 +162,17 @@ export const recalcNakitSatis = async (
   if (!sube) return { nakitSatis: 0, kartSatis: 0, havaleSatis: 0 };
 
   const satislarRef = collection(db, `subeler/${sube.dbPath}/satislar`);
-  const snap = await getDocs(satislarRef);
+  // Son 2 ayın satışlarını çek — tahsilat en fazla bu kadar geriye gider
+  const ikiAyOnce = new Date();
+  ikiAyOnce.setMonth(ikiAyOnce.getMonth() - 2);
+  ikiAyOnce.setDate(1);
+  ikiAyOnce.setHours(0, 0, 0, 0);
+  const q = query(
+    satislarRef,
+    where('olusturmaTarihi', '>=', Timestamp.fromDate(ikiAyOnce)),
+    orderBy('olusturmaTarihi', 'desc')
+  );
+  const snap = await getDocs(q);
 
   let nakitSatis = 0;
   let kartSatis = 0;
@@ -434,7 +444,16 @@ export const getSatislar = async (
     const sube = getSubeByKod(subeKodu as SubeKodu);
     if (!sube) return bos;
 
-    const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`));
+    const ikiAyOnce = new Date();
+    ikiAyOnce.setMonth(ikiAyOnce.getMonth() - 2);
+    ikiAyOnce.setDate(1);
+    ikiAyOnce.setHours(0, 0, 0, 0);
+    const satisQuery = query(
+      collection(db, `subeler/${sube.dbPath}/satislar`),
+      where('olusturmaTarihi', '>=', Timestamp.fromDate(ikiAyOnce)),
+      orderBy('olusturmaTarihi', 'desc')
+    );
+    const snap = await getDocs(satisQuery);
 
     let aralikBaslangic: Date;
     let aralikBitis: Date;

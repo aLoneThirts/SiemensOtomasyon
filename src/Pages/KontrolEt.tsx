@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, Timestamp, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu } from '../types/satis';
 import { getSubeByKod, SUBELER } from '../types/sube';
@@ -38,19 +38,29 @@ const KontrolEt: React.FC = () => {
       setLoading(true);
       const liste: SatisTeklifFormu[] = [];
 
+      // Son 90 gün — daha eski bekleyen onay varsa zaten sorunlu
+      const doksan = new Date();
+      doksan.setDate(doksan.getDate() - 90);
+      doksan.setHours(0, 0, 0, 0);
+      const doksanTimestamp = Timestamp.fromDate(doksan);
+
+      const fetchSube = async (sube: typeof SUBELER[0]) => {
+        try {
+          const q = query(
+            collection(db, `subeler/${sube.dbPath}/satislar`),
+            where('olusturmaTarihi', '>=', doksanTimestamp),
+            orderBy('olusturmaTarihi', 'desc')
+          );
+          const snap = await getDocs(q);
+          snap.forEach(d => liste.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu));
+        } catch (err) { console.error(`${sube.ad} yüklenemedi:`, err); }
+      };
+
       if (isAdmin) {
-        for (const sube of SUBELER) {
-          try {
-            const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`));
-            snap.forEach(d => liste.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu));
-          } catch (err) { console.error(`${sube.ad} yüklenemedi:`, err); }
-        }
+        await Promise.all(SUBELER.map(fetchSube));
       } else {
         const sube = getSubeByKod(currentUser!.subeKodu);
-        if (sube) {
-          const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`));
-          snap.forEach(d => liste.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu));
-        }
+        if (sube) await fetchSube(sube);
       }
 
       liste.sort((a: any, b: any) => {
@@ -87,8 +97,9 @@ const KontrolEt: React.FC = () => {
     satislar.filter(s => (s as any).iptalTalebi === true && (s as any).satisDurumu !== 'IPTAL')
   );
 
-  // isAdmin kısıtı kaldırıldı — her kullanıcı durum değiştirebilir (yanlış onayı geri alma için)
+  // ✅ P0-2 FIX: Sadece admin onay toggle yapabilir
   const onayToggle = async (satis: SatisTeklifFormu) => {
+    if (!isAdmin) { alert('Bu işlem için admin yetkisi gereklidir.'); return; }
     if (!satis.id) return;
     const sube = getSubeByKod(satis.subeKodu);
     if (!sube) return;

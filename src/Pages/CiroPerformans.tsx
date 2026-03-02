@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, doc, setDoc, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, Timestamp, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu } from '../types/satis';
 import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
@@ -337,8 +337,17 @@ const CiroPerformansPage: React.FC = () => {
     const fetchData = async (): Promise<void> => {
       setLoading(true);
       try {
+        // Bu yılın başından itibaren satışları çek (yıllık filtre için yeterli)
+        const yilBasi = new Date(new Date().getFullYear(), 0, 1);
+        yilBasi.setHours(0, 0, 0, 0);
+        const yilBasiTimestamp = Timestamp.fromDate(yilBasi);
+
         const satisPromises = SUBELER.map(sube =>
-          getDocs(collection(db, `subeler/${sube.dbPath}/satislar`))
+          getDocs(query(
+            collection(db, `subeler/${sube.dbPath}/satislar`),
+            where('olusturmaTarihi', '>=', yilBasiTimestamp),
+            orderBy('olusturmaTarihi', 'desc')
+          ))
             .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data(), subeKodu: sube.kod, tarih: d.data().tarih?.toDate?.() || new Date() } as SatisTeklifFormu)))
             .catch(() => [] as SatisTeklifFormu[])
         );

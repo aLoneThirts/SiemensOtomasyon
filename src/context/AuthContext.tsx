@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   User as FirebaseUser,
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
@@ -9,13 +8,12 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { User, RegisterData, UserRole } from '../types/user';
+import { User } from '../types/user';
 
 interface AuthContextType {
   currentUser: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
@@ -38,8 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userDoc.exists()) {
             const userData = userDoc.data();
 
-            console.log('🔍 Firestore User Data:', userData);
-            console.log('📊 Role from Firestore:', userData.role);
+            // ✅ P0-6: Hassas console.log'lar kaldırıldı
 
             // createdAt veya olusturmaTarihi hangisi varsa onu kullan
             // ikisi de yoksa new Date() koy - patlamaması için
@@ -56,11 +53,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: userData.role ?? 'SATICI',
               subeKodu: userData.subeKodu ?? '',
               createdAt,
-            });
-
-            console.log('✅ Current User Set:', {
-              ad: userData.ad,
-              role: userData.role,
             });
           } else {
             // Firestore'da döküman yok - kullanıcıyı null yap
@@ -80,17 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
-  const register = async (data: RegisterData) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      email: data.email,
-      ad: data.ad,
-      soyad: data.soyad,
-      role: UserRole.CALISAN,
-      subeKodu: data.subeKodu,
-      createdAt: new Date(),
-    });
-  };
+  // register fonksiyonu kaldırıldı — kullanıcı oluşturma sadece AdminPanel'den
+  // secondaryAuth ile yapılıyor (AuthContext'teki eski register mevcut oturumu bozuyordu)
 
   const login = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
@@ -108,7 +91,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     currentUser,
     loading,
     login,
-    register,
     logout,
     resetPassword,
   };

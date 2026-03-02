@@ -22,8 +22,9 @@ const FATURA_NO_REGEX = /^(\d{4}|Kesilmedi)$/;
 const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
 const isFaturaNoGecerli = (val: string): boolean => !val || FATURA_NO_REGEX.test(val);
 
-// ✅ #3 Mars No validasyon — tam 10 hane, 2026 ile başlar
-const MARS_NO_REGEX = /^2026\d{6}$/;
+// ✅ P1-1 FIX: Mars No validasyon — tam 10 hane, güncel yıl ile başlar
+const CURRENT_YEAR = new Date().getFullYear().toString();
+const MARS_NO_REGEX = new RegExp(`^${CURRENT_YEAR}\\d{6}$`);
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
 
 const bugunStr = (): string => {
@@ -305,7 +306,7 @@ const SatisDuzenlePage: React.FC = () => {
       setMarsListesi(prev => prev.map((item, i) => i === index ? { ...item, marsNo: sadeceSayi } : item));
       // Anlık validasyon
       if (sadeceSayi && !isMarsNoGecerli(sadeceSayi)) {
-        setMarsNoHatalar(prev => ({ ...prev, [index]: `Mars No: 2026 ile başlayan 10 haneli sayı olmalıdır. (${sadeceSayi.length}/10)` }));
+        setMarsNoHatalar(prev => ({ ...prev, [index]: `Mars No:  ile başlayan 10 haneli sayı olmalıdır. (${sadeceSayi.length}/10)` }));
       } else {
         setMarsNoHatalar(prev => { const copy = { ...prev }; delete copy[index]; return copy; });
       }
@@ -509,7 +510,7 @@ const SatisDuzenlePage: React.FC = () => {
     for (let i = 0; i < marsListesi.length; i++) {
       const giris = marsListesi[i];
       if (giris.marsNo && !isMarsNoGecerli(giris.marsNo)) {
-        alert(`❌ ${etiketAd(i)} Mars No geçersiz!\n2026 ile başlayan 10 haneli sayı olmalıdır.\nGirilen: ${giris.marsNo}`);
+        alert(`❌ ${etiketAd(i)} Mars No geçersiz!\nGüncel yıl ile başlayan 10 haneli sayı olmalıdır.\nGirilen: ${giris.marsNo}`);
         return;
       }
     }
@@ -987,7 +988,7 @@ const SatisDuzenlePage: React.FC = () => {
                         type="text"
                         value={giris.marsNo}
                         onChange={e => marsGuncelle(index, 'marsNo', e.target.value)}
-                        placeholder="2026XXXXXX"
+                        placeholder={`${CURRENT_YEAR}XXXXXX`}
                         maxLength={10}
                         className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`}
                         disabled={alanlarKilitli}
@@ -1001,9 +1002,9 @@ const SatisDuzenlePage: React.FC = () => {
                         <small style={{ color: '#16a34a', display: 'block' }}>✅ Geçerli ({giris.marsNo.length}/10)</small>
                       )}
                       {giris.marsNo && !marsNoHatalar[index] && !isMarsNoGecerli(giris.marsNo) && (
-                        <small style={{ color: '#d97706', display: 'block' }}>⚠️ {giris.marsNo.length}/10 — 2026 ile başlayan 10 hane gerekli</small>
+                        <small style={{ color: '#d97706', display: 'block' }}>⚠️ {giris.marsNo.length}/10 — ${CURRENT_YEAR} ile başlayan 10 hane gerekli</small>
                       )}
-                      <small style={{ color: '#9ca3af', fontSize: 11 }}>2026 ile başlayan 10 haneli sayı (örn: 2026123456)</small>
+                      <small style={{ color: '#9ca3af', fontSize: 11 }}>Güncel yıl ile başlayan 10 haneli sayı</small>
                     </div>
                     <div>
                       <label className="duzenle-label">Teslimat Tarihi</label>

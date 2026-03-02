@@ -712,36 +712,28 @@ const AdminPanel: React.FC = () => {
         ? SUBELER
         : SUBELER.filter(s => s.kod === logFiltre.subeKodu);
 
-      let tumLoglar: SatisLog[] = [];
+      const baslangic = new Date(logFiltre.baslangicTarih);
+      baslangic.setHours(0, 0, 0, 0);
+      const bitis = new Date(logFiltre.bitisTarih);
+      bitis.setHours(23, 59, 59, 999);
 
-      for (const sube of subeler) {
+      // Tüm şubeleri paralel çek
+      const sonuclar = await Promise.all(subeler.map(async (sube) => {
         try {
-          const satislarRef = collection(db, `subeler/${sube.dbPath}/satislar`);
-
-          const baslangic = new Date(logFiltre.baslangicTarih);
-          baslangic.setHours(0, 0, 0, 0);
-
-          const bitis = new Date(logFiltre.bitisTarih);
-          bitis.setHours(23, 59, 59, 999);
-
           const q = query(
-            satislarRef,
+            collection(db, `subeler/${sube.dbPath}/satislar`),
             where('olusturmaTarihi', '>=', baslangic),
             where('olusturmaTarihi', '<=', bitis)
           );
-
           const snap = await getDocs(q);
 
-          let subeLoglari = snap.docs.map(d => {
-            const data = d.data();
-            return {
-              id: d.id,
-              ...data,
-              subeAd: sube.ad,
-              subeKodu: sube.kod,
-              dbPath: sube.dbPath
-            } as SatisLog;
-          });
+          let subeLoglari = snap.docs.map(d => ({
+            id: d.id,
+            ...d.data(),
+            subeAd: sube.ad,
+            subeKodu: sube.kod,
+            dbPath: sube.dbPath
+          } as SatisLog));
 
           if (logFiltre.saticiId !== 'TUMU') {
             subeLoglari = subeLoglari.filter(log =>
@@ -757,12 +749,14 @@ const AdminPanel: React.FC = () => {
             });
           }
 
-          tumLoglar = [...tumLoglar, ...subeLoglari];
-
+          return subeLoglari;
         } catch (err: any) {
           console.error(`${sube.ad} hatası:`, err);
+          return [] as SatisLog[];
         }
-      }
+      }));
+
+      const tumLoglar = sonuclar.flat();
 
       tumLoglar.sort((a, b) => {
         const tarihA = a.olusturmaTarihi?.toDate?.() || new Date(a.olusturmaTarihi || 0);

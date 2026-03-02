@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, Timestamp, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, OdemeDurumu } from '../types/satis';
 import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
@@ -42,26 +42,81 @@ const Dashboard: React.FC = () => {
       const fark = Math.ceil((bi.getTime()-b.getTime())/(1000*60*60*24));
       if (bi<b) setTarihAralikHatasi('Bitiş tarihi başlangıçtan önce olamaz');
       else if (fark>31) setTarihAralikHatasi(`Maksimum 31 gün seçilebilir (${fark} gün seçildi)`);
-      else setTarihAralikHatasi('');
+      else { setTarihAralikHatasi(''); fetchSatislar(satisTarihiBaslangic, satisTarihiBitis); }
     } else setTarihAralikHatasi('');
   }, [satisTarihiBaslangic, satisTarihiBitis]);
 
-  const fetchSatislar = async () => {
+  // Tarih aralığı parametre olarak alır. Boşsa bu ayın satışlarını çeker.
+  const fetchSatislar = async (baslangic?: string, bitis?: string) => {
     try {
       setLoading(true);
       const satisListesi: SatisTeklifFormu[] = [];
       const subeSet = new Set<string>();
-      if (isAdmin) {
-        for (const sube of SUBELER) {
-          try { const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`)); snap.forEach(d => { satisListesi.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu); subeSet.add(sube.kod); }); } catch (err) { console.error(`${sube.ad} yüklenemedi:`, err); }
+
+      let startDate: Date;
+      let endDate: Date | null = null;
+
+      if (baslangic && bitis) {
+        startDate = new Date(baslangic);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(bitis);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        // Default: bu ayın 1'i
+        startDate = new Date();
+        startDate.setDate(1);
+        startDate.setHours(0, 0, 0, 0);
+      }
+
+      const startTimestamp = Timestamp.fromDate(startDate);
+      const endTimestamp = endDate ? Timestamp.fromDate(endDate) : null;
+
+      const fetchSube = async (sube: typeof SUBELER[0]) => {
+        try {
+          let q;
+          if (endTimestamp) {
+            q = query(
+              collection(db, `subeler/${sube.dbPath}/satislar`),
+              where('olusturmaTarihi', '>=', startTimestamp),
+              where('olusturmaTarihi', '<=', endTimestamp),
+              orderBy('olusturmaTarihi', 'desc')
+            );
+          } else {
+            q = query(
+              collection(db, `subeler/${sube.dbPath}/satislar`),
+              where('olusturmaTarihi', '>=', startTimestamp),
+              orderBy('olusturmaTarihi', 'desc')
+            );
+          }
+          const snap = await getDocs(q);
+          snap.forEach(d => {
+            satisListesi.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu);
+            subeSet.add(sube.kod);
+          });
+        } catch (err) {
+          console.error(`${sube.ad} yüklenemedi:`, err);
         }
+      };
+
+      if (isAdmin) {
+        await Promise.all(SUBELER.map(fetchSube));
       } else {
         const sube = getSubeByKod(currentUser!.subeKodu as SubeKodu);
-        if (sube) { const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/satislar`)); snap.forEach(d => { satisListesi.push({ id: d.id, ...d.data(), subeKodu: sube.kod } as SatisTeklifFormu); subeSet.add(sube.kod); }); }
+        if (sube) await fetchSube(sube);
       }
-      satisListesi.sort((a:any,b:any) => { const tA=a.olusturmaTarihi?.toDate?a.olusturmaTarihi.toDate():new Date(a.olusturmaTarihi||0); const tB=b.olusturmaTarihi?.toDate?b.olusturmaTarihi.toDate():new Date(b.olusturmaTarihi||0); return tB.getTime()-tA.getTime(); });
-      setMevcutSubeler(Array.from(subeSet)); setSatislar(satisListesi);
-    } catch (error) { console.error('Satışlar yüklenemedi:', error); } finally { setLoading(false); }
+
+      satisListesi.sort((a: any, b: any) => {
+        const tA = a.olusturmaTarihi?.toDate ? a.olusturmaTarihi.toDate() : new Date(a.olusturmaTarihi || 0);
+        const tB = b.olusturmaTarihi?.toDate ? b.olusturmaTarihi.toDate() : new Date(b.olusturmaTarihi || 0);
+        return tB.getTime() - tA.getTime();
+      });
+      setMevcutSubeler(Array.from(subeSet));
+      setSatislar(satisListesi);
+    } catch (error) {
+      console.error('Satışlar yüklenemedi:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const dateToString=(date:any):string=>{if(!date)return'';if(date instanceof Timestamp)return date.toDate().toISOString().split('T')[0];if(date instanceof Date)return date.toISOString().split('T')[0];return'';};
@@ -85,8 +140,7 @@ const Dashboard: React.FC = () => {
     setFiltreliSatislar(sonuc);
   };
 
-  const filtreleriSifirla=()=>{setSecilenSube('');setZararOlanlar('all');setDurum('all');setTeslimTarihi('');setAcikHesap('all');setSatisTarihiBaslangic('');setSatisTarihiBitis('');setTarihAralikHatasi('');setAramaMetni('');};
-
+  const filtreleriSifirla=()=>{setSecilenSube('');setZararOlanlar('all');setDurum('all');setTeslimTarihi('');setAcikHesap('all');setSatisTarihiBaslangic('');setSatisTarihiBitis('');setTarihAralikHatasi('');setAramaMetni('');fetchSatislar();};
   const iptalTalebiGonder=async(satis:SatisTeklifFormu)=>{
     if(!satis.id)return;const sube=getSubeByKod(satis.subeKodu as SubeKodu);if(!sube)return;
     setGuncellemeyorum(satis.id);

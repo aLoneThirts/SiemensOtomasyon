@@ -3,7 +3,7 @@ export enum SubeKodu {
   PENDIK = 'PENDIK',
   SANCAKTEPE = 'SANCAKTEPE',
   BUYAKA_AVM = 'BUYAKA_AVM',
-  MALTEPE = 'MALTEPE'
+  SOGANLIK = 'SOGANLIK'
 }
 
 export interface Sube {
@@ -39,10 +39,10 @@ export const SUBELER: Sube[] = [
     dbPath: 'buyaka'
   },
   {
-    kod: SubeKodu.MALTEPE,
+    kod: SubeKodu.SOGANLIK,
     ad: 'Soğanlık Şubesi',
     satisKoduPrefix: 5060,
-    dbPath: 'soğanlık'
+    dbPath: 'soganlik'
   }
 ];
 

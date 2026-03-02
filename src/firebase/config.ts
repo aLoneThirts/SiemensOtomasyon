@@ -2,21 +2,21 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// Firebase configuration
+// Firebase configuration — .env dosyasından okunuyor
 const firebaseConfig = {
-  apiKey: "AIzaSyD634I1HYvXqe0hbu7xMAlbdr8Sof3VNM8",
-  authDomain: "siemensotomasyon-a4039.firebaseapp.com",
-  projectId: "siemensotomasyon-a4039",
-  storageBucket: "siemensotomasyon-a4039.firebasestorage.app",
-  messagingSenderId: "257431439512",
-  appId: "1:257431439512:web:c1376e8edfe16535d368ed",
-  measurementId: "G-6CL2MGBP3G"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID,
 };
 
 // Ana app
 const app = initializeApp(firebaseConfig);
 
-// İkinci app - admin oturumunu bozmadan kullanıcı oluşturmak için
+// Ikinci app - admin oturumunu bozmadan kullanici olusturmak icin
 const secondaryApp = getApps().find(a => a.name === 'Secondary')
   || initializeApp(firebaseConfig, 'Secondary');
 
