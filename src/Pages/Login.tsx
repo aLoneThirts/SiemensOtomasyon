@@ -48,12 +48,27 @@ const Login: React.FC = () => {
   return (
     <div className="auth-container">
       <div className="auth-left">
-        {/* LOGO RESMİ */}
+        {/* TÜFEKÇİ HOME LOGO */}
         <div className="brand-logo">
           <img src="/tufekci-logo.jpeg" alt="Tüfekçi Home" />
           <div className="brand-text">
             <h2>TÜFEKÇİ HOME</h2>
             <p>SIEMENS</p>
+          </div>
+        </div>
+
+        {/* HOŞGELDİN YAZISI */}
+        <div className="auth-welcome">
+          <h1>Hoş Geldiniz</h1>
+          <p>Satış takip ve yönetim sisteminize giriş yaparak işlemlerinizi kolayca yönetin.</p>
+        </div>
+
+        {/* NEXLEDGER — Powered by Badge */}
+        <div className="nexledger-badge">
+          <img src="/nexledger-logo.png" alt="NexLedger" />
+          <div className="nexledger-badge-text">
+            <span className="powered">POWERED BY</span>
+            <span className="nexledger-name">NEXLEDGER</span>
           </div>
         </div>
       </div>
@@ -97,6 +112,11 @@ const Login: React.FC = () => {
             </button>
           </form>
 
+          {/* NEXLEDGER FOOTER */}
+          <div className="nexledger-footer">
+            <img src="/nexledger-logo.png" alt="NexLedger" />
+            <span>NEXLEDGER</span>
+          </div>
         </div>
       </div>
     </div>

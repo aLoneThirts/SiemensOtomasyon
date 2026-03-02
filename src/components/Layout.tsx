@@ -69,7 +69,19 @@ const Layout: React.FC<LayoutProps> = ({ children, pageTitle, headerExtra }) => 
       {/* Sidebar - açık/kapalı state'e göre className alır */}
       <aside className={`layout-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <h1>TÜFEKÇİ HOME<span>SIEMENS</span></h1>
+          <div className="sidebar-brand">
+            <img src="/tufekci-logo.jpeg" alt="Tüfekçi Home" className="sidebar-brand-logo" />
+            <div className="sidebar-brand-text">
+              <h1>TÜFEKÇİ HOME<span>SIEMENS</span></h1>
+            </div>
+          </div>
+          <div className="sidebar-nexledger">
+            <img src="/nexledger-logo.png" alt="NexLedger" className="sidebar-nexledger-logo" />
+            <div className="sidebar-nexledger-text">
+              <span className="sidebar-nexledger-powered">POWERED BY</span>
+              <span className="sidebar-nexledger-name">NEXLEDGER</span>
+            </div>
+          </div>
         </div>
 
         <nav className="sidebar-nav">

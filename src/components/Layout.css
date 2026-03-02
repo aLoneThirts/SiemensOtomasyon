@@ -51,10 +51,9 @@
   transition: transform 0.3s ease;
   left: 0;
   top: 0;
-  transform: translateX(0); /* Masaüstünde görünür */
+  transform: translateX(0);
 }
 
-/* Sidebar mobilde gizli - Layout.tsx'teki sidebarOpen state'ine bağlı */
 @media (max-width: 768px) {
   .layout-sidebar {
     transform: translateX(-100%);
@@ -67,15 +66,38 @@
   }
 }
 
+/* =============================================
+   SIDEBAR HEADER — TÜFEKÇİ HOME + NEXLEDGER
+   ============================================= */
+
 .sidebar-header {
-  padding: 32px 24px;
+  padding: 24px 20px 16px;
   border-bottom: 2px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }
 
-.sidebar-header h1 {
+/* Tüfekçi Home Brand */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.sidebar-brand-logo {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-brand-text h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -83,13 +105,60 @@
   line-height: 1.3;
 }
 
-.sidebar-header h1 span {
+.sidebar-brand-text h1 span {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   opacity: 0.9;
-  margin-top: 8px;
+  margin-top: 4px;
   letter-spacing: 1px;
+}
+
+/* NexLedger Badge */
+.sidebar-nexledger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(10, 15, 20, 0.5);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+.sidebar-nexledger:hover {
+  background: rgba(10, 15, 20, 0.65);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.sidebar-nexledger-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: brightness(1.3);
+}
+
+.sidebar-nexledger-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.sidebar-nexledger-powered {
+  font-size: 8px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.sidebar-nexledger-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 2.5px;
 }
 
 /* NAV */
@@ -226,7 +295,7 @@
 }
 
 /* =============================================
-   HAMBURGER - Layout.tsx'teki state ile çalışır
+   HAMBURGER
    ============================================= */
 
 .hamburger-btn {
@@ -315,7 +384,6 @@
    ============================================= */
 
 @media (max-width: 768px) {
-  /* Hamburger görünür */
   .hamburger-btn {
     display: flex;
     align-items: center;
@@ -326,7 +394,6 @@
     min-height: 48px;
   }
 
-  /* Sidebar mobilde transform ile kontrol edilir */
   .layout-sidebar {
     transform: translateX(-100%);
     left: 0;
@@ -338,13 +405,11 @@
     box-shadow: 4px 0 20px rgba(0, 153, 153, 0.3);
   }
 
-  /* Main margin sıfır */
   .layout-main {
     margin-left: 0;
     width: 100%;
   }
 
-  /* Header mobil */
   .layout-header {
     padding: 12px 16px;
   }
@@ -357,12 +422,10 @@
     font-size: 18px;
   }
 
-  /* Content padding */
   .layout-content {
     padding: 16px;
   }
 
-  /* Touch-friendly iyileştirmeler */
   .sidebar-nav-item {
     padding: 16px 24px;
     min-height: 56px;
@@ -384,8 +447,7 @@
   .sidebar-nav {
     padding: 16px 0;
   }
-  
-  /* Overlay görünür */
+
   .layout-overlay.open {
     display: block;
   }
@@ -400,21 +462,24 @@
     font-size: 16px;
   }
 
-  .sidebar-header h1 {
-    font-size: 20px;
-  }
-  
-  .sidebar-header h1 span {
-    font-size: 12px;
+  .sidebar-brand-text h1 {
+    font-size: 18px;
   }
 
-  /* Sidebar responsive genişlik */
+  .sidebar-brand-text h1 span {
+    font-size: 11px;
+  }
+
+  .sidebar-brand-logo {
+    width: 44px;
+    height: 44px;
+  }
+
   .layout-sidebar {
     width: 85%;
     max-width: 300px;
   }
 
-  /* Header düzeni */
   .layout-header-left {
     min-width: 0;
     flex: 1;
@@ -424,7 +489,6 @@
     gap: 4px;
   }
 
-  /* Nav item iyileştirmeleri */
   .sidebar-nav-item {
     padding: 14px 20px;
     gap: 10px;
@@ -435,7 +499,6 @@
     width: 24px;
   }
 
-  /* User info */
   .sidebar-user {
     gap: 10px;
   }
@@ -449,10 +512,24 @@
     flex-wrap: wrap;
   }
 
-  /* Logout butonu */
   .sidebar-logout {
     padding: 12px;
     font-size: 13px;
+  }
+
+  .sidebar-nexledger {
+    padding: 6px 12px;
+    gap: 8px;
+  }
+
+  .sidebar-nexledger-logo {
+    width: 22px;
+    height: 22px;
+  }
+
+  .sidebar-nexledger-name {
+    font-size: 11px;
+    letter-spacing: 2px;
   }
 }
 
@@ -469,9 +546,9 @@
     }
 
     .sidebar-header {
-      padding-top: max(32px, env(safe-area-inset-top));
-      padding-left: max(24px, env(safe-area-inset-left));
-      padding-right: max(24px, env(safe-area-inset-right));
+      padding-top: max(24px, env(safe-area-inset-top));
+      padding-left: max(20px, env(safe-area-inset-left));
+      padding-right: max(20px, env(safe-area-inset-right));
     }
 
     .sidebar-footer {
@@ -515,7 +592,7 @@
 }
 
 /* =============================================
-   DOKUNMATİK CİHAZLAR İÇİN (hover'sız, active'li)
+   DOKUNMATİK CİHAZLAR İÇİN
    ============================================= */
 
 @media (hover: none) and (pointer: coarse) {
@@ -533,7 +610,7 @@
     background: rgba(255, 255, 255, 0.2);
     transform: scale(0.98);
   }
-  
+
   .hamburger-btn:active {
     background: #f3f4f6;
   }
@@ -546,16 +623,35 @@
 @media (max-width: 896px) and (orientation: landscape) {
   @media (max-height: 450px) {
     .sidebar-header {
-      padding: 16px 20px;
+      padding: 12px 16px;
     }
 
-    .sidebar-header h1 {
-      font-size: 18px;
+    .sidebar-brand-text h1 {
+      font-size: 16px;
     }
 
-    .sidebar-header h1 span {
-      font-size: 11px;
-      margin-top: 4px;
+    .sidebar-brand-text h1 span {
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    .sidebar-brand-logo {
+      width: 38px;
+      height: 38px;
+    }
+
+    .sidebar-nexledger {
+      padding: 5px 10px;
+      margin-top: 8px;
+    }
+
+    .sidebar-nexledger-logo {
+      width: 20px;
+      height: 20px;
+    }
+
+    .sidebar-nexledger-name {
+      font-size: 10px;
     }
 
     .sidebar-nav-item {
@@ -582,7 +678,7 @@
       min-height: 40px;
       font-size: 12px;
     }
-    
+
     .layout-content {
       padding: 12px;
     }
@@ -597,7 +693,7 @@
   .layout-header-right {
     gap: 4px;
   }
-  
+
   .layout-page-title {
     font-size: 16px;
   }
@@ -611,18 +707,18 @@
   .layout-header {
     padding: 10px 12px;
   }
-  
+
   .hamburger-btn {
     padding: 8px;
     min-width: 40px;
     min-height: 40px;
     font-size: 20px;
   }
-  
+
   .layout-page-title {
     font-size: 14px;
   }
-  
+
   .layout-content {
     padding: 12px;
   }
