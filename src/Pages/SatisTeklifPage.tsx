@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -20,17 +20,33 @@ const HAVALE_BANKALARI = ['Ziraat Bankası', 'Halkbank', 'Vakıfbank', 'İş Ban
 interface YesilEtiketAdmin { id?: string; urunKodu: string; urunTuru?: string; maliyet: number; }
 interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: boolean; subeKodu: string; tutar?: number; }
 
-const bugunStr = (): string => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
+const STORAGE_KEY = 'satisTeklif_draft';
 
-// ✅ Fatura No validasyon
+const bugunStr = (): string => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
 const FATURA_NO_REGEX = /^(\d{4}|Kesilmedi)$/;
 const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
 const isFaturaNoGecerli = (val: string): boolean => FATURA_NO_REGEX.test(val);
-
-// ✅ P1-1 FIX: Mars No validasyon — tam 10 hane, güncel yıl ile başlar, sadece rakam
 const CURRENT_YEAR = new Date().getFullYear().toString();
 const MARS_NO_REGEX = new RegExp(`^${CURRENT_YEAR}\\d{6}$`);
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
+
+const saveDraft = (data: any) => {
+  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
+};
+const clearDraft = () => {
+  try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+};
+
+// ✅ ANA DÜZELTME: useState lazy initializer — component mount anında sessionStorage'dan okur
+// Bu sayede useEffect'ten önce, ilk render'da doğru değerle başlar
+const getInitial = <T,>(key: string, fallback: T): T => {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return fallback;
+    const draft = JSON.parse(raw);
+    return (draft[key] !== undefined && draft[key] !== null) ? draft[key] : fallback;
+  } catch { return fallback; }
+};
 
 const SatisTeklifPage: React.FC = () => {
   const { currentUser } = useAuth();
@@ -38,55 +54,72 @@ const SatisTeklifPage: React.FC = () => {
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
   const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
-  const [musteriTemsilcisiId, setMusteriTemsilcisiId] = useState<string>('');
 
-  // ✅ Ünvan eklendi, teslimatAlacakKisi KALDIRILDI (isim alanına yazılır)
-  const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>({
-    isim: '', adres: '', faturaAdresi: '', isAdresi: '',
-    vergiNumarasi: '', vkNo: '', vd: '', cep: '', unvan: ''
-  });
-  const [musteriTemsilcisiTel, setMusteriTemsilcisiTel] = useState('');
-
-  const [urunler, setUrunler] = useState<Urun[]>([{ id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }]);
-  const [tarih, setTarih] = useState(new Date().toISOString().split('T')[0]);
-  const [teslimatTarihi, setTeslimatTarihi] = useState('');
-  const [marsNo, setMarsNo] = useState('');
+  // ✅ Tüm state'ler lazy initializer ile sessionStorage'dan başlangıç değeri alıyor
+  const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>(() =>
+    getInitial('musteriBilgileri', { isim: '', adres: '', faturaAdresi: '', isAdresi: '', vergiNumarasi: '', vkNo: '', vd: '', cep: '', unvan: '' })
+  );
+  const [musteriTemsilcisiId, setMusteriTemsilcisiId] = useState<string>(() => getInitial('musteriTemsilcisiId', ''));
+  const [musteriTemsilcisiTel, setMusteriTemsilcisiTel] = useState<string>(() => getInitial('musteriTemsilcisiTel', ''));
+  const [urunler, setUrunler] = useState<Urun[]>(() =>
+    getInitial('urunler', [{ id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }])
+  );
+  const [tarih, setTarih] = useState<string>(() => getInitial('tarih', new Date().toISOString().split('T')[0]));
+  const [teslimatTarihi, setTeslimatTarihi] = useState<string>(() => getInitial('teslimatTarihi', ''));
+  const [marsNo, setMarsNo] = useState<string>(() => getInitial('marsNo', ''));
   const [marsNoHata, setMarsNoHata] = useState(false);
-  const [magaza, setMagaza] = useState('');
-  const [faturaNo, setFaturaNo] = useState('');
+  const [magaza, setMagaza] = useState<string>(() => getInitial('magaza', ''));
+  const [faturaNo, setFaturaNo] = useState<string>(() => getInitial('faturaNo', ''));
   const [faturaNoHata, setFaturaNoHata] = useState(false);
   const [faturaNoHataMesaj, setFaturaNoHataMesaj] = useState('');
-  const [servisNotu, setServisNotu] = useState('');
-  const [teslimEdildiMi, setTeslimEdildiMi] = useState(false);
-  const [cevap, setCevap] = useState('');
-  const [fatura, setFatura] = useState(false);
-  const [ileriTeslim, setIleriTeslim] = useState(false);
-  const [ileriTeslimTarihi, setIleriTeslimTarihi] = useState('');
-  const [servis, setServis] = useState(false);
-  const [notlar, setNotlar] = useState('');
+  const [servisNotu, setServisNotu] = useState<string>(() => getInitial('servisNotu', ''));
+  const [teslimEdildiMi, setTeslimEdildiMi] = useState<boolean>(() => getInitial('teslimEdildiMi', false));
+  const [cevap, setCevap] = useState<string>(() => getInitial('cevap', ''));
+  const [fatura, setFatura] = useState<boolean>(() => getInitial('fatura', false));
+  const [ileriTeslim, setIleriTeslim] = useState<boolean>(() => getInitial('ileriTeslim', false));
+  const [ileriTeslimTarihi, setIleriTeslimTarihi] = useState<string>(() => getInitial('ileriTeslimTarihi', ''));
+  const [servis, setServis] = useState<boolean>(() => getInitial('servis', false));
+  const [notlar, setNotlar] = useState<string>(() => getInitial('notlar', ''));
+  const [seciliKampanyaIds, setSeciliKampanyaIds] = useState<string[]>(() => getInitial('seciliKampanyaIds', []));
+  const [pesinatlar, setPesinatlar] = useState<{ id: string; tutar: number; aciklama: string }[]>(() => getInitial('pesinatlar', []));
+  const [havaleler, setHavaleler] = useState<{ id: string; tutar: number; banka: string }[]>(() => getInitial('havaleler', []));
+  const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>(() => getInitial('kartOdemeler', []));
+  const [manuelSatisTutari, setManuelSatisTutari] = useState<number | null>(() => getInitial('manuelSatisTutari', null));
+  const [onayDurumu, setOnayDurumu] = useState<boolean>(() => getInitial('onayDurumu', false));
 
   const [kampanyaListesi, setKampanyaListesi] = useState<KampanyaAdmin[]>([]);
-  const [seciliKampanyaIds, setSeciliKampanyaIds] = useState<string[]>([]);
   const [yesilEtiketAdminList, setYesilEtiketAdminList] = useState<YesilEtiketAdmin[]>([]);
-
-  const [pesinatlar, setPesinatlar] = useState<{ id: string; tutar: number; aciklama: string }[]>([]);
-  const [havaleler, setHavaleler] = useState<{ id: string; tutar: number; banka: string }[]>([]);
-  const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>([]);
   const [kesintiCache, setKesintiCache] = useState<Record<string, Record<string, number>>>({});
-
-  const [onayDurumu, setOnayDurumu] = useState(false);
   const [loading, setLoading] = useState(false);
   const [satisKodu, setSatisKodu] = useState('');
-  const [manuelSatisTutari, setManuelSatisTutari] = useState<number | null>(null);
   const [urunCache, setUrunCache] = useState<Record<string, { ad: string; alis: number; bip: number; urunTuru: string }>>({});
   const [urunAramaDropdown, setUrunAramaDropdown] = useState<{ index: number; sonuclar: string[] } | null>(null);
+
+  const draftVarMi = !!sessionStorage.getItem(STORAGE_KEY);
+
+  // ✅ Her state değişiminde draft kaydet
+  useEffect(() => {
+    saveDraft({
+      musteriBilgileri, musteriTemsilcisiId, musteriTemsilcisiTel,
+      urunler, tarih, teslimatTarihi, marsNo, magaza, faturaNo,
+      servisNotu, teslimEdildiMi, cevap, fatura, ileriTeslim,
+      ileriTeslimTarihi, servis, notlar, seciliKampanyaIds,
+      pesinatlar, havaleler, kartOdemeler, manuelSatisTutari, onayDurumu,
+    });
+  }, [
+    musteriBilgileri, musteriTemsilcisiId, musteriTemsilcisiTel,
+    urunler, tarih, teslimatTarihi, marsNo, magaza, faturaNo,
+    servisNotu, teslimEdildiMi, cevap, fatura, ileriTeslim,
+    ileriTeslimTarihi, servis, notlar, seciliKampanyaIds,
+    pesinatlar, havaleler, kartOdemeler, manuelSatisTutari, onayDurumu,
+  ]);
 
   const kullanicilariCek = async () => {
     try {
       const kullanicilarSnapshot = await getDocs(collection(db, 'users'));
-      const tumKullanicilar = kullanicilarSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return { id: doc.id, ad: data.ad || '', soyad: data.soyad || '', email: data.email || '', role: data.role || '', subeKodu: data.subeKodu || '' } as Kullanici;
+      const tumKullanicilar = kullanicilarSnapshot.docs.map(d => {
+        const data = d.data();
+        return { id: d.id, ad: data.ad || '', soyad: data.soyad || '', email: data.email || '', role: data.role || '', subeKodu: data.subeKodu || '' } as Kullanici;
       });
       const adminler = tumKullanicilar.filter(k => k.role?.toString().trim().toUpperCase() === 'ADMIN');
       const subeSatıcıları = tumKullanicilar.filter(k => k.subeKodu === currentUser?.subeKodu && k.role?.toString().trim().toUpperCase() !== 'ADMIN');
@@ -94,7 +127,12 @@ const SatisTeklifPage: React.FC = () => {
       const formattedKullanicilar = birlesikKullanicilar.map(k => ({ ...k, displayName: `${k.ad} ${k.soyad}${k.role === 'ADMIN' ? ' (Admin)' : ''}` }));
       formattedKullanicilar.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
       setKullanicilar(formattedKullanicilar);
-      if (currentUser?.uid) setMusteriTemsilcisiId(currentUser.uid);
+
+      // ✅ Draft'ta temsilci varsa DOKUNMA, yoksa varsayılanı ata
+      const draftTemsilci = getInitial('musteriTemsilcisiId', '');
+      if (!draftTemsilci && currentUser?.uid) {
+        setMusteriTemsilcisiId(currentUser.uid);
+      }
     } catch (err) { console.error('❌ Kullanıcılar çekilemedi:', err); }
   };
 
@@ -173,7 +211,6 @@ const SatisTeklifPage: React.FC = () => {
 
   const isTeslimatTarihiGecerli = (): boolean => { if (!teslimatTarihi) return true; return teslimatTarihi >= tarih; };
 
-  // ✅ #3 Mars No: sadece rakam, 10 hane, 2026 başlangıç
   const handleMarsNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const sadeceSayi = e.target.value.replace(/\D/g, '');
     setMarsNo(sadeceSayi);
@@ -195,7 +232,10 @@ const SatisTeklifPage: React.FC = () => {
     }
   };
 
-  const handleMusteriChange = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setMusteriBilgileri(prev => ({ ...prev, [name]: value })); };
+  const handleMusteriChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setMusteriBilgileri(prev => ({ ...prev, [name]: value }));
+  };
 
   const urunCacheYukle = async () => {
     try {
@@ -282,6 +322,37 @@ const SatisTeklifPage: React.FC = () => {
     kullanicilariCek();
   }, [currentUser]);
 
+  const formuSifirla = () => {
+    if (!window.confirm('Formdaki tüm bilgiler silinecek. Emin misiniz?')) return;
+    clearDraft();
+    setMusteriBilgileri({ isim: '', adres: '', faturaAdresi: '', isAdresi: '', vergiNumarasi: '', vkNo: '', vd: '', cep: '', unvan: '' });
+    setMusteriTemsilcisiId(currentUser?.uid || '');
+    setMusteriTemsilcisiTel('');
+    setUrunler([{ id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }]);
+    setTarih(new Date().toISOString().split('T')[0]);
+    setTeslimatTarihi('');
+    setMarsNo('');
+    setMagaza('');
+    setFaturaNo('');
+    setServisNotu('');
+    setTeslimEdildiMi(false);
+    setCevap('');
+    setFatura(false);
+    setIleriTeslim(false);
+    setIleriTeslimTarihi('');
+    setServis(false);
+    setNotlar('');
+    setSeciliKampanyaIds([]);
+    setPesinatlar([]);
+    setHavaleler([]);
+    setKartOdemeler([]);
+    setManuelSatisTutari(null);
+    setOnayDurumu(false);
+    setMarsNoHata(false);
+    setFaturaNoHata(false);
+    setFaturaNoHataMesaj('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -294,14 +365,11 @@ const SatisTeklifPage: React.FC = () => {
     }
     if (!manuelSatisTutari || manuelSatisTutari <= 0) { alert('❌ Satış tutarı girilmelidir!'); return; }
     if (ileriTeslim && !ileriTeslimTarihi) { alert('❌ İleri teslim seçildiğinde müşteriyle anlaşılan teslim tarihi zorunludur!'); return; }
-
-    // ✅ #3 Mars No validasyon — 2026 başlangıç, 10 hane, sadece rakam
     if (marsNo && !isMarsNoGecerli(marsNo)) {
       setMarsNoHata(true);
       alert(`❌ Mars No geçersiz!\n2026 ile başlayan tam 10 haneli sayı olmalıdır.\nGirilen: ${marsNo} (${marsNo.length} hane)\nGeçerli örnek: 2026123456`);
       return;
     }
-
     if (!musteriTemsilcisiId) { alert('❌ Müşteri temsilcisi seçilmelidir!'); return; }
     if (teslimatTarihi && !isTeslimatTarihiGecerli()) { alert('❌ Teslimat tarihi, satış tarihinden önce olamaz.'); return; }
     if (teslimatTarihi && !marsNo.trim()) { setMarsNoHata(true); alert('❌ Teslimat tarihi girildiğinde Mars numarası zorunludur.'); return; }
@@ -327,7 +395,6 @@ const SatisTeklifPage: React.FC = () => {
       const satisTeklifi: any = {
         satisKodu: yeniSatisKodu,
         subeKodu: currentUser!.subeKodu,
-        // ✅ Ünvan kaydediliyor, teslimatAlacakKisi KALDIRILDI
         musteriBilgileri: { ...musteriBilgileri, unvan: (musteriBilgileri as any).unvan || '' },
         musteriTemsilcisiId,
         musteriTemsilcisiAd: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
@@ -358,7 +425,7 @@ const SatisTeklifPage: React.FC = () => {
         pesinatTutar: pesinatToplamHesapla(), havaleTutar: havaleToplamHesapla(),
         fatura, ileriTeslim,
         ileriTeslimTarihi: ileriTeslim && ileriTeslimTarihi ? new Date(ileriTeslimTarihi) : null,
-        ileriTeslimOnay: false, // ✅ Yeni alan — ileri teslim onayı ayrı tutulur
+        ileriTeslimOnay: false,
         servis,
         odemeYontemi: OdemeYontemi.PESINAT,
         onayDurumu,
@@ -390,6 +457,7 @@ const SatisTeklifPage: React.FC = () => {
       }
 
       await logKaydet(yeniSatisKodu, 'YENİ_SATIS', `Yeni satış. Müşteri: ${musteriBilgileri.isim}, Tutar: ${manuelSatisTutari} TL`);
+      clearDraft();
       alert(`✅ Satış başarıyla oluşturuldu!\n\nSatış Kodu: ${yeniSatisKodu}`);
       navigate('/dashboard');
     } catch (error) {
@@ -407,30 +475,31 @@ const SatisTeklifPage: React.FC = () => {
     <div className="satis-form-container">
       <div className="satis-form-header">
         <button onClick={() => navigate('/dashboard')} className="btn-back">← Geri</button>
+        {draftVarMi && (
+          <div className="draft-bilgi">
+            <span>📝 Kaydedilmemiş değişiklikler mevcut</span>
+            <button type="button" onClick={formuSifirla} className="btn-draft-sifirla">🗑️ Formu Temizle</button>
+          </div>
+        )}
       </div>
       <h2 className="form-title">
         Yeni Satış Teklif Formu — {satisKodu || <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '0.85em' }}>{subePrefix ? `${subePrefix}-***` : 'Otomatik atanacak'}</span>}
       </h2>
 
       <form onSubmit={handleSubmit}>
-
         {/* MÜŞTERİ BİLGİLERİ */}
         <section className="form-section">
           <h3 className="section-title">Müşteri Bilgileri</h3>
           <div className="form-grid-4">
             <div className="form-field"><label>İsim/Adı *</label><input name="isim" value={musteriBilgileri.isim} onChange={handleMusteriChange} required /></div>
-            {/* ✅ Ünvan alanı */}
             <div className="form-field"><label>Ünvan</label><input name="unvan" value={(musteriBilgileri as any).unvan || ''} onChange={handleMusteriChange} placeholder="Şirket ünvanı" /></div>
             <div className="form-field"><label>VK No</label><input name="vkNo" value={musteriBilgileri.vkNo} onChange={handleMusteriChange} /></div>
             <div className="form-field"><label>Adres</label><input name="adres" value={musteriBilgileri.adres} onChange={handleMusteriChange} /></div>
             <div className="form-field"><label>VD</label><input name="vd" value={musteriBilgileri.vd} onChange={handleMusteriChange} /></div>
             <div className="form-field"><label>Fatura Adresi</label><input name="faturaAdresi" value={musteriBilgileri.faturaAdresi} onChange={handleMusteriChange} /></div>
             <div className="form-field"><label>Cep Tel</label><input name="cep" value={musteriBilgileri.cep} onChange={handleMusteriChange} /></div>
-            {/* ✅ teslimatAlacakKisi KALDIRILDI — isim alanına yazılır */}
           </div>
-          <small style={{ color: '#9ca3af', fontSize: 11, marginTop: 4, display: 'block' }}>
-            💡 Teslim alacak kişi bilgisi "İsim" alanına yazılabilir.
-          </small>
+          <small style={{ color: '#9ca3af', fontSize: 11, marginTop: 4, display: 'block' }}>💡 Teslim alacak kişi bilgisi "İsim" alanına yazılabilir.</small>
         </section>
 
         {/* SATIŞ BİLGİLERİ */}
@@ -464,26 +533,8 @@ const SatisTeklifPage: React.FC = () => {
           <div className="form-grid-4">
             <div className="form-field">
               <label>MARS No</label>
-              {/* ✅ #3 Mars No: sadece rakam, 10 hane, 2026 başlangıcı */}
-              <input
-                value={marsNo}
-                onChange={handleMarsNoChange}
-                placeholder="2026XXXXXX"
-                maxLength={10}
-                style={{ borderColor: marsNoHata ? '#ef4444' : (marsNo && isMarsNoGecerli(marsNo) ? '#16a34a' : undefined) }}
-              />
-              {marsNo && (
-                <small style={{ color: isMarsNoGecerli(marsNo) ? '#16a34a' : '#ef4444' }}>
-                  {isMarsNoGecerli(marsNo)
-                    ? '✅ Geçerli Mars No'
-                    : marsNo.length < 10
-                      ? `⚠️ ${marsNo.length}/10 hane — 2026 ile başlayan 10 hane gerekli`
-                      : !marsNo.startsWith('2026')
-                        ? '❌ 2026 ile başlamalıdır'
-                        : '❌ Geçersiz format'
-                  }
-                </small>
-              )}
+              <input value={marsNo} onChange={handleMarsNoChange} placeholder="2026XXXXXX" maxLength={10} style={{ borderColor: marsNoHata ? '#ef4444' : (marsNo && isMarsNoGecerli(marsNo) ? '#16a34a' : undefined) }} />
+              {marsNo && <small style={{ color: isMarsNoGecerli(marsNo) ? '#16a34a' : '#ef4444' }}>{isMarsNoGecerli(marsNo) ? '✅ Geçerli Mars No' : marsNo.length < 10 ? `⚠️ ${marsNo.length}/10 hane — 2026 ile başlayan 10 hane gerekli` : !marsNo.startsWith('2026') ? '❌ 2026 ile başlamalıdır' : '❌ Geçersiz format'}</small>}
               <small style={{ color: '#9ca3af', fontSize: 11 }}>2026 ile başlayan 10 haneli sayı (örn: 2026123456)</small>
             </div>
             <div className="form-field"><label>Mağaza Teslimat</label><input value={magaza} onChange={e => setMagaza(e.target.value)} placeholder="Mağaza adı" /></div>

@@ -277,7 +277,7 @@
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
-.ozet-kart-dever {
+.ozet-kart-deger {
   font-size: 16px;
   font-weight: 800;
   color: #1f2937;
@@ -285,7 +285,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ozet-kart-dever.negatif {
+.ozet-kart-deger.negatif {
   color: #dc2626;
 }
 
@@ -449,13 +449,11 @@
   min-width: 100px;
   -webkit-tap-highlight-color: transparent;
 }
-
 .btn-sifirla:hover {
   background: #ffa726;
   transform: translateY(-2px);
   box-shadow: 0 3px 8px rgba(255, 152, 0, 0.25);
   width: 100%;
-
 }
 .btn-sifirla:active {
   background: #f57c00;
@@ -511,11 +509,52 @@
   color: #2e7d32;
   font-weight: 600;
   line-height: 1.4;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 .sonuc-bilgi strong {
   font-weight: 900;
   color: #1b5e20;
   font-size: 16px;
+}
+
+/* Sıralama bilgi chip */
+.siralama-bilgi {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 20px;
+  padding: 2px 10px 2px 8px;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.siralama-bilgi strong {
+  font-size: 12px;
+  color: #1b5e20;
+}
+.siralama-temizle-btn {
+  background: none;
+  border: none;
+  color: #4a7c59;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.siralama-temizle-btn:hover {
+  background: rgba(0,0,0,0.12);
+  color: #1b5e20;
 }
 
 /* =============================================
@@ -585,6 +624,56 @@
 }
 .satir-iptal td {
   color: #6b7280;
+}
+
+/* =============================================
+   SIRALAMA BAŞLIK STİLLERİ
+   ============================================= */
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+  position: relative;
+}
+.sortable-th:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+.sortable-th:active {
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+.sortable-th--aktif {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.sortable-th-icerik {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.sort-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+  opacity: 0.45;
+  transition: all 0.2s ease;
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.sort-icon--aktif {
+  opacity: 1;
+  background: rgba(255,255,255,0.3);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  transform: scale(1.1);
+}
+.sortable-th:hover .sort-icon {
+  opacity: 0.75;
+  background: rgba(255,255,255,0.25);
 }
 
 /* =============================================
@@ -876,7 +965,7 @@
     font-size: 20px;
   }
 
-  .ozet-kart-dever {
+  .ozet-kart-deger {
     font-size: 18px;
   }
 
@@ -941,7 +1030,7 @@
     font-size: 12px;
   }
 
-  .ozet-kart-dever {
+  .ozet-kart-deger {
     font-size: 20px;
   }
 
@@ -1007,7 +1096,7 @@
    BÜYÜK MASAÜSTÜ (1200px ve üzeri)
    ============================================= */
 @media (min-width: 1200px) {
-  .ozet-kart-dever {
+  .ozet-kart-deger {
     font-size: 22px;
   }
 
@@ -1102,6 +1191,13 @@
 
   .filtre-select:focus, .filtre-input:focus, .search-input:focus {
     border-color: #009999;
+  }
+
+  .sortable-th:hover {
+    background: transparent !important;
+  }
+  .sortable-th:active {
+    background: rgba(255,255,255,0.2) !important;
   }
 }
 

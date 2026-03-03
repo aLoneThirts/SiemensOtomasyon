@@ -1140,4 +1140,57 @@
   .form-field textarea {
     font-size: 16px;
   }
+/* ===== FORM HEADER ===== */
+.satis-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ===== DRAFT BİLGİ BARI ===== */
+.draft-bilgi {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: #009999;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  box-shadow: 0 2px 8px rgba(0,153,153,0.25);
+}
+
+.draft-bilgi span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-draft-sifirla {
+  padding: 6px 14px;
+  background: white;
+  border: none;
+  color: #dc2626;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.btn-draft-sifirla:hover {
+  background: #fef2f2;
+  box-shadow: 0 2px 8px rgba(220,38,38,0.2);
+  transform: translateY(-1px);
+}
+.btn-draft-sifirla:active {
+  transform: scale(0.97);
+}
 }
