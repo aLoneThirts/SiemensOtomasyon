@@ -134,6 +134,17 @@ const kasaPrintPreviewYap = (params: {
   const { kasaGun, satislar, tahsilatlar, magazaStok, stokHareketler: stokLog, magazaAdi, subeAdi } = params;
   const tarih = formatGun(kasaGun.gun);
 
+  // S11 FIX: XSS onlemi — kullanicidan gelen verileri HTML'e guvenli eklemek icin
+  const esc = (str: any): string => {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
   const fTL = (n: number) =>
     new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 2 }).format(n);
 
@@ -173,10 +184,10 @@ const kasaPrintPreviewYap = (params: {
   const satisRows = satislar.map(s => `
     <tr>
       <td style="font-family:'IBM Plex Mono',monospace;font-size:11px">${formatSaat(s.tarih)}</td>
-      <td style="font-weight:600">${s.satisKodu}</td>
-      <td>${s.musteriIsim}</td>
+      <td style="font-weight:600">${esc(s.satisKodu)}</td>
+      <td>${esc(s.musteriIsim)}</td>
       <td style="font-family:'IBM Plex Mono',monospace;font-weight:700">${fTL(s.tutar)}</td>
-      <td style="font-size:10px;color:#5f6368;max-width:220px">${odemeDetayi(s as any)}</td>
+      <td style="font-size:10px;color:#5f6368;max-width:220px">${esc(odemeDetayi(s as any))}</td>
     </tr>`).join('');
 
   const tahsilatRows = (tahsilatlar as any[]).map(s => {
@@ -206,8 +217,8 @@ const kasaPrintPreviewYap = (params: {
     return `
     <tr style="${rowBg}">
       <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;${isIade ? 'color:#dc2626' : ''}">${s.satisTarihi ? formatGun(s.satisTarihi) : '—'}</td>
-      <td style="font-weight:600;${isIade ? 'color:#dc2626' : ''}">${s.satisKodu}${isIade ? ' <span style="font-size:9px;background:#dc2626;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">İPTAL</span>' : ''}</td>
-      <td>${s.musteriIsim}</td>
+      <td style="font-weight:600;${isIade ? 'color:#dc2626' : ''}">${esc(s.satisKodu)}${isIade ? ' <span style="font-size:9px;background:#dc2626;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">İPTAL</span>' : ''}</td>
+      <td>${esc(s.musteriIsim)}</td>
       <td style="font-family:'IBM Plex Mono',monospace;font-weight:700;${isIade ? 'color:#dc2626' : ''}">${fTL(tutar)}</td>
       <td style="font-size:10px;max-width:240px;${isIade ? 'color:#dc2626;font-weight:600' : 'color:#5f6368'}">${detay}</td>
     </tr>`;
@@ -215,8 +226,8 @@ const kasaPrintPreviewYap = (params: {
 
   const stokRows = magazaStok.map(s => `
     <tr>
-      <td><strong>${s.urunKodu}</strong></td>
-      <td>${s.urunAdi || '—'}</td>
+      <td><strong>${esc(s.urunKodu)}</strong></td>
+      <td>${esc(s.urunAdi || '—')}</td>
       <td style="font-weight:700; color: ${s.adet > 0 ? '#16a34a' : '#dc2626'}">${s.adet} adet</td>
     </tr>`).join('');
 
@@ -224,18 +235,18 @@ const kasaPrintPreviewYap = (params: {
     <tr>
       <td>${h.tarih instanceof Date ? formatSaat(h.tarih) : '—'}</td>
       <td style="font-weight:700; color:${h.tip === 'GELEN' ? '#16a34a' : '#dc2626'}">${h.tip === 'GELEN' ? '📥 Gelen' : '📤 Çıkan'}</td>
-      <td><strong>${h.urunKodu}</strong></td>
-      <td>${h.urunAdi || '—'}</td>
+      <td><strong>${esc(h.urunKodu)}</strong></td>
+      <td>${esc(h.urunAdi || '—')}</td>
       <td style="font-weight:700; color:${h.tip === 'GELEN' ? '#16a34a' : '#dc2626'}">${h.tip === 'GELEN' ? '+' : '−'}${h.adet}</td>
-      <td>${h.musteriVeyaSatisKodu || '—'}</td>
-      <td>${h.not || '—'}</td>
+      <td>${esc(h.musteriVeyaSatisKodu || '—')}</td>
+      <td>${esc(h.not || '—')}</td>
     </tr>`).join('');
 
   const html = `<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8"/>
-  <title>Kasa Çıktısı — ${subeAdi} — ${tarih}</title>
+  <title>Kasa Çıktısı — ${esc(subeAdi)} — ${tarih}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
     *{box-sizing:border-box;margin:0;padding:0}
@@ -260,8 +271,8 @@ const kasaPrintPreviewYap = (params: {
   </style>
 </head>
 <body>
-  <h1>🏪 ${magazaAdi} — Kasa Raporu</h1>
-  <div class="meta">📍 Şube: ${subeAdi} &nbsp;|&nbsp; 📅 Tarih: ${tarih}</div>
+  <h1>🏪 ${esc(magazaAdi)} — Kasa Raporu</h1>
+  <div class="meta">📍 Şube: ${esc(subeAdi)} &nbsp;|&nbsp; 📅 Tarih: ${tarih}</div>
 
   <div class="ozet">
     <div class="ozet-kart"><label>Açılış Bakiyesi</label><strong>${fTL(kasaGun.acilisBakiyesi)}</strong></div>
@@ -285,9 +296,9 @@ const kasaPrintPreviewYap = (params: {
       return '<tr>' +
         '<td style="font-family:IBM Plex Mono,monospace;font-size:11px">' + (h.saat || '—') + '</td>' +
         '<td><span style="font-weight:700;color:' + (isGider ? '#dc2626' : '#5f6368') + '">' + (isGider ? '💸 Gider' : '📝 Diğer') + '</span></td>' +
-        '<td>' + (h.aciklama || '—') + '</td>' +
-        '<td style="font-size:10px;color:#888">' + (h.belgeNo || '—') + '</td>' +
-        '<td style="font-size:10px;color:#5f6368;font-style:italic">' + (h.not || '—') + '</td>' +
+        '<td>' + esc(h.aciklama || '—') + '</td>' +
+        '<td style="font-size:10px;color:#888">' + esc(h.belgeNo || '—') + '</td>' +
+        '<td style="font-size:10px;color:#5f6368;font-style:italic">' + esc(h.not || '—') + '</td>' +
         '<td style="font-family:IBM Plex Mono,monospace;font-weight:700;color:#dc2626">−' + fTL(h.tutar) + '</td>' +
         '</tr>';
     }).join('');

@@ -38,6 +38,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // ✅ P0-6: Hassas console.log'lar kaldırıldı
 
+            // ✅ FIX: Deaktif kullanıcı kontrolü
+            // Admin satıcıyı deaktif ettiğinde giriş engellenir
+            if (userData.aktif === false) {
+              console.warn('⚠️ Deaktif kullanıcı tespit edildi, çıkış yapılıyor.');
+              await signOut(auth);
+              setCurrentUser(null);
+              setLoading(false);
+              return;
+            }
+
             // createdAt veya olusturmaTarihi hangisi varsa onu kullan
             // ikisi de yoksa new Date() koy - patlamaması için
             const createdAt =

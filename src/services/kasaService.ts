@@ -24,7 +24,7 @@
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc,
   query, orderBy, limit, serverTimestamp, Timestamp,
-  where,
+  where, runTransaction, increment,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getSubeByKod, SubeKodu } from '../types/sube';
@@ -344,81 +344,103 @@ export const getBugununKasaGunu = async (
   const today = testTarih ?? bugunStr();
   const colRef = collection(db, 'kasalar', subeKodu, 'gunler');
   const bugunRef = doc(colRef, today);
-  const bugunSnap = await getDoc(bugunRef);
 
-  // Açılış bakiyesini hesapla
-  let acilisBakiyesi = 0;
-  if (!bugunSnap.exists()) {
-    // Yeni gün: önceki günün gün sonunu bul
-    const oncekiSnap = await getDocs(
-      query(colRef, orderBy('gun', 'desc'), limit(10))
-    );
-    for (const d of oncekiSnap.docs) {
-      if (d.id < today) {
-        acilisBakiyesi = d.data().gunSonuBakiyesi ?? 0;
-        break;
-      }
+  // ✅ FIX: Önceki günün bakiyesini transaction DIŞINDA hesapla
+  // getDocs (query) transaction içinde kullanılamaz, sadece tx.get(docRef) çalışır.
+  // Önceki günler immutable olduğu için bu güvenlidir.
+  let oncekiGunSonuBakiyesi = 0;
+  const oncekiSnap = await getDocs(
+    query(colRef, orderBy('gun', 'desc'), limit(10))
+  );
+  for (const d of oncekiSnap.docs) {
+    if (d.id < today) {
+      oncekiGunSonuBakiyesi = d.data().gunSonuBakiyesi ?? 0;
+      break;
     }
-  } else {
-    acilisBakiyesi = bugunSnap.data().acilisBakiyesi ?? 0;
   }
 
-  // ✅ v6 MİMARİ: recalcNakitSatis() ÇAĞRILMAZ.
-  // nakitSatis/kartSatis/havaleSatis değerleri kasaTahsilatEkle() tarafından
-  // her tahsilatta atomik olarak güncellenir. Burada sadece Firestore'dan okuruz.
-  const mevcut = bugunSnap.exists() ? bugunSnap.data() : {};
-  const nakitSatis       = mevcut.nakitSatis       ?? 0;
-  const kartSatis        = mevcut.kartSatis        ?? 0;
-  const havaleSatis      = mevcut.havaleSatis      ?? 0;
-  const toplamGider      = mevcut.toplamGider      ?? 0;
-  const cikisYapilanPara = mevcut.cikisYapilanPara ?? 0;
-  const adminAlimlar     = mevcut.adminAlimlar     ?? 0;
-  const adminOzet        = mevcut.adminOzet        ?? {};
-  const hareketler       = mevcut.hareketler       ?? [];
+  // ✅ FIX: runTransaction ile yeni gün oluşturma — race condition önlemi
+  // İki kişi aynı anda kasa açarsa sadece ilki setDoc yapar, ikincisi mevcut veriyi okur
+  const result = await runTransaction(db, async (tx) => {
+    const bugunSnap = await tx.get(bugunRef);
 
-  const gunSonuBakiyesi = hesaplaGunSonu({
-    acilisBakiyesi, nakitSatis, toplamGider, cikisYapilanPara, adminAlimlar,
+    if (!bugunSnap.exists()) {
+      // Yeni gün oluştur — açılış bakiyesi önceki günden alındı
+      const acilisBakiyesi = oncekiGunSonuBakiyesi;
+
+      tx.set(bugunRef, {
+        gun: today,
+        subeKodu,
+        durum: 'ACIK',
+        acilisBakiyesi,
+        gunSonuBakiyesi: acilisBakiyesi, // yeni gün açılışta nakitSatis=0
+        nakitSatis: 0,
+        kartSatis: 0,
+        havaleSatis: 0,
+        toplamGider: 0,
+        cikisYapilanPara: 0,
+        adminAlimlar: 0,
+        adminOzet: {},
+        hareketler: [],
+        acilisYapan: acilisYapan,
+        olusturmaTarihi: serverTimestamp(),
+        guncellemeTarihi: serverTimestamp(),
+      });
+
+      return {
+        acilisBakiyesi,
+        nakitSatis: 0, kartSatis: 0, havaleSatis: 0,
+        toplamGider: 0, cikisYapilanPara: 0, adminAlimlar: 0,
+        adminOzet: {}, hareketler: [] as any[],
+        durum: 'ACIK' as const,
+        acilisYapan,
+        olusturmaTarihi: new Date(),
+      };
+    } else {
+      // Mevcut gün — sadece oku, üzerine yazma
+      const data = bugunSnap.data();
+      return {
+        acilisBakiyesi:   data.acilisBakiyesi   ?? 0,
+        nakitSatis:       data.nakitSatis       ?? 0,
+        kartSatis:        data.kartSatis        ?? 0,
+        havaleSatis:      data.havaleSatis      ?? 0,
+        toplamGider:      data.toplamGider      ?? 0,
+        cikisYapilanPara: data.cikisYapilanPara ?? 0,
+        adminAlimlar:     data.adminAlimlar     ?? 0,
+        adminOzet:        data.adminOzet        ?? {},
+        hareketler:       data.hareketler       ?? [],
+        durum:            (data.durum ?? 'ACIK') as 'ACIK' | 'KAPALI',
+        acilisYapan:      data.acilisYapan      ?? acilisYapan,
+        olusturmaTarihi:  data.olusturmaTarihi  ?? new Date(),
+      };
+    }
   });
 
-  // Sadece yeni gün oluşturulurken setDoc yap, mevcut günün üzerine YAZMA
-  if (!bugunSnap.exists()) {
-    await setDoc(bugunRef, {
-      gun: today,
-      subeKodu,
-      durum: 'ACIK',
-      acilisBakiyesi,
-      gunSonuBakiyesi: acilisBakiyesi, // yeni gün açılışta nakitSatis=0
-      nakitSatis: 0,
-      kartSatis: 0,
-      havaleSatis: 0,
-      toplamGider: 0,
-      cikisYapilanPara: 0,
-      adminAlimlar: 0,
-      adminOzet: {},
-      hareketler: [],
-      acilisYapan: acilisYapan,
-      olusturmaTarihi: serverTimestamp(),
-      guncellemeTarihi: serverTimestamp(),
-    });
-  }
+  const gunSonuBakiyesi = hesaplaGunSonu({
+    acilisBakiyesi: result.acilisBakiyesi,
+    nakitSatis: result.nakitSatis,
+    toplamGider: result.toplamGider,
+    cikisYapilanPara: result.cikisYapilanPara,
+    adminAlimlar: result.adminAlimlar,
+  });
 
   return {
     id: today,
     gun: today,
     subeKodu,
-    durum: (mevcut.durum ?? 'ACIK') as 'ACIK' | 'KAPALI',
-    acilisBakiyesi,
+    durum: result.durum as 'ACIK' | 'KAPALI',
+    acilisBakiyesi: result.acilisBakiyesi,
     gunSonuBakiyesi,
-    nakitSatis,
-    kartSatis,
-    havaleSatis,
-    toplamGider,
-    cikisYapilanPara,
-    adminAlimlar,
-    adminOzet,
-    hareketler: hareketler.map((h: any) => ({ ...h, tarih: toDate(h.tarih) })),
-    acilisYapan: mevcut.acilisYapan ?? acilisYapan,
-    olusturmaTarihi: toDate(mevcut.olusturmaTarihi ?? new Date()),
+    nakitSatis: result.nakitSatis,
+    kartSatis: result.kartSatis,
+    havaleSatis: result.havaleSatis,
+    toplamGider: result.toplamGider,
+    cikisYapilanPara: result.cikisYapilanPara,
+    adminAlimlar: result.adminAlimlar,
+    adminOzet: result.adminOzet,
+    hareketler: (result.hareketler as any[]).map((h: any) => ({ ...h, tarih: toDate(h.tarih) })),
+    acilisYapan: result.acilisYapan,
+    olusturmaTarihi: toDate(result.olusturmaTarihi),
     guncellemeTarihi: new Date(),
   };
 };
@@ -605,6 +627,9 @@ export const getTahsilatlar = async (
 };
 
 // ─── kasaHareketEkle ──────────────────────────────────────────────────────────
+// ✅ FIX: runTransaction ile hareketler/gider/cikis atomik güncellenir.
+// gunSonuBakiyesi transaction SONRASI fresh okuma ile hesaplanır.
+// Böylece kasaTahsilatEkle'nin increment'ı ile çakışma olmaz.
 export const kasaHareketEkle = async (
   subeKodu: string,
   kasaGunId: string,
@@ -614,70 +639,77 @@ export const kasaHareketEkle = async (
 ): Promise<boolean> => {
   try {
     const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', kasaGunId);
-    const snap = await getDoc(gunRef);
-    if (!snap.exists()) return false;
 
-    const mevcut = docToKasaGun(snap.id, snap.data());
-    const yeniH: KasaHareket = {
-      ...hareket,
-      id: `h_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      saat: saatStr(),
-      tarih: hareket.tarih instanceof Date ? hareket.tarih : new Date(),
-    };
+    // 1. Transaction ile gider/cikis/admin toplamlarını ve hareketler array'ini güncelle
+    //    gunSonuBakiyesi burada YAZILMAZ — çünkü nakitSatis increment ile değişmiş olabilir
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(gunRef);
+      if (!snap.exists()) throw new Error('Kasa günü bulunamadı');
 
-    // Sadece manuel hareketlerin toplamlarını güncelle
-    // nakitSatis/kartSatis/havaleSatis recalcNakitSatis ile ayrıca hesaplanıyor
-    let toplamGider      = mevcut.toplamGider;
-    let cikisYapilanPara = mevcut.cikisYapilanPara;
-    let adminAlimlar     = mevcut.adminAlimlar;
-    const adminOzet      = { ...mevcut.adminOzet };
+      const mevcut = docToKasaGun(snap.id, snap.data());
+      const yeniH: KasaHareket = {
+        ...hareket,
+        id: `h_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        saat: saatStr(),
+        tarih: hareket.tarih instanceof Date ? hareket.tarih : new Date(),
+      };
 
-    switch (yeniH.tip) {
-      case KasaHareketTipi.GIDER:
-        toplamGider += yeniH.tutar;
-        break;
-      case KasaHareketTipi.CIKIS:
-        cikisYapilanPara += yeniH.tutar;
-        break;
-      case KasaHareketTipi.ADMIN_ALIM:
-        adminAlimlar += yeniH.tutar;
-        if (yeniH.adminAd) {
-          adminOzet[yeniH.adminAd] = (adminOzet[yeniH.adminAd] ?? 0) + yeniH.tutar;
-        }
-        break;
-      case KasaHareketTipi.DIGER:
-        // DİĞER kasaya nakit giriş sayılır — recalcNakitSatis bunu saymıyor
-        // kasaGun.nakitSatis'e manuel ekle
-        break;
-      default:
-        break;
+      let toplamGider      = mevcut.toplamGider;
+      let cikisYapilanPara = mevcut.cikisYapilanPara;
+      let adminAlimlar     = mevcut.adminAlimlar;
+      const adminOzet      = { ...mevcut.adminOzet };
+
+      switch (yeniH.tip) {
+        case KasaHareketTipi.GIDER:
+          toplamGider += yeniH.tutar;
+          break;
+        case KasaHareketTipi.CIKIS:
+          cikisYapilanPara += yeniH.tutar;
+          break;
+        case KasaHareketTipi.ADMIN_ALIM:
+          adminAlimlar += yeniH.tutar;
+          if (yeniH.adminAd) {
+            adminOzet[yeniH.adminAd] = (adminOzet[yeniH.adminAd] ?? 0) + yeniH.tutar;
+          }
+          break;
+        case KasaHareketTipi.DIGER:
+          break;
+        default:
+          break;
+      }
+
+      // gunSonuBakiyesi YOK — transaction sonrası hesaplanacak
+      tx.update(gunRef, {
+        toplamGider,
+        cikisYapilanPara,
+        adminAlimlar,
+        adminOzet,
+        hareketler: [
+          ...mevcut.hareketler.map((h) => ({
+            ...h,
+            tarih: h.tarih instanceof Date ? Timestamp.fromDate(h.tarih) : h.tarih,
+          })),
+          { ...yeniH, tarih: Timestamp.fromDate(yeniH.tarih as Date) },
+        ],
+        guncellemeTarihi: serverTimestamp(),
+      });
+    });
+
+    // 2. Transaction commit olduktan sonra güncel veriyi okuyup gunSonuBakiyesi hesapla
+    //    Bu sayede kasaTahsilatEkle'nin increment ettiği nakitSatis da dahil edilir
+    const freshSnap = await getDoc(gunRef);
+    if (freshSnap.exists()) {
+      const fresh = freshSnap.data()!;
+      const gunSonuBakiyesi = hesaplaGunSonu({
+        acilisBakiyesi:   fresh.acilisBakiyesi   ?? 0,
+        nakitSatis:       fresh.nakitSatis       ?? 0,
+        toplamGider:      fresh.toplamGider      ?? 0,
+        cikisYapilanPara: fresh.cikisYapilanPara ?? 0,
+        adminAlimlar:     fresh.adminAlimlar     ?? 0,
+      });
+      await updateDoc(gunRef, { gunSonuBakiyesi });
     }
 
-    // ✅ gunSonuBakiyesi hesaplamasında mevcut nakitSatis kullan
-    // (recalcNakitSatis ile zaten güncellendi, burada dokunmuyoruz)
-    const gunSonuBakiyesi = hesaplaGunSonu({
-      acilisBakiyesi: mevcut.acilisBakiyesi,
-      nakitSatis: mevcut.nakitSatis, // satış/tahsilat nakiti (dokunma)
-      toplamGider,
-      cikisYapilanPara,
-      adminAlimlar,
-    });
-
-    await updateDoc(gunRef, {
-      toplamGider,
-      cikisYapilanPara,
-      adminAlimlar,
-      adminOzet,
-      gunSonuBakiyesi,
-      hareketler: [
-        ...mevcut.hareketler.map((h) => ({
-          ...h,
-          tarih: h.tarih instanceof Date ? Timestamp.fromDate(h.tarih) : h.tarih,
-        })),
-        { ...yeniH, tarih: Timestamp.fromDate(yeniH.tarih as Date) },
-      ],
-      guncellemeTarihi: serverTimestamp(),
-    });
     return true;
   } catch (err) {
     console.error('kasaHareketEkle hata:', err);
@@ -813,34 +845,41 @@ export const kasaTahsilatEkle = async (params: {
       }
     );
 
-    // 2. Kasa gününü güncelle (atomik increment)
+    // 2. Kasa gününü güncelle — ✅ FIX: increment() ile atomik güncelleme
+    // Eski hali: getDoc → hesapla → updateDoc (race condition!)
+    // Yeni hali: increment() Firestore sunucusunda atomik toplar, çakışma olmaz
     const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', gun);
     const gunSnap = await getDoc(gunRef);
-    const mevcut = gunSnap.exists() ? gunSnap.data() : {};
-
-    const yeniNakit  = (mevcut.nakitSatis  ?? 0) + nakitTutar;
-    const yeniKart   = (mevcut.kartSatis   ?? 0) + kartTutar;
-    const yeniHavale = (mevcut.havaleSatis ?? 0) + havaleTutar;
-    const gunSonuBakiyesi = hesaplaGunSonu({
-      acilisBakiyesi:   mevcut.acilisBakiyesi   ?? 0,
-      nakitSatis:       yeniNakit,
-      toplamGider:      mevcut.toplamGider      ?? 0,
-      cikisYapilanPara: mevcut.cikisYapilanPara ?? 0,
-      adminAlimlar:     mevcut.adminAlimlar     ?? 0,
-    });
 
     if (gunSnap.exists()) {
+      // Mevcut gün var — increment ile atomik artır
       await updateDoc(gunRef, {
-        nakitSatis: yeniNakit, kartSatis: yeniKart, havaleSatis: yeniHavale,
-        gunSonuBakiyesi, guncellemeTarihi: serverTimestamp(),
+        nakitSatis:  increment(nakitTutar),
+        kartSatis:   increment(kartTutar),
+        havaleSatis: increment(havaleTutar),
+        guncellemeTarihi: serverTimestamp(),
       });
+
+      // gunSonuBakiyesi'ni güncel veriden hesapla
+      const freshSnap = await getDoc(gunRef);
+      const fresh = freshSnap.data()!;
+      const gunSonuBakiyesi = hesaplaGunSonu({
+        acilisBakiyesi:   fresh.acilisBakiyesi   ?? 0,
+        nakitSatis:       fresh.nakitSatis       ?? 0,
+        toplamGider:      fresh.toplamGider      ?? 0,
+        cikisYapilanPara: fresh.cikisYapilanPara ?? 0,
+        adminAlimlar:     fresh.adminAlimlar     ?? 0,
+      });
+      await updateDoc(gunRef, { gunSonuBakiyesi });
     } else {
+      // Gün henüz yok — yeni oluştur (bu nadir, genelde getBugununKasaGunu zaten oluşturur)
       await setDoc(gunRef, {
         gun, subeKodu, durum: 'ACIK',
         acilisBakiyesi: 0,
-        nakitSatis: yeniNakit, kartSatis: yeniKart, havaleSatis: yeniHavale,
+        nakitSatis: nakitTutar, kartSatis: kartTutar, havaleSatis: havaleTutar,
         toplamGider: 0, cikisYapilanPara: 0, adminAlimlar: 0,
-        adminOzet: {}, hareketler: [], gunSonuBakiyesi,
+        adminOzet: {}, hareketler: [],
+        gunSonuBakiyesi: nakitTutar, // açılış 0 + nakit
         acilisYapan: yapan,
         olusturmaTarihi: serverTimestamp(), guncellemeTarihi: serverTimestamp(),
       });
@@ -896,27 +935,30 @@ export const kasaIadeEkle = async (params: {
       }
     );
 
-    // 2. Kasadan düş
+    // 2. Kasadan düş — ✅ FIX: increment() ile atomik güncelleme
     const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', gun);
     const gunSnap = await getDoc(gunRef);
-    const mevcut = gunSnap.exists() ? gunSnap.data() : {};
-
-    const yeniNakit  = (mevcut.nakitSatis  ?? 0) - Math.abs(nakitTutar);
-    const yeniKart   = (mevcut.kartSatis   ?? 0) - Math.abs(kartTutar);
-    const yeniHavale = (mevcut.havaleSatis ?? 0) - Math.abs(havaleTutar);
-    const gunSonuBakiyesi = hesaplaGunSonu({
-      acilisBakiyesi:   mevcut.acilisBakiyesi   ?? 0,
-      nakitSatis:       yeniNakit,
-      toplamGider:      mevcut.toplamGider      ?? 0,
-      cikisYapilanPara: mevcut.cikisYapilanPara ?? 0,
-      adminAlimlar:     mevcut.adminAlimlar     ?? 0,
-    });
 
     if (gunSnap.exists()) {
+      // increment ile negatif değer vererek atomik düşür
       await updateDoc(gunRef, {
-        nakitSatis: yeniNakit, kartSatis: yeniKart, havaleSatis: yeniHavale,
-        gunSonuBakiyesi, guncellemeTarihi: serverTimestamp(),
+        nakitSatis:  increment(-Math.abs(nakitTutar)),
+        kartSatis:   increment(-Math.abs(kartTutar)),
+        havaleSatis: increment(-Math.abs(havaleTutar)),
+        guncellemeTarihi: serverTimestamp(),
       });
+
+      // gunSonuBakiyesi'ni güncel veriden hesapla
+      const freshSnap = await getDoc(gunRef);
+      const fresh = freshSnap.data()!;
+      const gunSonuBakiyesi = hesaplaGunSonu({
+        acilisBakiyesi:   fresh.acilisBakiyesi   ?? 0,
+        nakitSatis:       fresh.nakitSatis       ?? 0,
+        toplamGider:      fresh.toplamGider      ?? 0,
+        cikisYapilanPara: fresh.cikisYapilanPara ?? 0,
+        adminAlimlar:     fresh.adminAlimlar     ?? 0,
+      });
+      await updateDoc(gunRef, { gunSonuBakiyesi });
     }
 
     return true;
