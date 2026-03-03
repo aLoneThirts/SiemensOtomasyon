@@ -976,7 +976,7 @@ const AdminPanel: React.FC = () => {
             <div className="ap-user-avatar">{currentUser?.ad?.charAt(0)}{currentUser?.soyad?.charAt(0)}</div>
             <div>
               <div className="ap-user-name">{currentUser?.ad} {currentUser?.soyad}</div>
-              <div className="ap-user-role">Administrator</div>
+              <div className="ap-user-role">Admin</div>
             </div>
           </div>
           <button className="ap-logout-btn" onClick={logout}><i className="fas fa-sign-out-alt" /></button>
