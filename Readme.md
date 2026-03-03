@@ -42,8 +42,9 @@ Modern bir iş takip ve satış teklif yönetim sistemi. React + TypeScript + Fi
 ## 📦 Kurulum
 
 ```bash
-cd is-takip-uygulamasi
+cd siemensotomasyon
 npm install
+npm start
 ```
 
 ## ⚙️ Firebase Konfigürasyonu
