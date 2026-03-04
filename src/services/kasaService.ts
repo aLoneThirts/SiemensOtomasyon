@@ -1,24 +1,27 @@
 // ===================================================
-//  KASA SERVICE — v5 BUG FIX
+//  KASA SERVICE — v6 BUG FIX
 //
-//  🔴 KÖK PROBLEM (tespit edildi):
-//     getBugununKasaGunu() kasaGun dokümanını oluştururken
-//     nakitSatis = 0 yazıyor ve HİÇBİR YER satış/tahsilat
-//     nakit toplamlarını bu alana yazmıyor.
-//     kasaHareketEkle() sadece manuel hareketleri güncelliyor.
-//     Sonuç: nakitSatis hep 0 → gunSonuBakiyesi hep açılış ile aynı.
+//  🔴 v5'teki PROBLEMLER:
+//     1. kasaIadeEkle increment(-tutar) ile kasaGun'ü bozuyordu
+//        → recalcNakitSatis iptal satışları atlıyordu → tutarsızlık
+//     2. getTahsilatlar kasaIptalKayitlari koleksiyonunu okumuyordu
+//        → iade kayıtları tahsilatlar listesine düşmüyordu
+//     3. recalcNakitSatis iptal/iade etkisini hesaba katmıyordu
 //
-//  ✅ ÇÖZÜM — recalcNakitSatis() fonksiyonu:
-//     Her getBugununKasaGunu çağrısında satış + tahsilat nakit
-//     toplamları canlı hesaplanıp kasaGun dokümanına yazılıyor.
-//     Böylece hem bugün hem geçmiş günler doğru görünür.
+//  ✅ v6 ÇÖZÜMLER:
+//     1. kasaIadeEkle artık kasaGun dokümanını DEĞİŞTİRMEZ
+//        → Sadece audit trail yazar (kasaTahsilatHareketleri)
+//        → kasaGun değerleri SADECE recalcNakitSatis tarafından hesaplanır
+//     2. getTahsilatlar artık kasaIptalKayitlari'nı da okur
+//        → İade kayıtları negatif tutarla listeye eklenir
+//     3. recalcNakitSatis artık iptal kayıtlarını da dahil eder
+//        → Nakit toplamları doğru hesaplanır
 //
-//  📋 DEĞİŞTİRİLEN FONKSİYONLAR:
-//     1. recalcNakitSatis()  → YENİ: canlı nakit hesaplama
-//     2. getBugununKasaGunu  → recalcNakitSatis'i çağırır
-//     3. recalculateTumGunler() → YENİ: geçmiş backfill
-//     4. getSatislar / getTahsilatlar → değişmedi (zaten doğruydu)
-//     5. kasaHareketEkle → değişmedi
+//  📋 DEĞİŞEN FONKSİYONLAR:
+//     1. kasaIadeEkle → increment kaldırıldı, sadece audit trail
+//     2. getTahsilatlar → kasaIptalKayitlari dahil edildi
+//     3. recalcNakitSatis → iptal kayıtları dahil edildi
+//     4. getBugununKasaGunu → recalcNakitSatis çağrısı eklendi (canlı hesaplama)
 // ===================================================
 
 import {
@@ -58,7 +61,6 @@ const gunNormalize = (d: Date): Date => {
   return g;
 };
 
-// Bir tarihin "YYYY-MM-DD" string'ine eşit olup olmadığını kontrol et (timezone-safe)
 const tarihGunEsit = (tarih: Date, gun: string): boolean => {
   return tarihStr(tarih) === gun;
 };
@@ -141,18 +143,15 @@ export interface KasaTahsilatOzet {
 export type SatisFiltreTip = 'bugun' | 'haftabasindan' | 'buay' | '30gun' | 'tahsilatlar';
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  🔧 recalcNakitSatis — CORE FIX
+//  🔧 recalcNakitSatis — v6: İptal kayıtları dahil edildi
 //
-//  Bu fonksiyon bir günün tüm satış ve tahsilat kayıtlarını okuyarak
-//  o güne ait nakit toplamını hesaplar ve kasaGun dokümanına yazar.
-//
-//  Çağrıldığı yerler:
-//  - getBugununKasaGunu() → her sayfa açılışında
-//  - recalculateTumGunler() → geçmiş backfill için
+//  Satış + tahsilat nakit toplamlarını hesaplar.
+//  ✅ v6: kasaIptalKayitlari koleksiyonundan iade tutarlarını da çeker
+//         ve net toplamdan düşer.
 // ═══════════════════════════════════════════════════════════════════════════
 export const recalcNakitSatis = async (
   subeKodu: string,
-  gun: string, // "YYYY-MM-DD"
+  gun: string,
 ): Promise<{
   nakitSatis: number;
   kartSatis: number;
@@ -162,7 +161,6 @@ export const recalcNakitSatis = async (
   if (!sube) return { nakitSatis: 0, kartSatis: 0, havaleSatis: 0 };
 
   const satislarRef = collection(db, `subeler/${sube.dbPath}/satislar`);
-  // Son 2 ayın satışlarını çek — tahsilat en fazla bu kadar geriye gider
   const ikiAyOnce = new Date();
   ikiAyOnce.setMonth(ikiAyOnce.getMonth() - 2);
   ikiAyOnce.setDate(1);
@@ -181,16 +179,13 @@ export const recalcNakitSatis = async (
   snap.docs.forEach((docSnap) => {
     const data = docSnap.data();
 
-    // İptal satışları atla
+    // İptal satışları atla — bunların etkisi iptal kayıtlarından gelecek
     if (data.durum === 'IPTAL' || data.iptalEdildi === true) return;
 
-    // ── A) Bu günün SATIŞLARININ nakiti ────────────────────────────────
-    // Satış bu günde yapılmışsa nakit tutarını ekle
     const satisTarih = toDate(data.olusturmaTarihi);
     const buGununSatisi = tarihGunEsit(satisTarih, gun);
 
     if (buGununSatisi) {
-      // Nakit (peşinat)
       const nakit = Number(
         data.pesinatTutar ??
         data.odemeOzeti?.kasayaYansiran ??
@@ -198,23 +193,19 @@ export const recalcNakitSatis = async (
         data.nakit ??
         0
       );
-      // Kart ödemeleri
       let kart = 0;
       (data.kartOdemeler ?? []).forEach((k: any) => {
         kart += Number(k.tutar ?? k.netTutar ?? 0);
       });
-      // Havale
       const havale = Number(data.havaleTutar ?? 0);
 
       nakitSatis += nakit;
-      kartSatis  += kart;
+      kartSatis += kart;
       havaleSatis += havale;
-      return; // Bu satışı satış olarak saydık, tahsilat olarak tekrar sayma
+      return;
     }
 
-    // ── B) Önceki günlerin SATIŞLARININ bu güne gelen tahsilatı ───────
-    // Nakit ödeme tarihi bu güne denk geliyorsa sayıyoruz
-
+    // Önceki günlerin tahsilatları
     const nakit = Number(
       data.pesinatTutar ??
       data.odemeOzeti?.kasayaYansiran ??
@@ -231,7 +222,6 @@ export const recalcNakitSatis = async (
       }
     }
 
-    // Kart ödemeleri
     (data.kartOdemeler ?? []).forEach((k: any) => {
       const kTutar = Number(k.tutar ?? k.netTutar ?? 0);
       if (kTutar <= 0) return;
@@ -241,7 +231,6 @@ export const recalcNakitSatis = async (
       }
     });
 
-    // Havale
     const havale = Number(data.havaleTutar ?? 0);
     if (havale > 0) {
       const havaleTarih = toDate(
@@ -253,22 +242,38 @@ export const recalcNakitSatis = async (
     }
   });
 
+  // ═══ v6 FIX: İptal kayıtlarını da dahil et ═══
+  // kasaIptalKayitlari koleksiyonundan bu güne ait iadeleri çek
+  // Bu kayıtlarda tutarlar zaten negatif (nakitTutar: -13244 gibi)
+  try {
+    const [y, m, d] = gun.split('-').map(Number);
+    const gunBaslangic = new Date(y, m - 1, d, 0, 0, 0, 0);
+    const gunBitis = new Date(y, m - 1, d, 23, 59, 59, 999);
+
+    const iptalSnap = await getDocs(
+      query(
+        collection(db, `subeler/${sube.dbPath}/kasaIptalKayitlari`),
+        where('created_at', '>=', Timestamp.fromDate(gunBaslangic)),
+        where('created_at', '<=', Timestamp.fromDate(gunBitis)),
+      )
+    );
+
+    iptalSnap.docs.forEach((iptalDoc) => {
+      const iptalData = iptalDoc.data();
+      // Tutarlar zaten negatif (ör: nakitTutar: -13244)
+      nakitSatis += Number(iptalData.nakitTutar ?? 0);
+      kartSatis += Number(iptalData.kartTutar ?? 0);
+      havaleSatis += Number(iptalData.havaleTutar ?? 0);
+    });
+  } catch (err) {
+    console.error('recalcNakitSatis iptal kayıtları hatası:', err);
+  }
+
   return { nakitSatis, kartSatis, havaleSatis };
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  🔧 recalculateTumGunler — GEÇMİŞ BACKFILL
-//
-//  Tüm geçmiş kasa günleri için nakitSatis, kartSatis, havaleSatis ve
-//  gunSonuBakiyesi'ni yeniden hesaplar.
-//
-//  Nasıl çalıştırılır:
-//  Kasa.tsx'te bir "Kasa Verilerini Yeniden Hesapla" butonu ekleyip
-//  admin yetkisiyle bu fonksiyonu çağırabilirsiniz.
-//
-//  Örnek:
-//  import { recalculateTumGunler } from '../services/kasaService';
-//  await recalculateTumGunler(aktifSubeKodu);
+//  recalculateTumGunler — Geçmiş backfill (değişmedi)
 // ═══════════════════════════════════════════════════════════════════════════
 export const recalculateTumGunler = async (
   subeKodu: string,
@@ -279,7 +284,7 @@ export const recalculateTumGunler = async (
 
   let guncellenen = 0;
   let hatali = 0;
-  let oncekiGunSonu = 0; // İlk günün açılışı 0
+  let oncekiGunSonu = 0;
 
   for (const gunSnap of snap.docs) {
     try {
@@ -287,14 +292,9 @@ export const recalculateTumGunler = async (
       const mevcut = docToKasaGun(gunSnap.id, gunSnap.data());
       onProgress?.(`🔄 ${gun} hesaplanıyor...`);
 
-      // Bu günün nakit toplamlarını canlı hesapla
       const { nakitSatis, kartSatis, havaleSatis } = await recalcNakitSatis(subeKodu, gun);
 
-      // Açılış bakiyesini önceki günden al
-      // (Sadece ilk kaydın açılışı 0, diğerleri zincirleme hesaplanır)
       const acilisBakiyesi = oncekiGunSonu;
-
-      // Manuel hareketlerin gider/çıkış toplamlarını koru (onlar doğruydu)
       const toplamGider = mevcut.toplamGider;
       const cikisYapilanPara = mevcut.cikisYapilanPara;
       const adminAlimlar = mevcut.adminAlimlar;
@@ -331,10 +331,7 @@ export const recalculateTumGunler = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  getBugununKasaGunu — DEĞİŞTİRİLDİ
-//
-//  Her çağrıda recalcNakitSatis() ile canlı nakit hesaplayıp Firestore'u günceller.
-//  Bu sayede satış/tahsilat eklendiğinde kasa otomatik güncellenir.
+//  getBugununKasaGunu — v6: Her açılışta recalc çağırıp kasaGun'ü günceller
 // ═══════════════════════════════════════════════════════════════════════════
 export const getBugununKasaGunu = async (
   subeKodu: string,
@@ -345,9 +342,6 @@ export const getBugununKasaGunu = async (
   const colRef = collection(db, 'kasalar', subeKodu, 'gunler');
   const bugunRef = doc(colRef, today);
 
-  // ✅ FIX: Önceki günün bakiyesini transaction DIŞINDA hesapla
-  // getDocs (query) transaction içinde kullanılamaz, sadece tx.get(docRef) çalışır.
-  // Önceki günler immutable olduğu için bu güvenlidir.
   let oncekiGunSonuBakiyesi = 0;
   const oncekiSnap = await getDocs(
     query(colRef, orderBy('gun', 'desc'), limit(10))
@@ -359,13 +353,10 @@ export const getBugununKasaGunu = async (
     }
   }
 
-  // ✅ FIX: runTransaction ile yeni gün oluşturma — race condition önlemi
-  // İki kişi aynı anda kasa açarsa sadece ilki setDoc yapar, ikincisi mevcut veriyi okur
   const result = await runTransaction(db, async (tx) => {
     const bugunSnap = await tx.get(bugunRef);
 
     if (!bugunSnap.exists()) {
-      // Yeni gün oluştur — açılış bakiyesi önceki günden alındı
       const acilisBakiyesi = oncekiGunSonuBakiyesi;
 
       tx.set(bugunRef, {
@@ -373,7 +364,7 @@ export const getBugununKasaGunu = async (
         subeKodu,
         durum: 'ACIK',
         acilisBakiyesi,
-        gunSonuBakiyesi: acilisBakiyesi, // yeni gün açılışta nakitSatis=0
+        gunSonuBakiyesi: acilisBakiyesi,
         nakitSatis: 0,
         kartSatis: 0,
         havaleSatis: 0,
@@ -397,13 +388,12 @@ export const getBugununKasaGunu = async (
         olusturmaTarihi: new Date(),
       };
     } else {
-      // Mevcut gün — sadece oku, üzerine yazma
       const data = bugunSnap.data();
       return {
         acilisBakiyesi:   data.acilisBakiyesi   ?? 0,
         nakitSatis:       data.nakitSatis       ?? 0,
         kartSatis:        data.kartSatis        ?? 0,
-        havaleSatis:      data.havaleSatis      ?? 0,
+        havaleSatis:      data.havaleSatis       ?? 0,
         toplamGider:      data.toplamGider      ?? 0,
         cikisYapilanPara: data.cikisYapilanPara ?? 0,
         adminAlimlar:     data.adminAlimlar     ?? 0,
@@ -416,12 +406,25 @@ export const getBugununKasaGunu = async (
     }
   });
 
+  // ═══ v6 FIX: Transaction sonrası canlı recalc çalıştır ═══
+  // Bu sayede satış/tahsilat/iptal eklendiğinde kasa otomatik güncellenir
+  const { nakitSatis, kartSatis, havaleSatis } = await recalcNakitSatis(subeKodu, today);
+
+  // Firestore'u güncelle (recalc sonuçlarıyla)
   const gunSonuBakiyesi = hesaplaGunSonu({
     acilisBakiyesi: result.acilisBakiyesi,
-    nakitSatis: result.nakitSatis,
+    nakitSatis,
     toplamGider: result.toplamGider,
     cikisYapilanPara: result.cikisYapilanPara,
     adminAlimlar: result.adminAlimlar,
+  });
+
+  await updateDoc(bugunRef, {
+    nakitSatis,
+    kartSatis,
+    havaleSatis,
+    gunSonuBakiyesi,
+    guncellemeTarihi: serverTimestamp(),
   });
 
   return {
@@ -431,9 +434,9 @@ export const getBugununKasaGunu = async (
     durum: result.durum as 'ACIK' | 'KAPALI',
     acilisBakiyesi: result.acilisBakiyesi,
     gunSonuBakiyesi,
-    nakitSatis: result.nakitSatis,
-    kartSatis: result.kartSatis,
-    havaleSatis: result.havaleSatis,
+    nakitSatis,
+    kartSatis,
+    havaleSatis,
     toplamGider: result.toplamGider,
     cikisYapilanPara: result.cikisYapilanPara,
     adminAlimlar: result.adminAlimlar,
@@ -446,7 +449,6 @@ export const getBugununKasaGunu = async (
 };
 
 // ─── getSatislar ─────────────────────────────────────────────────────────────
-// (Değişmedi — zaten doğru çalışıyordu, UI'da göstermek için kullanılıyor)
 export const getSatislar = async (
   subeKodu: string,
   filtre: SatisFiltreTip = 'bugun',
@@ -601,7 +603,7 @@ export const getSatislar = async (
   }
 };
 
-// ─── getTahsilatlar ───────────────────────────────────────────────────────────
+// ─── getTahsilatlar — v6: İptal kayıtları dahil edildi ─────────────────────
 export const getTahsilatlar = async (
   subeKodu: string,
   gun: string,
@@ -611,25 +613,82 @@ export const getTahsilatlar = async (
     tahsilatTutar: 0, tahsilatAdeti: 0, tahsilatlar: [],
   };
   try {
+    // 1. Normal tahsilatları getir (mevcut mantık)
     const sonuc = await getSatislar(subeKodu, 'tahsilatlar', gun);
-    return {
+
+    const ozet: KasaTahsilatOzet = {
       toplamNakit: sonuc.toplamNakit,
       toplamKart: sonuc.toplamKart,
       toplamHavale: sonuc.toplamHavale,
       tahsilatTutar: sonuc.tahsilatTutar,
       tahsilatAdeti: sonuc.satisAdeti,
-      tahsilatlar: sonuc.satislar,
+      tahsilatlar: [...sonuc.satislar],
     };
+
+    // ═══ v6 FIX: İptal kayıtlarını da dahil et ═══
+    const sube = getSubeByKod(subeKodu as SubeKodu);
+    if (sube) {
+      try {
+        const [y, m, d] = gun.split('-').map(Number);
+        const gunBaslangic = new Date(y, m - 1, d, 0, 0, 0, 0);
+        const gunBitis = new Date(y, m - 1, d, 23, 59, 59, 999);
+
+        const iptalSnap = await getDocs(
+          query(
+            collection(db, `subeler/${sube.dbPath}/kasaIptalKayitlari`),
+            where('created_at', '>=', Timestamp.fromDate(gunBaslangic)),
+            where('created_at', '<=', Timestamp.fromDate(gunBitis)),
+          )
+        );
+
+        iptalSnap.docs.forEach((iptalDoc) => {
+          const data = iptalDoc.data();
+          const nakitTutar = Number(data.nakitTutar ?? 0);  // zaten negatif
+          const kartTutar = Number(data.kartTutar ?? 0);    // zaten negatif
+          const havaleTutar = Number(data.havaleTutar ?? 0); // zaten negatif
+
+          // Toplam hesaplamalara ekle (negatif olduğu için otomatik düşer)
+          ozet.toplamNakit += nakitTutar;
+          ozet.toplamKart += kartTutar;
+          ozet.toplamHavale += havaleTutar;
+          ozet.tahsilatTutar += (nakitTutar + kartTutar + havaleTutar);
+          ozet.tahsilatAdeti += 1;
+
+          // Listeye ekle — kırmızı satır olarak görünecek
+          ozet.tahsilatlar.push({
+            id: iptalDoc.id,
+            satisKodu: data.satisKodu ?? '',
+            musteriIsim: data.musteriIsim ?? '—',
+            tutar: nakitTutar + kartTutar + havaleTutar,
+            nakitTutar,
+            kartTutar,
+            havaleTutar,
+            tarih: toDate(data.created_at),
+            odemeDurumu: 'IADE',
+            onayDurumu: false,
+            kullanici: data.iptalYapan ?? '—',
+            oncekiGunOdemesi: true,
+            satisTarihi: data.satisTarihi ?? '',
+            iptalIadesi: true,  // ← UI'da kırmızı satır için
+            aciklama: data.aciklama ?? 'Satış iptali iadesi',
+          });
+        });
+      } catch (err) {
+        console.error('getTahsilatlar iptal kayıtları hatası:', err);
+      }
+    }
+
+    // Tarihe göre sırala
+    ozet.tahsilatlar.sort((a, b) => b.tarih.getTime() - a.tarih.getTime());
+
+    return ozet;
   } catch (err) {
     console.error('getTahsilatlar hata:', err);
     return bos;
   }
 };
 
-// ─── kasaHareketEkle ──────────────────────────────────────────────────────────
-// ✅ FIX: runTransaction ile hareketler/gider/cikis atomik güncellenir.
-// gunSonuBakiyesi transaction SONRASI fresh okuma ile hesaplanır.
-// Böylece kasaTahsilatEkle'nin increment'ı ile çakışma olmaz.
+// ─── kasaHareketEkle (değişmedi) ──────────────────────────────────────────
 export const kasaHareketEkle = async (
   subeKodu: string,
   kasaGunId: string,
@@ -640,8 +699,6 @@ export const kasaHareketEkle = async (
   try {
     const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', kasaGunId);
 
-    // 1. Transaction ile gider/cikis/admin toplamlarını ve hareketler array'ini güncelle
-    //    gunSonuBakiyesi burada YAZILMAZ — çünkü nakitSatis increment ile değişmiş olabilir
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(gunRef);
       if (!snap.exists()) throw new Error('Kasa günü bulunamadı');
@@ -678,7 +735,6 @@ export const kasaHareketEkle = async (
           break;
       }
 
-      // gunSonuBakiyesi YOK — transaction sonrası hesaplanacak
       tx.update(gunRef, {
         toplamGider,
         cikisYapilanPara,
@@ -695,8 +751,6 @@ export const kasaHareketEkle = async (
       });
     });
 
-    // 2. Transaction commit olduktan sonra güncel veriyi okuyup gunSonuBakiyesi hesapla
-    //    Bu sayede kasaTahsilatEkle'nin increment ettiği nakitSatis da dahil edilir
     const freshSnap = await getDoc(gunRef);
     if (freshSnap.exists()) {
       const fresh = freshSnap.data()!;
@@ -717,7 +771,7 @@ export const kasaHareketEkle = async (
   }
 };
 
-// ─── getKasaGecmisi ───────────────────────────────────────────────────────────
+// ─── getKasaGecmisi (değişmedi) ───────────────────────────────────────────
 export const getKasaGecmisi = async (subeKodu: string, gunSayisi = 90): Promise<KasaGun[]> => {
   try {
     const q = query(
@@ -733,7 +787,7 @@ export const getKasaGecmisi = async (subeKodu: string, gunSayisi = 90): Promise<
   }
 };
 
-// ─── testGunGecisi ────────────────────────────────────────────────────────────
+// ─── testGunGecisi (değişmedi) ────────────────────────────────────────────
 export const testGunGecisi = async (
   subeKodu: string,
   acilisYapan: string,
@@ -800,7 +854,7 @@ export interface KasaTahsilatHareket {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  kasaTahsilatEkle — Satıştan tahsilat alındığında kasayı günceller
+//  kasaTahsilatEkle (değişmedi)
 // ═══════════════════════════════════════════════════════════════════════════
 export const kasaTahsilatEkle = async (params: {
   subeKodu: string;
@@ -828,7 +882,6 @@ export const kasaTahsilatEkle = async (params: {
   if (!sube) return false;
 
   try {
-    // 1. Audit trail
     await addDoc(
       collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
       {
@@ -845,14 +898,10 @@ export const kasaTahsilatEkle = async (params: {
       }
     );
 
-    // 2. Kasa gününü güncelle — ✅ FIX: increment() ile atomik güncelleme
-    // Eski hali: getDoc → hesapla → updateDoc (race condition!)
-    // Yeni hali: increment() Firestore sunucusunda atomik toplar, çakışma olmaz
     const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', gun);
     const gunSnap = await getDoc(gunRef);
 
     if (gunSnap.exists()) {
-      // Mevcut gün var — increment ile atomik artır
       await updateDoc(gunRef, {
         nakitSatis:  increment(nakitTutar),
         kartSatis:   increment(kartTutar),
@@ -860,7 +909,6 @@ export const kasaTahsilatEkle = async (params: {
         guncellemeTarihi: serverTimestamp(),
       });
 
-      // gunSonuBakiyesi'ni güncel veriden hesapla
       const freshSnap = await getDoc(gunRef);
       const fresh = freshSnap.data()!;
       const gunSonuBakiyesi = hesaplaGunSonu({
@@ -872,14 +920,13 @@ export const kasaTahsilatEkle = async (params: {
       });
       await updateDoc(gunRef, { gunSonuBakiyesi });
     } else {
-      // Gün henüz yok — yeni oluştur (bu nadir, genelde getBugununKasaGunu zaten oluşturur)
       await setDoc(gunRef, {
         gun, subeKodu, durum: 'ACIK',
         acilisBakiyesi: 0,
         nakitSatis: nakitTutar, kartSatis: kartTutar, havaleSatis: havaleTutar,
         toplamGider: 0, cikisYapilanPara: 0, adminAlimlar: 0,
         adminOzet: {}, hareketler: [],
-        gunSonuBakiyesi: nakitTutar, // açılış 0 + nakit
+        gunSonuBakiyesi: nakitTutar,
         acilisYapan: yapan,
         olusturmaTarihi: serverTimestamp(), guncellemeTarihi: serverTimestamp(),
       });
@@ -893,7 +940,14 @@ export const kasaTahsilatEkle = async (params: {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  kasaIadeEkle — İade onaylandığında o günün kasasından düşer
+//  kasaIadeEkle — v6 FIX: kasaGun dokümanını DEĞİŞTİRMEZ
+//
+//  🔴 Eski (v5): increment(-tutar) ile kasaGun.nakitSatis'ten düşüyordu
+//     → recalcNakitSatis ile çakışma → negatif değerler
+//
+//  ✅ Yeni (v6): Sadece audit trail yazar
+//     → kasaGun değerleri recalcNakitSatis tarafından hesaplanır
+//     → iptal kayıtları kasaIptalKayitlari koleksiyonundan okunur
 // ═══════════════════════════════════════════════════════════════════════════
 export const kasaIadeEkle = async (params: {
   subeKodu: string;
@@ -917,7 +971,7 @@ export const kasaIadeEkle = async (params: {
   if (!sube) return false;
 
   try {
-    // 1. Audit trail (negatif tutarlar)
+    // 1. Audit trail (negatif tutarlar) — bu kalıyor
     await addDoc(
       collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
       {
@@ -935,31 +989,16 @@ export const kasaIadeEkle = async (params: {
       }
     );
 
-    // 2. Kasadan düş — ✅ FIX: increment() ile atomik güncelleme
-    const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', gun);
-    const gunSnap = await getDoc(gunRef);
+    // ═══ v6 FIX: kasaGun dokümanını GÜNCELLEME ═══
+    // Eski kod burada increment(-tutar) yapıyordu — KALDIRILDI
+    // Kasa değerleri artık sadece recalcNakitSatis tarafından hesaplanır
+    // recalcNakitSatis kasaIptalKayitlari'ndan negatif tutarları okur
+    //
+    // NOT: kasaIptalKaydiOlustur zaten kasaIptalKayitlari'na yazar,
+    // recalcNakitSatis de oradan okur. Bu yüzden burada kasaGun'e
+    // dokunmaya gerek yok.
 
-    if (gunSnap.exists()) {
-      // increment ile negatif değer vererek atomik düşür
-      await updateDoc(gunRef, {
-        nakitSatis:  increment(-Math.abs(nakitTutar)),
-        kartSatis:   increment(-Math.abs(kartTutar)),
-        havaleSatis: increment(-Math.abs(havaleTutar)),
-        guncellemeTarihi: serverTimestamp(),
-      });
-
-      // gunSonuBakiyesi'ni güncel veriden hesapla
-      const freshSnap = await getDoc(gunRef);
-      const fresh = freshSnap.data()!;
-      const gunSonuBakiyesi = hesaplaGunSonu({
-        acilisBakiyesi:   fresh.acilisBakiyesi   ?? 0,
-        nakitSatis:       fresh.nakitSatis       ?? 0,
-        toplamGider:      fresh.toplamGider      ?? 0,
-        cikisYapilanPara: fresh.cikisYapilanPara ?? 0,
-        adminAlimlar:     fresh.adminAlimlar     ?? 0,
-      });
-      await updateDoc(gunRef, { gunSonuBakiyesi });
-    }
+    console.log(`✅ kasaIadeEkle: Audit trail yazıldı (kasaGun güncellenmedi) — ${satisKodu}`);
 
     return true;
   } catch (err) {
