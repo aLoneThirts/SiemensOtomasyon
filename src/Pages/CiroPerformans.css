@@ -222,7 +222,7 @@
   color: white;
 }
 
-/* ─── 5'Lİ KPI GRID (Ürün Çeşidi & Azalan Stok kaldırıldı) ── */
+/* ─── 5'Lİ KPI GRID ─────────────────────────────────────────── */
 .cp-kpi-5grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -739,44 +739,82 @@
 .cp-hedef-ozet {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .cp-hedef-ozet-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--gray-100);
 }
 
 .cp-hedef-ozet-item:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .cp-hedef-ozet-left {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
 .cp-hedef-ozet-renk {
   width: 4px;
   height: 24px;
   border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .cp-hedef-ozet-ad {
   font-size: 13px;
   font-weight: 500;
   color: var(--gray-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cp-hedef-ozet-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 
 .cp-hedef-ozet-oran {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   font-family: var(--font-mono);
-  color: var(--primary);
+}
+
+/* ✅ YENİ: TL alt yazısı */
+.cp-hedef-ozet-tl {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--gray-500);
+  white-space: nowrap;
+}
+
+/* ✅ YENİ: Progress bar — item'ın altında tam genişlikte */
+.cp-hedef-ozet-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--gray-200);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-basis: 100%;
+}
+
+.cp-hedef-ozet-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
 }
 
 /* ─── HEDEF ITEM (Detaylı) ─────────────────────────────────── */
@@ -1138,8 +1176,6 @@
 }
 
 /* ─── RESPONSIVE ───────────────────────────────────────────── */
-
-/* 5 kart → 1400px üstünde 5'li, altında kademeli küçülme */
 @media (max-width: 1400px) {
   .cp-kpi-5grid {
     grid-template-columns: repeat(3, 1fr);

@@ -337,7 +337,6 @@ const CiroPerformansPage: React.FC = () => {
     const fetchData = async (): Promise<void> => {
       setLoading(true);
       try {
-        // Bu yılın başından itibaren satışları çek (yıllık filtre için yeterli)
         const yilBasi = new Date(new Date().getFullYear(), 0, 1);
         yilBasi.setHours(0, 0, 0, 0);
         const yilBasiTimestamp = Timestamp.fromDate(yilBasi);
@@ -375,7 +374,8 @@ const CiroPerformansPage: React.FC = () => {
           const data = d.data();
           return { uid: d.id, ...data, hedefler: data.hedefler || {}, hedef: data.hedef || 0 } as User;
         });
-        setSaticilar(users.filter(u => !isAdmin(u.role)));
+        // ✅ DÜZELTİLDİ: Adminler de dahil tüm kullanıcılar alınıyor
+        setSaticilar(users);
         const mh: Record<string, number> = {};
         magazaSnap.forEach(d => { mh[d.id] = d.data().hedef || 0; });
         setMagazaHedefler(mh);
@@ -418,8 +418,12 @@ const CiroPerformansPage: React.FC = () => {
     [zamanFiltreliSatislar, aktifSube]
   );
 
+  // Satıcı performans listesi için sadece non-admin kullanıcılar
   const filtreliSaticilar: User[] = useMemo(
-    () => (aktifSube ? saticilar.filter(u => u.subeKodu === aktifSube) : saticilar),
+    () => {
+      const nonAdminlar = saticilar.filter(u => !isAdmin(u.role));
+      return aktifSube ? nonAdminlar.filter(u => u.subeKodu === aktifSube) : nonAdminlar;
+    },
     [saticilar, aktifSube]
   );
 
@@ -437,6 +441,7 @@ const CiroPerformansPage: React.FC = () => {
     const ciroDegisim = oncekiCiro > 0 ? ((ciro - oncekiCiro) / oncekiCiro) * 100 : 0;
     const ortalamaSatis = adet > 0 ? ciro / adet : 0;
     const karMarji = ciro > 0 ? (kar / ciro) * 100 : 0;
+    // ✅ DÜZELTİLDİ: Aktif satıcı sayısı sadece non-admin kullanıcıları sayıyor
     const aktifSaticiSayisi = filtreliSaticilar.length;
     const bugunSatis = satislar.filter(s => { const t = toDate(s.tarih); return t.toDateString() === new Date().toDateString(); }).length;
     return [
@@ -634,7 +639,6 @@ const CiroPerformansPage: React.FC = () => {
                   <span className="cp-card-badge">Bu Ay</span>
                 </div>
                 <div className="cp-card-content" style={{ padding: '16px 20px' }}>
-                  {/* Üst bilgi satırı */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14 }}>
                     <div>
                       <div style={{ fontSize: 12, color: '#64748b', marginBottom: 3 }}>Mevcut Ciro</div>
@@ -655,8 +659,6 @@ const CiroPerformansPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-
-                  {/* Donate bar */}
                   <div style={{ position: 'relative', height: 24, borderRadius: 12, background: '#e2e8f0', overflow: 'hidden' }}>
                     <div style={{
                       position: 'absolute', left: 0, top: 0, bottom: 0,
@@ -671,8 +673,6 @@ const CiroPerformansPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-
-                  {/* Alt bilgi */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 12, color: '#64748b' }}>
                     <span style={{ color: yuzde >= 100 ? '#16a34a' : '#64748b', fontWeight: yuzde >= 100 ? 700 : 400 }}>
                       {yuzde >= 100 ? '🎉 Hedefe ulaştın!' : `Hedefe ${formatTL(mevcutSatici.hedef - mevcutSatici.ciro)} kaldı`}
@@ -703,7 +703,7 @@ const CiroPerformansPage: React.FC = () => {
             </div>
           </div>
 
-          {/* MAĞAZA HEDEFLERİ */}
+          {/* ✅ DÜZELTİLDİ: MAĞAZA HEDEFLERİ — ciro + hedef TL + progress bar gösteriliyor */}
           <div className="cp-card">
             <div className="cp-card-header">
               <h3><span className="cp-card-icon">🎯</span>Hedefler</h3>
@@ -718,8 +718,29 @@ const CiroPerformansPage: React.FC = () => {
                       <span className="cp-hedef-ozet-ad">{hedef.ad.replace(' Şubesi', '')}</span>
                     </div>
                     <div className="cp-hedef-ozet-right">
-                      <span className="cp-hedef-ozet-oran">%{hedef.yuzde.toFixed(0)}</span>
+                      <span
+                        className="cp-hedef-ozet-oran"
+                        style={{
+                          color: hedef.yuzde >= 100 ? '#16a34a' : hedef.yuzde >= 70 ? '#d97706' : 'var(--primary)'
+                        }}
+                      >
+                        %{hedef.yuzde.toFixed(0)}
+                      </span>
+                      <span className="cp-hedef-ozet-tl">
+                        {formatKisa(hedef.ciro)}{hedef.hedef > 0 ? ` / ${formatKisa(hedef.hedef)}` : ' / hedef yok'}
+                      </span>
                     </div>
+                    {hedef.hedef > 0 && (
+                      <div className="cp-hedef-ozet-bar">
+                        <div
+                          className="cp-hedef-ozet-bar-fill"
+                          style={{
+                            width: `${hedef.yuzde}%`,
+                            background: hedef.yuzde >= 100 ? '#16a34a' : hedef.yuzde >= 70 ? '#d97706' : hedef.renk
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
