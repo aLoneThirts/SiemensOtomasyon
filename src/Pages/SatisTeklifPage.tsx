@@ -348,7 +348,9 @@ const SatisTeklifPage: React.FC = () => {
     }
     if (!musteriTemsilcisiId) { alert('❌ Müşteri temsilcisi seçilmelidir!'); return; }
     if (teslimatTarihi && !isTeslimatTarihiGecerli()) { alert('❌ Teslimat tarihi, satış tarihinden önce olamaz.'); return; }
-    // v7 FIX: teslimatTarihi + marsNo bağımlılığı kaldırıldı
+    // v7: Mars No ve Teslimat Tarihi karşılıklı zorunluluk
+    if (marsNo?.trim() && !teslimatTarihi) { alert('❌ Mars No girildiğinde teslimat tarihi zorunludur.'); return; }
+    if (teslimatTarihi && !marsNo?.trim()) { alert('❌ Teslimat tarihi girildiğinde Mars No zorunludur.'); return; }
 
     const _odenen = toplamOdenenHesapla();
     const _tutar  = manuelSatisTutari ?? 0;
@@ -487,7 +489,9 @@ const SatisTeklifPage: React.FC = () => {
               <label>Teslimat Tarihi</label>
               <input type="date" value={teslimatTarihi} min={tarih} onChange={e => setTeslimatTarihi(e.target.value)} style={{ borderColor: teslimatTarihi && !isTeslimatTarihiGecerli() ? '#ef4444' : undefined }} />
               {teslimatTarihi && !isTeslimatTarihiGecerli() && <small style={{ color: '#ef4444' }}>Teslimat tarihi, satış tarihinden önce olamaz.</small>}
-              {/* v7: Mars-teslimat bağımlılığı kaldırıldı */}
+              {/* v7: Mars-teslimat karşılıklı zorunluluk */}
+              {marsNo?.trim() && !teslimatTarihi && <small style={{ color: '#d97706' }}>⚠️ Mars No girildiğinde teslimat tarihi zorunludur.</small>}
+              {teslimatTarihi && !marsNo?.trim() && <small style={{ color: '#d97706' }}>⚠️ Teslimat tarihi girildiğinde Mars No zorunludur.</small>}
             </div>
             <div className="form-field">
               <label>Satış Tutarı *</label>
