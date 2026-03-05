@@ -11,7 +11,7 @@ import {
   YesilEtiket, OdemeYontemi, SatisLog, BANKALAR, TAKSIT_SECENEKLERI,
   OdemeDurumu, BekleyenUrun,
 } from '../types/satis';
-import { getSubeByKod, SubeKodu } from '../types/sube';
+import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
 import './SatisTeklif.css';
 import { kasaTahsilatEkle } from '../services/kasaService';
 
@@ -24,12 +24,10 @@ const STORAGE_KEY = 'satisTeklif_draft';
 
 const bugunStr = (): string => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
 
-// ✅ v7 FIX: Fatura No 1-4 haneli rakam kabul eder
 const FATURA_NO_REGEX = /^(\d{1,4}|Kesilmedi)$/;
 const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
 const isFaturaNoGecerli = (val: string): boolean => FATURA_NO_REGEX.test(val);
 
-// ✅ v7 FIX: Mars No — sadece 10 haneli sayı, yıl kısıtlaması kaldırıldı
 const MARS_NO_REGEX = /^\d{10}$/;
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
 
@@ -55,6 +53,11 @@ const SatisTeklifPage: React.FC = () => {
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
   const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
+
+  // ✅ YENİ: Admin için seçili şube state'i
+  const [adminSeciliSube, setAdminSeciliSube] = useState<string>(() =>
+    getInitial('adminSeciliSube', isAdmin ? (currentUser?.subeKodu || SUBELER[0]?.kod || '') : '')
+  );
 
   const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>(() =>
     getInitial('musteriBilgileri', { isim: '', adres: '', faturaAdresi: '', isAdresi: '', vergiNumarasi: '', vkNo: '', vd: '', cep: '', unvan: '' })
@@ -97,6 +100,9 @@ const SatisTeklifPage: React.FC = () => {
 
   const draftVarMi = !!sessionStorage.getItem(STORAGE_KEY);
 
+  // ✅ Aktif şube kodu — admin seçimine göre, normal kullanıcı için kendi şubesi
+  const aktifSubeKodu = isAdmin ? adminSeciliSube : (currentUser?.subeKodu || '');
+
   useEffect(() => {
     saveDraft({
       musteriBilgileri, musteriTemsilcisiId, musteriTemsilcisiTel,
@@ -104,6 +110,7 @@ const SatisTeklifPage: React.FC = () => {
       servisNotu, teslimEdildiMi, cevap, fatura, ileriTeslim,
       ileriTeslimTarihi, servis, notlar, seciliKampanyaIds,
       pesinatlar, havaleler, kartOdemeler, manuelSatisTutari, onayDurumu,
+      adminSeciliSube,
     });
   }, [
     musteriBilgileri, musteriTemsilcisiId, musteriTemsilcisiTel,
@@ -111,6 +118,7 @@ const SatisTeklifPage: React.FC = () => {
     servisNotu, teslimEdildiMi, cevap, fatura, ileriTeslim,
     ileriTeslimTarihi, servis, notlar, seciliKampanyaIds,
     pesinatlar, havaleler, kartOdemeler, manuelSatisTutari, onayDurumu,
+    adminSeciliSube,
   ]);
 
   const kullanicilariCek = async () => {
@@ -285,7 +293,7 @@ const SatisTeklifPage: React.FC = () => {
   const kampanyalariCek = async () => {
     try {
       const snap = await getDocs(collection(db, 'kampanyalar'));
-      const liste = snap.docs.map(d => ({ id: d.id, ...d.data() } as KampanyaAdmin)).filter(k => k.aktif && (k.subeKodu === 'GENEL' || k.subeKodu === currentUser!.subeKodu));
+      const liste = snap.docs.map(d => ({ id: d.id, ...d.data() } as KampanyaAdmin)).filter(k => k.aktif && (k.subeKodu === 'GENEL' || k.subeKodu === aktifSubeKodu));
       setKampanyaListesi(liste);
     } catch (err) { console.error('Kampanyalar çekilemedi:', err); }
   };
@@ -298,10 +306,10 @@ const SatisTeklifPage: React.FC = () => {
     } catch (err) { console.error('Yeşil etiketler çekilemedi:', err); }
   };
 
-  const logKaydet = async (kod: string, islem: string, detay: string) => {
-    const sube = getSubeByKod(currentUser!.subeKodu);
+  const logKaydet = async (kod: string, islem: string, detay: string, subeKodu: string) => {
+    const sube = getSubeByKod(subeKodu as SubeKodu);
     if (!sube) return;
-    await addDoc(collection(db, `subeler/${sube.dbPath}/loglar`), { satisKodu: kod, subeKodu: currentUser!.subeKodu, islem, kullanici: `${currentUser!.ad} ${currentUser!.soyad}`, tarih: new Date(), detay });
+    await addDoc(collection(db, `subeler/${sube.dbPath}/loglar`), { satisKodu: kod, subeKodu, islem, kullanici: `${currentUser!.ad} ${currentUser!.soyad}`, tarih: new Date(), detay });
   };
 
   useEffect(() => {
@@ -327,6 +335,7 @@ const SatisTeklifPage: React.FC = () => {
     setSeciliKampanyaIds([]); setPesinatlar([]); setHavaleler([]); setKartOdemeler([]);
     setManuelSatisTutari(null); setOnayDurumu(false); setMarsNoHata(false);
     setFaturaNoHata(false); setFaturaNoHataMesaj('');
+    if (isAdmin) setAdminSeciliSube(currentUser?.subeKodu || SUBELER[0]?.kod || '');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -348,9 +357,11 @@ const SatisTeklifPage: React.FC = () => {
     }
     if (!musteriTemsilcisiId) { alert('❌ Müşteri temsilcisi seçilmelidir!'); return; }
     if (teslimatTarihi && !isTeslimatTarihiGecerli()) { alert('❌ Teslimat tarihi, satış tarihinden önce olamaz.'); return; }
-    // v7: Mars No ve Teslimat Tarihi karşılıklı zorunluluk
     if (marsNo?.trim() && !teslimatTarihi) { alert('❌ Mars No girildiğinde teslimat tarihi zorunludur.'); return; }
     if (teslimatTarihi && !marsNo?.trim()) { alert('❌ Teslimat tarihi girildiğinde Mars No zorunludur.'); return; }
+
+    // ✅ Admin şube kontrolü
+    if (isAdmin && !aktifSubeKodu) { alert('❌ Lütfen satışın yapıldığı şubeyi seçin!'); return; }
 
     const _odenen = toplamOdenenHesapla();
     const _tutar  = manuelSatisTutari ?? 0;
@@ -361,7 +372,9 @@ const SatisTeklifPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const sube = getSubeByKod(currentUser!.subeKodu);
+      // ✅ Admin için seçilen şube, normal kullanıcı için kendi şubesi
+      const subeKoduKullan = aktifSubeKodu;
+      const sube = getSubeByKod(subeKoduKullan as SubeKodu);
       if (!sube) { alert('Şube bilgisi bulunamadı!'); setLoading(false); return; }
 
       const yeniSatisKodu = await atomikSatisKoduUret(sube.dbPath, String(sube.satisKoduPrefix));
@@ -372,7 +385,7 @@ const SatisTeklifPage: React.FC = () => {
 
       const satisTeklifi: any = {
         satisKodu: yeniSatisKodu,
-        subeKodu: currentUser!.subeKodu,
+        subeKodu: subeKoduKullan,
         musteriBilgileri: { ...musteriBilgileri, unvan: (musteriBilgileri as any).unvan || '' },
         musteriTemsilcisiId,
         musteriTemsilcisiAd: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
@@ -422,16 +435,16 @@ const SatisTeklifPage: React.FC = () => {
         const ilkKart   = kartOdemeler.find(k => k.tutar > 0);
         const ilkHavale = havaleler.find(h => h.tutar > 0);
         const gun = bugunStr();
-        await kasaTahsilatEkle({ subeKodu: currentUser!.subeKodu, gun, satisId: satisDocRef.id, satisKodu: yeniSatisKodu, musteriIsim: musteriBilgileri.isim || '—', nakitTutar, kartTutar, havaleTutar, yapan: `${currentUser!.ad} ${currentUser!.soyad}`, yapanId: currentUser!.uid || '', aciklama: `Yeni satış — ${yeniSatisKodu}`, satisTarihi: gun, kartBanka: ilkKart?.banka ?? undefined, havaleBanka: ilkHavale?.banka ?? undefined });
+        await kasaTahsilatEkle({ subeKodu: subeKoduKullan, gun, satisId: satisDocRef.id, satisKodu: yeniSatisKodu, musteriIsim: musteriBilgileri.isim || '—', nakitTutar, kartTutar, havaleTutar, yapan: `${currentUser!.ad} ${currentUser!.soyad}`, yapanId: currentUser!.uid || '', aciklama: `Yeni satış — ${yeniSatisKodu}`, satisTarihi: gun, kartBanka: ilkKart?.banka ?? undefined, havaleBanka: ilkHavale?.banka ?? undefined });
       }
 
       if (!onayDurumu) {
         for (const urun of urunler) {
-          await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), { satisKodu: yeniSatisKodu, subeKodu: currentUser!.subeKodu, urunKodu: urun.kod, urunAdi: urun.ad, adet: urun.adet, musteriIsmi: musteriBilgileri.isim, siparisTarihi: new Date(), beklenenTeslimTarihi: teslimatTarihi ? new Date(teslimatTarihi) : new Date(), durum: 'BEKLEMEDE', notlar: servisNotu || '', guncellemeTarihi: new Date() });
+          await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), { satisKodu: yeniSatisKodu, subeKodu: subeKoduKullan, urunKodu: urun.kod, urunAdi: urun.ad, adet: urun.adet, musteriIsmi: musteriBilgileri.isim, siparisTarihi: new Date(), beklenenTeslimTarihi: teslimatTarihi ? new Date(teslimatTarihi) : new Date(), durum: 'BEKLEMEDE', notlar: servisNotu || '', guncellemeTarihi: new Date() });
         }
       }
 
-      await logKaydet(yeniSatisKodu, 'YENİ_SATIS', `Yeni satış. Müşteri: ${musteriBilgileri.isim}, Tutar: ${manuelSatisTutari} TL`);
+      await logKaydet(yeniSatisKodu, 'YENİ_SATIS', `Yeni satış. Müşteri: ${musteriBilgileri.isim}, Tutar: ${manuelSatisTutari} TL`, subeKoduKullan);
       clearDraft();
       alert(`✅ Satış başarıyla oluşturuldu!\n\nSatış Kodu: ${yeniSatisKodu}`);
       navigate('/dashboard');
@@ -442,7 +455,12 @@ const SatisTeklifPage: React.FC = () => {
   };
 
   const seciliTemsilciAdi = () => { const temsilci = kullanicilar.find(k => k.id === musteriTemsilcisiId); return temsilci ? temsilci.displayName || `${temsilci.ad} ${temsilci.soyad}` : ''; };
-  const subePrefix = (() => { const sube = getSubeByKod(currentUser?.subeKodu as SubeKodu); return sube ? String(sube.satisKoduPrefix) : ''; })();
+
+  // ✅ Şube prefix — admin için seçilen şube, normal için kendi şubesi
+  const subePrefix = (() => {
+    const sube = getSubeByKod(aktifSubeKodu as SubeKodu);
+    return sube ? String(sube.satisKoduPrefix) : '';
+  })();
 
   return (
     <div className="satis-form-container">
@@ -460,6 +478,45 @@ const SatisTeklifPage: React.FC = () => {
       </h2>
 
       <form onSubmit={handleSubmit}>
+
+        {/* ✅ YENİ: ADMIN ŞUBE SEÇİMİ */}
+        {isAdmin && (
+          <section className="form-section" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
+            <h3 className="section-title">🏪 Satış Şubesi</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>Bu satışın yapıldığı şubeyi seçin:</span>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {SUBELER.map(sube => (
+                  <button
+                    key={sube.kod}
+                    type="button"
+                    onClick={() => setAdminSeciliSube(sube.kod)}
+                    style={{
+                      padding: '8px 18px',
+                      borderRadius: 30,
+                      border: '2px solid',
+                      borderColor: adminSeciliSube === sube.kod ? '#d97706' : '#e5e7eb',
+                      background: adminSeciliSube === sube.kod ? '#d97706' : 'white',
+                      color: adminSeciliSube === sube.kod ? 'white' : '#374151',
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {sube.ad.replace(' Şubesi', '')}
+                  </button>
+                ))}
+              </div>
+              {aktifSubeKodu && (
+                <span style={{ fontSize: 12, color: '#d97706', fontWeight: 600, padding: '4px 12px', background: '#fef3c7', borderRadius: 20 }}>
+                  ✓ Seçili: {getSubeByKod(aktifSubeKodu as SubeKodu)?.ad || aktifSubeKodu}
+                </span>
+              )}
+            </div>
+          </section>
+        )}
+
         <section className="form-section">
           <h3 className="section-title">Müşteri Bilgileri</h3>
           <div className="form-grid-4">
@@ -489,7 +546,6 @@ const SatisTeklifPage: React.FC = () => {
               <label>Teslimat Tarihi</label>
               <input type="date" value={teslimatTarihi} min={tarih} onChange={e => setTeslimatTarihi(e.target.value)} style={{ borderColor: teslimatTarihi && !isTeslimatTarihiGecerli() ? '#ef4444' : undefined }} />
               {teslimatTarihi && !isTeslimatTarihiGecerli() && <small style={{ color: '#ef4444' }}>Teslimat tarihi, satış tarihinden önce olamaz.</small>}
-              {/* v7: Mars-teslimat karşılıklı zorunluluk */}
               {marsNo?.trim() && !teslimatTarihi && <small style={{ color: '#d97706' }}>⚠️ Mars No girildiğinde teslimat tarihi zorunludur.</small>}
               {teslimatTarihi && !marsNo?.trim() && <small style={{ color: '#d97706' }}>⚠️ Teslimat tarihi girildiğinde Mars No zorunludur.</small>}
             </div>
