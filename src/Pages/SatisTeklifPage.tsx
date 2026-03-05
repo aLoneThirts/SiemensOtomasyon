@@ -50,7 +50,7 @@ const getInitial = <T,>(key: string, fallback: T): T => {
 const SatisTeklifPage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
+  const isAdmin = currentUser?.role?.toString().trim().toUpperCase().includes('ADMIN') ?? false;
 
   const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
 
@@ -480,7 +480,7 @@ const SatisTeklifPage: React.FC = () => {
       <form onSubmit={handleSubmit}>
 
         {/* ✅ YENİ: ADMIN ŞUBE SEÇİMİ */}
-        {isAdmin && (
+        {currentUser && isAdmin && (
           <section className="form-section" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
             <h3 className="section-title">🏪 Satış Şubesi</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
