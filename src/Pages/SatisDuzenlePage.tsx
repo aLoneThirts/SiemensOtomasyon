@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, getDoc, updateDoc, addDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, Kampanya, Urun, KartOdeme, YesilEtiket, BANKALAR, TAKSIT_SECENEKLERI } from '../types/satis';
 import { getSubeByKod } from '../types/sube';
@@ -482,21 +482,62 @@ const SatisDuzenlePage: React.FC = () => {
     setIptalIslemYapiliyor(true);
     try {
       const yeniOnay = iptaldenCikarStatusu === 'ONAYLI';
-      const mevcutIadeDurumu: string | undefined = (satis as any).iadeDurumu;
       const nakitTutar = pesinatToplam();
       const havaleTutar = havaleToplam();
       const kartTutar = kartBrutToplam();
       const toplamOdenenVal = nakitTutar + havaleTutar + kartTutar;
 
-      if (mevcutIadeDurumu === 'IADE_ODENDI' && toplamOdenenVal > 0 && currentUser && subeKodu) {
-        await kasaTahsilatEkle({ subeKodu, gun: bugunStr(), satisId: satis.id!, satisKodu: satis.satisKodu ?? id ?? '', musteriIsim: (satis as any).musteriBilgileri?.isim ?? '—', nakitTutar, kartTutar, havaleTutar, yapan: `${currentUser.ad} ${currentUser.soyad}`, yapanId: currentUser.uid || '', aciklama: 'İptalden çıkarma — iade geri alındı', satisTarihi: undefined });
+      // ═══ v7 FIX: İptalden çıkarılırken kasaIptalKayitlari'nda kayıt varsa
+      // kasaya geri ekle (pozitif tahsilat) + iptal kaydını sil
+      // Bu sayede iade durumu ne olursa olsun doğru çalışır
+      let kasayaGeriEklendi = false;
+
+      if (toplamOdenenVal > 0 && currentUser && subeKodu) {
+        // kasaIptalKayitlari'nda bu satış için kayıt var mı kontrol et
+        const iptalSnap = await getDocs(
+          query(
+            collection(db, `subeler/${sube.dbPath}/kasaIptalKayitlari`),
+            where('satisId', '==', satis.id),
+          )
+        );
+
+        if (!iptalSnap.empty) {
+          // Kasaya pozitif tahsilat olarak geri ekle
+          await kasaTahsilatEkle({
+            subeKodu,
+            gun: bugunStr(),
+            satisId: satis.id!,
+            satisKodu: satis.satisKodu ?? id ?? '',
+            musteriIsim: (satis as any).musteriBilgileri?.isim ?? '—',
+            nakitTutar,
+            kartTutar,
+            havaleTutar,
+            yapan: `${currentUser.ad} ${currentUser.soyad}`,
+            yapanId: currentUser.uid || '',
+            aciklama: 'İptalden çıkarma — ödeme geri kasaya eklendi',
+            satisTarihi: undefined,
+          });
+
+          // İptal kayıtlarını sil (bir daha negatif etki yapmaması için)
+          for (const iptalDoc of iptalSnap.docs) {
+            await deleteDoc(iptalDoc.ref);
+          }
+
+          kasayaGeriEklendi = true;
+        }
       }
 
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { satisDurumu: iptaldenCikarStatusu, onayDurumu: yeniOnay, iptalTarihi: null, iadeDurumu: null, guncellemeTarihi: new Date() });
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
+        satisDurumu: iptaldenCikarStatusu,
+        onayDurumu: yeniOnay,
+        iptalTarihi: null,
+        iadeDurumu: null,
+        guncellemeTarihi: new Date(),
+      });
       setSatis(prev => prev ? { ...prev, satisDurumu: iptaldenCikarStatusu, onayDurumu: yeniOnay, iadeDurumu: null } as any : prev);
       setIptaldenCikarPopup(false);
 
-      if (mevcutIadeDurumu === 'IADE_ODENDI' && toplamOdenenVal > 0) {
+      if (kasayaGeriEklendi) {
         alert(`✅ Satış "${iptaldenCikarStatusu === 'ONAYLI' ? 'Onaylı' : 'Beklemede'}" statüsüne alındı.\n💵 ${formatPrice(toplamOdenenVal)} bugünün kasasına geri eklendi.`);
       } else {
         alert(`✅ Satış "${iptaldenCikarStatusu === 'ONAYLI' ? 'Onaylı' : 'Beklemede'}" statüsüne alındı.`);
