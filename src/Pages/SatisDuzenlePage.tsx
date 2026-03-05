@@ -534,8 +534,17 @@ const SatisDuzenlePage: React.FC = () => {
       }
     }
 
-    // v7 FIX: Mars No ve teslimat tarihi bağımlılığı kaldırıldı
-    // Teslimat tarihi girildi diye Mars No zorunlu değil
+    // v7 FIX: Mars No ve Teslimat Tarihi karşılıklı zorunluluk
+    // Biri girilince diğeri de zorunlu
+    const orijinalGiris = marsListesi[0];
+    if (orijinalGiris?.marsNo?.trim() && !orijinalGiris?.teslimatTarihi) {
+      alert('❌ Mars No girildiğinde teslimat tarihi zorunludur.');
+      return;
+    }
+    if (orijinalGiris?.teslimatTarihi && !orijinalGiris?.marsNo?.trim()) {
+      alert('❌ Teslimat tarihi girildiğinde Mars No zorunludur.');
+      return;
+    }
 
     const _odenen = toplamOdenen();
     const _tutar  = toplamTutar();
@@ -983,7 +992,9 @@ const SatisDuzenlePage: React.FC = () => {
                       <label className="duzenle-label">Teslimat Tarihi</label>
                       <input type="date" value={giris.teslimatTarihi} min={satisTarihi || undefined} onChange={e => marsGuncelle(index, 'teslimatTarihi', e.target.value)} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} disabled={alanlarKilitli} style={{ borderColor: giris.teslimatTarihi && !isTeslimatTarihiGecerli(giris.teslimatTarihi) ? '#ef4444' : undefined }} />
                       {giris.teslimatTarihi && !isTeslimatTarihiGecerli(giris.teslimatTarihi) && <small style={{ color: '#ef4444', display: 'block' }}>Teslimat tarihi, satış tarihinden önce olamaz.</small>}
-                      {/* v7: Mars-teslimat bağımlılığı kaldırıldı */}
+                      {/* v7: Mars-teslimat karşılıklı zorunluluk */}
+                      {index === 0 && giris.marsNo?.trim() && !giris.teslimatTarihi && <small style={{ color: '#d97706', display: 'block' }}>⚠️ Mars No girildiğinde teslimat tarihi zorunludur.</small>}
+                      {index === 0 && giris.teslimatTarihi && !giris.marsNo?.trim() && <small style={{ color: '#d97706', display: 'block' }}>⚠️ Teslimat tarihi girildiğinde Mars No zorunludur.</small>}
                     </div>
                   </div>
                 </div>
