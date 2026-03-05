@@ -260,6 +260,8 @@ export const recalcNakitSatis = async (
 
     iptalSnap.docs.forEach((iptalDoc) => {
       const iptalData = iptalDoc.data();
+      // v7: Geri alınmış iptal kayıtlarını atla
+      if (iptalData.iptalGeriAlindi === true) return;
       // Tutarlar zaten negatif (ör: nakitTutar: -13244)
       nakitSatis += Number(iptalData.nakitTutar ?? 0);
       kartSatis += Number(iptalData.kartTutar ?? 0);
@@ -643,6 +645,8 @@ export const getTahsilatlar = async (
 
         iptalSnap.docs.forEach((iptalDoc) => {
           const data = iptalDoc.data();
+          // v7: Geri alınmış iptal kayıtlarını atla
+          if (data.iptalGeriAlindi === true) return;
           const nakitTutar = Number(data.nakitTutar ?? 0);  // zaten negatif
           const kartTutar = Number(data.kartTutar ?? 0);    // zaten negatif
           const havaleTutar = Number(data.havaleTutar ?? 0); // zaten negatif

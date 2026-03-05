@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, getDoc, updateDoc, addDoc, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, Kampanya, Urun, KartOdeme, YesilEtiket, BANKALAR, TAKSIT_SECENEKLERI } from '../types/satis';
 import { getSubeByKod } from '../types/sube';
@@ -518,9 +518,13 @@ const SatisDuzenlePage: React.FC = () => {
             satisTarihi: undefined,
           });
 
-          // İptal kayıtlarını sil (bir daha negatif etki yapmaması için)
-          for (const iptalDoc of iptalSnap.docs) {
-            await deleteDoc(iptalDoc.ref);
+          // İptal kayıtlarını "geri alındı" olarak işaretle (silmek yerine — permission sorunu önlenir)
+          for (const iptalDocSnap of iptalSnap.docs) {
+            await updateDoc(iptalDocSnap.ref, {
+              iptalGeriAlindi: true,
+              geriAlinmaTarihi: new Date(),
+              geriAlanKullanici: `${currentUser.ad} ${currentUser.soyad}`,
+            });
           }
 
           kasayaGeriEklendi = true;
