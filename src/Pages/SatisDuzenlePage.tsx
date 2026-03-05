@@ -18,12 +18,12 @@ interface MarsGirisi { marsNo: string; teslimatTarihi: string; etiket: string; }
 const MAX_MARS = 4;
 const HAVALE_BANKALARI = ['Ziraat Bankası','Halkbank','Vakıfbank','İş Bankası','Garanti BBVA','Yapı Kredi','Akbank','QNB Finansbank','Denizbank','TEB','ING Bank','HSBC','Şekerbank','Fibabanka','Alternatifbank'];
 
-const FATURA_NO_REGEX = /^(\d{4}|Kesilmedi)$/;
+const FATURA_NO_REGEX = /^(\d{1,4}|Kesilmedi)$/;
 const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
 const isFaturaNoGecerli = (val: string): boolean => !val || FATURA_NO_REGEX.test(val);
 
-const CURRENT_YEAR = new Date().getFullYear().toString();
-const MARS_NO_REGEX = new RegExp(`^${CURRENT_YEAR}\\d{6}$`);
+// ✅ v7 FIX: Mars No — sadece 10 haneli sayı, yıl kısıtlaması kaldırıldı
+const MARS_NO_REGEX = /^\d{10}$/;
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
 
 const bugunStr = (): string => {
@@ -297,7 +297,7 @@ const SatisDuzenlePage: React.FC = () => {
       const sadeceSayi = value.replace(/\D/g, '');
       setMarsListesi(prev => prev.map((item, i) => i === index ? { ...item, marsNo: sadeceSayi } : item));
       if (sadeceSayi && !isMarsNoGecerli(sadeceSayi)) {
-        setMarsNoHatalar(prev => ({ ...prev, [index]: `Mars No:  ile başlayan 10 haneli sayı olmalıdır. (${sadeceSayi.length}/10)` }));
+        setMarsNoHatalar(prev => ({ ...prev, [index]: `Mars No 10 haneli sayı olmalıdır. (${sadeceSayi.length}/10)` }));
       } else {
         setMarsNoHatalar(prev => { const copy = { ...prev }; delete copy[index]; return copy; });
       }
@@ -316,7 +316,7 @@ const SatisDuzenlePage: React.FC = () => {
   const handleFaturaNoBlur = () => {
     if (faturaNo && !isFaturaNoGecerli(faturaNo)) {
       setFaturaNoHata(true);
-      setFaturaNoHataMesaj("Fatura No yalnızca 4 haneli rakam veya 'Kesilmedi' olabilir.");
+      setFaturaNoHataMesaj("Fatura No yalnızca 1-4 haneli rakam veya 'Kesilmedi' olabilir.");
     }
   };
 
@@ -397,7 +397,7 @@ const SatisDuzenlePage: React.FC = () => {
   };
 
   // ═══════════════════════════════════════════════════════════════
-  //  satisiIptalEt — v6 FIX: kasaIptalKaydiOlustur eklendi
+  //  satisiIptalEt — v7 FIX: kasaya dokunmaz, sadece status değiştirir
   // ═══════════════════════════════════════════════════════════════
   const satisiIptalEt = async () => {
     if (!satis?.id) return;
@@ -421,15 +421,9 @@ const SatisDuzenlePage: React.FC = () => {
       const yeniIadeDurumu = toplamOdenenTutar > 0 ? 'IADE_GEREKIYOR' : undefined;
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { satisDurumu: 'IPTAL', onayDurumu: false, iptalTarihi: new Date(), guncellemeTarihi: new Date(), ...(yeniIadeDurumu ? { iadeDurumu: yeniIadeDurumu } : {}) });
 
-      // ═══ v6 FIX: İptal kaydı oluştur (kasaIptalKayitlari koleksiyonuna) ═══
-      if (toplamOdenenTutar > 0) {
-        await kasaIptalKaydiOlustur({
-          satis: { ...satis, id: satis.id } as any,
-          subeKodu: subeKodu!,
-          iptalYapan: `${currentUser?.ad} ${currentUser?.soyad}`,
-          iptalYapanId: currentUser?.uid || '',
-        });
-      }
+      // ═══ v7 FIX: İptal anında kasaya DOKUNMA ═══
+      // İptal sadece status değiştirir, kasaya etki "İadeyi Onayla" butonunda olur
+      // kasaIptalKaydiOlustur SADECE iadeOnayla'da çağrılır (çift iade önlemi)
 
       setSatis(prev => prev ? { ...prev, satisDurumu: 'IPTAL', iadeDurumu: yeniIadeDurumu } as any : prev);
       setIptalPopup(false);
@@ -443,7 +437,7 @@ const SatisDuzenlePage: React.FC = () => {
   };
 
   // ═══════════════════════════════════════════════════════════════
-  //  iadeOnayla — v6 FIX: kasaIptalKaydiOlustur eklendi
+  //  iadeOnayla — v7 FIX: TEK NOKTA — kasaIptalKaydiOlustur SADECE burada çağrılır
   // ═══════════════════════════════════════════════════════════════
   const iadeOnayla = async () => {
     if (!satis?.id || !subeKodu || !currentUser) return;
@@ -519,15 +513,15 @@ const SatisDuzenlePage: React.FC = () => {
 
     if (faturaNo && !isFaturaNoGecerli(faturaNo)) {
       setFaturaNoHata(true);
-      setFaturaNoHataMesaj("Fatura No yalnızca 4 haneli rakam veya 'Kesilmedi' olabilir.");
-      alert("❌ Fatura No yalnızca 4 haneli rakam veya 'Kesilmedi' olabilir.");
+      setFaturaNoHataMesaj("Fatura No yalnızca 1-4 haneli rakam veya 'Kesilmedi' olabilir.");
+      alert("❌ Fatura No yalnızca 1-4 haneli rakam veya 'Kesilmedi' olabilir.");
       return;
     }
 
     for (let i = 0; i < marsListesi.length; i++) {
       const giris = marsListesi[i];
       if (giris.marsNo && !isMarsNoGecerli(giris.marsNo)) {
-        alert(`❌ ${etiketAd(i)} Mars No geçersiz!\nGüncel yıl ile başlayan 10 haneli sayı olmalıdır.\nGirilen: ${giris.marsNo}`);
+        alert(`❌ ${etiketAd(i)} Mars No geçersiz!\n10 haneli sayı olmalıdır.\nGirilen: ${giris.marsNo}`);
         return;
       }
     }
@@ -540,11 +534,8 @@ const SatisDuzenlePage: React.FC = () => {
       }
     }
 
-    const orijinalGiris = marsListesi[0];
-    if (orijinalGiris?.teslimatTarihi && !orijinalGiris?.marsNo?.trim()) {
-      alert('❌ Teslimat tarihi girildiğinde Mars numarası zorunludur.');
-      return;
-    }
+    // v7 FIX: Mars No ve teslimat tarihi bağımlılığı kaldırıldı
+    // Teslimat tarihi girildi diye Mars No zorunlu değil
 
     const _odenen = toplamOdenen();
     const _tutar  = toplamTutar();
@@ -925,7 +916,7 @@ const SatisDuzenlePage: React.FC = () => {
               <input type="text" value={faturaNo} onChange={handleFaturaNoChange} onBlur={handleFaturaNoBlur} placeholder="0001 veya Kesilmedi" className="duzenle-input" disabled={alanlarKilitli} style={{ borderColor: faturaNoHata ? '#ef4444' : undefined }} />
               {faturaNoHata && <small style={{ color: '#ef4444' }}>{faturaNoHataMesaj}</small>}
               {!faturaNoHata && faturaNo && isFaturaNoGecerli(faturaNo) && <small style={{ color: '#16a34a' }}>✅ Geçerli</small>}
-              <small style={{ color: '#9ca3af', fontSize: 11 }}>4 haneli rakam veya "Kesilmedi"</small>
+              <small style={{ color: '#9ca3af', fontSize: 11 }}>1-4 haneli rakam veya "Kesilmedi"</small>
             </div>
             <div>
               <label className="duzenle-label">Servis Notu</label>
@@ -982,17 +973,17 @@ const SatisDuzenlePage: React.FC = () => {
                   <div className="duzenle-mars-inputs">
                     <div>
                       <label className="duzenle-label">Mars No</label>
-                      <input type="text" value={giris.marsNo} onChange={e => marsGuncelle(index, 'marsNo', e.target.value)} placeholder={`${CURRENT_YEAR}XXXXXX`} maxLength={10} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} disabled={alanlarKilitli} style={{ borderColor: marsNoHatalar[index] ? '#ef4444' : (giris.marsNo && isMarsNoGecerli(giris.marsNo) ? '#16a34a' : undefined) }} />
+                      <input type="text" value={giris.marsNo} onChange={e => marsGuncelle(index, 'marsNo', e.target.value)} placeholder="10 haneli sayı" maxLength={10} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} disabled={alanlarKilitli} style={{ borderColor: marsNoHatalar[index] ? '#ef4444' : (giris.marsNo && isMarsNoGecerli(giris.marsNo) ? '#16a34a' : undefined) }} />
                       {marsNoHatalar[index] && <small style={{ color: '#ef4444', display: 'block' }}>{marsNoHatalar[index]}</small>}
                       {giris.marsNo && isMarsNoGecerli(giris.marsNo) && !marsNoHatalar[index] && <small style={{ color: '#16a34a', display: 'block' }}>✅ Geçerli ({giris.marsNo.length}/10)</small>}
-                      {giris.marsNo && !marsNoHatalar[index] && !isMarsNoGecerli(giris.marsNo) && <small style={{ color: '#d97706', display: 'block' }}>⚠️ {giris.marsNo.length}/10 — ${CURRENT_YEAR} ile başlayan 10 hane gerekli</small>}
-                      <small style={{ color: '#9ca3af', fontSize: 11 }}>Güncel yıl ile başlayan 10 haneli sayı</small>
+                      {giris.marsNo && !marsNoHatalar[index] && !isMarsNoGecerli(giris.marsNo) && <small style={{ color: '#d97706', display: 'block' }}>⚠️ {giris.marsNo.length}/10 — 10 haneli sayı gerekli</small>}
+                      <small style={{ color: '#9ca3af', fontSize: 11 }}>10 haneli sayı</small>
                     </div>
                     <div>
                       <label className="duzenle-label">Teslimat Tarihi</label>
                       <input type="date" value={giris.teslimatTarihi} min={satisTarihi || undefined} onChange={e => marsGuncelle(index, 'teslimatTarihi', e.target.value)} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} disabled={alanlarKilitli} style={{ borderColor: giris.teslimatTarihi && !isTeslimatTarihiGecerli(giris.teslimatTarihi) ? '#ef4444' : undefined }} />
                       {giris.teslimatTarihi && !isTeslimatTarihiGecerli(giris.teslimatTarihi) && <small style={{ color: '#ef4444', display: 'block' }}>Teslimat tarihi, satış tarihinden önce olamaz.</small>}
-                      {index === 0 && giris.teslimatTarihi && !giris.marsNo?.trim() && <small style={{ color: '#d97706', display: 'block' }}>⚠️ Teslimat tarihi girildiğinde Mars No zorunludur.</small>}
+                      {/* v7: Mars-teslimat bağımlılığı kaldırıldı */}
                     </div>
                   </div>
                 </div>

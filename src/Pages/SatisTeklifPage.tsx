@@ -23,11 +23,14 @@ interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: bool
 const STORAGE_KEY = 'satisTeklif_draft';
 
 const bugunStr = (): string => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
-const FATURA_NO_REGEX = /^(\d{4}|Kesilmedi)$/;
+
+// ✅ v7 FIX: Fatura No 1-4 haneli rakam kabul eder
+const FATURA_NO_REGEX = /^(\d{1,4}|Kesilmedi)$/;
 const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
 const isFaturaNoGecerli = (val: string): boolean => FATURA_NO_REGEX.test(val);
-const CURRENT_YEAR = new Date().getFullYear().toString();
-const MARS_NO_REGEX = new RegExp(`^${CURRENT_YEAR}\\d{6}$`);
+
+// ✅ v7 FIX: Mars No — sadece 10 haneli sayı, yıl kısıtlaması kaldırıldı
+const MARS_NO_REGEX = /^\d{10}$/;
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
 
 const saveDraft = (data: any) => {
@@ -37,8 +40,6 @@ const clearDraft = () => {
   try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
 };
 
-// ✅ ANA DÜZELTME: useState lazy initializer — component mount anında sessionStorage'dan okur
-// Bu sayede useEffect'ten önce, ilk render'da doğru değerle başlar
 const getInitial = <T,>(key: string, fallback: T): T => {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
@@ -55,7 +56,6 @@ const SatisTeklifPage: React.FC = () => {
 
   const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
 
-  // ✅ Tüm state'ler lazy initializer ile sessionStorage'dan başlangıç değeri alıyor
   const [musteriBilgileri, setMusteriBilgileri] = useState<MusteriBilgileri>(() =>
     getInitial('musteriBilgileri', { isim: '', adres: '', faturaAdresi: '', isAdresi: '', vergiNumarasi: '', vkNo: '', vd: '', cep: '', unvan: '' })
   );
@@ -97,7 +97,6 @@ const SatisTeklifPage: React.FC = () => {
 
   const draftVarMi = !!sessionStorage.getItem(STORAGE_KEY);
 
-  // ✅ Her state değişiminde draft kaydet
   useEffect(() => {
     saveDraft({
       musteriBilgileri, musteriTemsilcisiId, musteriTemsilcisiTel,
@@ -127,12 +126,8 @@ const SatisTeklifPage: React.FC = () => {
       const formattedKullanicilar = birlesikKullanicilar.map(k => ({ ...k, displayName: `${k.ad} ${k.soyad}${k.role === 'ADMIN' ? ' (Admin)' : ''}` }));
       formattedKullanicilar.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
       setKullanicilar(formattedKullanicilar);
-
-      // ✅ Draft'ta temsilci varsa DOKUNMA, yoksa varsayılanı ata
       const draftTemsilci = getInitial('musteriTemsilcisiId', '');
-      if (!draftTemsilci && currentUser?.uid) {
-        setMusteriTemsilcisiId(currentUser.uid);
-      }
+      if (!draftTemsilci && currentUser?.uid) setMusteriTemsilcisiId(currentUser.uid);
     } catch (err) { console.error('❌ Kullanıcılar çekilemedi:', err); }
   };
 
@@ -142,11 +137,7 @@ const SatisTeklifPage: React.FC = () => {
       const cache: Record<string, Record<number, number>> = {};
       snap.docs.forEach(d => {
         const data = d.data();
-        if (data.taksitler) {
-          const taksitMap: Record<number, number> = {};
-          Object.entries(data.taksitler).forEach(([key, val]) => { taksitMap[Number(key)] = Number(val); });
-          cache[d.id] = taksitMap;
-        }
+        if (data.taksitler) { const taksitMap: Record<number, number> = {}; Object.entries(data.taksitler).forEach(([key, val]) => { taksitMap[Number(key)] = Number(val); }); cache[d.id] = taksitMap; }
       });
       setKesintiCache(cache);
     } catch (err) { console.error('Kesinti cache yüklenemedi:', err); }
@@ -228,7 +219,7 @@ const SatisTeklifPage: React.FC = () => {
   const handleFaturaNoBlur = () => {
     if (faturaNo && !isFaturaNoGecerli(faturaNo)) {
       setFaturaNoHata(true);
-      setFaturaNoHataMesaj("Fatura No yalnızca 4 haneli rakam veya 'Kesilmedi' olabilir.");
+      setFaturaNoHataMesaj("Fatura No yalnızca 1-4 haneli rakam veya 'Kesilmedi' olabilir.");
     }
   };
 
@@ -330,27 +321,12 @@ const SatisTeklifPage: React.FC = () => {
     setMusteriTemsilcisiTel('');
     setUrunler([{ id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }]);
     setTarih(new Date().toISOString().split('T')[0]);
-    setTeslimatTarihi('');
-    setMarsNo('');
-    setMagaza('');
-    setFaturaNo('');
-    setServisNotu('');
-    setTeslimEdildiMi(false);
-    setCevap('');
-    setFatura(false);
-    setIleriTeslim(false);
-    setIleriTeslimTarihi('');
-    setServis(false);
-    setNotlar('');
-    setSeciliKampanyaIds([]);
-    setPesinatlar([]);
-    setHavaleler([]);
-    setKartOdemeler([]);
-    setManuelSatisTutari(null);
-    setOnayDurumu(false);
-    setMarsNoHata(false);
-    setFaturaNoHata(false);
-    setFaturaNoHataMesaj('');
+    setTeslimatTarihi(''); setMarsNo(''); setMagaza(''); setFaturaNo('');
+    setServisNotu(''); setTeslimEdildiMi(false); setCevap(''); setFatura(false);
+    setIleriTeslim(false); setIleriTeslimTarihi(''); setServis(false); setNotlar('');
+    setSeciliKampanyaIds([]); setPesinatlar([]); setHavaleler([]); setKartOdemeler([]);
+    setManuelSatisTutari(null); setOnayDurumu(false); setMarsNoHata(false);
+    setFaturaNoHata(false); setFaturaNoHataMesaj('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -359,20 +335,20 @@ const SatisTeklifPage: React.FC = () => {
     if (!faturaNo.trim()) { setFaturaNoHata(true); setFaturaNoHataMesaj('Fatura numarası zorunludur!'); alert('❌ Fatura numarası zorunludur!'); return; }
     if (!isFaturaNoGecerli(faturaNo)) {
       setFaturaNoHata(true);
-      setFaturaNoHataMesaj("Fatura No yalnızca 4 haneli rakam veya 'Kesilmedi' olabilir.");
-      alert("❌ Fatura No yalnızca 4 haneli rakam veya 'Kesilmedi' olabilir.");
+      setFaturaNoHataMesaj("Fatura No yalnızca 1-4 haneli rakam veya 'Kesilmedi' olabilir.");
+      alert("❌ Fatura No yalnızca 1-4 haneli rakam veya 'Kesilmedi' olabilir.");
       return;
     }
     if (!manuelSatisTutari || manuelSatisTutari <= 0) { alert('❌ Satış tutarı girilmelidir!'); return; }
     if (ileriTeslim && !ileriTeslimTarihi) { alert('❌ İleri teslim seçildiğinde müşteriyle anlaşılan teslim tarihi zorunludur!'); return; }
     if (marsNo && !isMarsNoGecerli(marsNo)) {
       setMarsNoHata(true);
-      alert(`❌ Mars No geçersiz!\n2026 ile başlayan tam 10 haneli sayı olmalıdır.\nGirilen: ${marsNo} (${marsNo.length} hane)\nGeçerli örnek: 2026123456`);
+      alert(`❌ Mars No geçersiz!\n10 haneli sayı olmalıdır.\nGirilen: ${marsNo} (${marsNo.length} hane)`);
       return;
     }
     if (!musteriTemsilcisiId) { alert('❌ Müşteri temsilcisi seçilmelidir!'); return; }
     if (teslimatTarihi && !isTeslimatTarihiGecerli()) { alert('❌ Teslimat tarihi, satış tarihinden önce olamaz.'); return; }
-    if (teslimatTarihi && !marsNo.trim()) { setMarsNoHata(true); alert('❌ Teslimat tarihi girildiğinde Mars numarası zorunludur.'); return; }
+    // v7 FIX: teslimatTarihi + marsNo bağımlılığı kaldırıldı
 
     const _odenen = toplamOdenenHesapla();
     const _tutar  = manuelSatisTutari ?? 0;
@@ -425,16 +401,13 @@ const SatisTeklifPage: React.FC = () => {
         pesinatTutar: pesinatToplamHesapla(), havaleTutar: havaleToplamHesapla(),
         fatura, ileriTeslim,
         ileriTeslimTarihi: ileriTeslim && ileriTeslimTarihi ? new Date(ileriTeslimTarihi) : null,
-        ileriTeslimOnay: false,
-        servis,
+        ileriTeslimOnay: false, servis,
         odemeYontemi: OdemeYontemi.PESINAT,
         onayDurumu,
         zarar: karZararHesapla(),
         olusturanKullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
-        olusturmaTarihi: new Date(),
-        guncellemeTarihi: new Date(),
-        assignedUserId: musteriTemsilcisiId,
-        assignedUserRole: seciliTemsilci?.role || ''
+        olusturmaTarihi: new Date(), guncellemeTarihi: new Date(),
+        assignedUserId: musteriTemsilcisiId, assignedUserRole: seciliTemsilci?.role || ''
       };
 
       const satisDocRef = await addDoc(collection(db, `subeler/${sube.dbPath}/satislar`), satisTeklifi);
@@ -463,9 +436,7 @@ const SatisTeklifPage: React.FC = () => {
     } catch (error) {
       console.error(error);
       alert('❌ Bir hata oluştu! Lütfen tekrar deneyin.');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const seciliTemsilciAdi = () => { const temsilci = kullanicilar.find(k => k.id === musteriTemsilcisiId); return temsilci ? temsilci.displayName || `${temsilci.ad} ${temsilci.soyad}` : ''; };
@@ -487,7 +458,6 @@ const SatisTeklifPage: React.FC = () => {
       </h2>
 
       <form onSubmit={handleSubmit}>
-        {/* MÜŞTERİ BİLGİLERİ */}
         <section className="form-section">
           <h3 className="section-title">Müşteri Bilgileri</h3>
           <div className="form-grid-4">
@@ -502,7 +472,6 @@ const SatisTeklifPage: React.FC = () => {
           <small style={{ color: '#9ca3af', fontSize: 11, marginTop: 4, display: 'block' }}>💡 Teslim alacak kişi bilgisi "İsim" alanına yazılabilir.</small>
         </section>
 
-        {/* SATIŞ BİLGİLERİ */}
         <section className="form-section">
           <h3 className="section-title">Satış Bilgileri</h3>
           <div className="form-grid-4">
@@ -518,7 +487,7 @@ const SatisTeklifPage: React.FC = () => {
               <label>Teslimat Tarihi</label>
               <input type="date" value={teslimatTarihi} min={tarih} onChange={e => setTeslimatTarihi(e.target.value)} style={{ borderColor: teslimatTarihi && !isTeslimatTarihiGecerli() ? '#ef4444' : undefined }} />
               {teslimatTarihi && !isTeslimatTarihiGecerli() && <small style={{ color: '#ef4444' }}>Teslimat tarihi, satış tarihinden önce olamaz.</small>}
-              {teslimatTarihi && !marsNo && <small style={{ color: '#d97706' }}>⚠️ Teslimat tarihi girildiğinde Mars No zorunludur.</small>}
+              {/* v7: Mars-teslimat bağımlılığı kaldırıldı */}
             </div>
             <div className="form-field">
               <label>Satış Tutarı *</label>
@@ -527,23 +496,22 @@ const SatisTeklifPage: React.FC = () => {
           </div>
         </section>
 
-        {/* NOTLAR VE ZORUNLU ALANLAR */}
         <section className="form-section">
           <h3 className="section-title">Notlar ve Zorunlu Alanlar</h3>
           <div className="form-grid-4">
             <div className="form-field">
               <label>MARS No</label>
-              <input value={marsNo} onChange={handleMarsNoChange} placeholder="2026XXXXXX" maxLength={10} style={{ borderColor: marsNoHata ? '#ef4444' : (marsNo && isMarsNoGecerli(marsNo) ? '#16a34a' : undefined) }} />
-              {marsNo && <small style={{ color: isMarsNoGecerli(marsNo) ? '#16a34a' : '#ef4444' }}>{isMarsNoGecerli(marsNo) ? '✅ Geçerli Mars No' : marsNo.length < 10 ? `⚠️ ${marsNo.length}/10 hane — 2026 ile başlayan 10 hane gerekli` : !marsNo.startsWith('2026') ? '❌ 2026 ile başlamalıdır' : '❌ Geçersiz format'}</small>}
-              <small style={{ color: '#9ca3af', fontSize: 11 }}>2026 ile başlayan 10 haneli sayı (örn: 2026123456)</small>
+              <input value={marsNo} onChange={handleMarsNoChange} placeholder="10 haneli sayı" maxLength={10} style={{ borderColor: marsNoHata ? '#ef4444' : (marsNo && isMarsNoGecerli(marsNo) ? '#16a34a' : undefined) }} />
+              {marsNo && <small style={{ color: isMarsNoGecerli(marsNo) ? '#16a34a' : '#ef4444' }}>{isMarsNoGecerli(marsNo) ? '✅ Geçerli Mars No' : `⚠️ ${marsNo.length}/10 hane — 10 haneli sayı gerekli`}</small>}
+              <small style={{ color: '#9ca3af', fontSize: 11 }}>10 haneli sayı</small>
             </div>
             <div className="form-field"><label>Mağaza Teslimat</label><input value={magaza} onChange={e => setMagaza(e.target.value)} placeholder="Mağaza adı" /></div>
             <div className="form-field">
               <label>Fatura No *</label>
-              <input value={faturaNo} onChange={handleFaturaNoChange} onBlur={handleFaturaNoBlur} placeholder="0001 veya Kesilmedi" style={{ borderColor: faturaNoHata ? '#ef4444' : undefined }} required />
+              <input value={faturaNo} onChange={handleFaturaNoChange} onBlur={handleFaturaNoBlur} placeholder="1-4 haneli rakam veya Kesilmedi" style={{ borderColor: faturaNoHata ? '#ef4444' : undefined }} required />
               {faturaNoHata && <small style={{ color: '#ef4444' }}>{faturaNoHataMesaj}</small>}
               {!faturaNoHata && faturaNo && isFaturaNoGecerli(faturaNo) && <small style={{ color: '#16a34a' }}>✅ Geçerli format</small>}
-              <small style={{ color: '#9ca3af', fontSize: 11 }}>4 haneli rakam (ör: 0001) veya "Kesilmedi"</small>
+              <small style={{ color: '#9ca3af', fontSize: 11 }}>1-4 haneli rakam (ör: 1, 01, 001, 0001) veya "Kesilmedi"</small>
             </div>
             <div className="form-field">
               <label>Servis Notu</label>
@@ -569,7 +537,6 @@ const SatisTeklifPage: React.FC = () => {
           )}
         </section>
 
-        {/* ÜRÜNLER */}
         <section className="form-section">
           <div className="section-header">
             <h3 className="section-title">Ürünler</h3>
@@ -605,7 +572,6 @@ const SatisTeklifPage: React.FC = () => {
           </div>
         </section>
 
-        {/* KAMPANYALAR */}
         <section className="form-section">
           <h3 className="section-title">Kampanyalar</h3>
           {kampanyaListesi.length === 0 ? <div className="empty-state">Aktif kampanya bulunamadı.</div> : (
@@ -624,7 +590,6 @@ const SatisTeklifPage: React.FC = () => {
           )}
         </section>
 
-        {/* ÖDEME BİLGİLERİ */}
         <section className="form-section">
           <h3 className="section-title">💳 Ödeme Bilgileri</h3>
           <div className="odeme-blok">
