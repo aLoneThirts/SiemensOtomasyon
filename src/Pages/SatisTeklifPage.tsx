@@ -11,7 +11,7 @@ import {
   YesilEtiket, OdemeYontemi, SatisLog, BANKALAR, TAKSIT_SECENEKLERI,
   OdemeDurumu, BekleyenUrun,
 } from '../types/satis';
-import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
+import { getSubeByKod, SUBELER, MAGAZA_SUBELER, ONLINE_SUBELER, TICARI_SUBELER, SubeKodu } from '../types/sube';
 import './SatisTeklif.css';
 import { kasaTahsilatEkle } from '../services/kasaService';
 
@@ -54,7 +54,6 @@ const SatisTeklifPage: React.FC = () => {
 
   const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
 
-  // ✅ YENİ: Admin için seçili şube state'i
   const [adminSeciliSube, setAdminSeciliSube] = useState<string>(() =>
     getInitial('adminSeciliSube', isAdmin ? (currentUser?.subeKodu || SUBELER[0]?.kod || '') : '')
   );
@@ -99,8 +98,6 @@ const SatisTeklifPage: React.FC = () => {
   const [urunAramaDropdown, setUrunAramaDropdown] = useState<{ index: number; sonuclar: string[] } | null>(null);
 
   const draftVarMi = !!sessionStorage.getItem(STORAGE_KEY);
-
-  // ✅ Aktif şube kodu — admin seçimine göre, normal kullanıcı için kendi şubesi
   const aktifSubeKodu = isAdmin ? adminSeciliSube : (currentUser?.subeKodu || '');
 
   useEffect(() => {
@@ -360,7 +357,6 @@ const SatisTeklifPage: React.FC = () => {
     if (marsNo?.trim() && !teslimatTarihi) { alert('❌ Mars No girildiğinde teslimat tarihi zorunludur.'); return; }
     if (teslimatTarihi && !marsNo?.trim()) { alert('❌ Teslimat tarihi girildiğinde Mars No zorunludur.'); return; }
 
-    // ✅ Admin şube kontrolü
     if (isAdmin && !aktifSubeKodu) { alert('❌ Lütfen satışın yapıldığı şubeyi seçin!'); return; }
 
     const _odenen = toplamOdenenHesapla();
@@ -372,7 +368,6 @@ const SatisTeklifPage: React.FC = () => {
 
     setLoading(true);
     try {
-      // ✅ Admin için seçilen şube, normal kullanıcı için kendi şubesi
       const subeKoduKullan = aktifSubeKodu;
       const sube = getSubeByKod(subeKoduKullan as SubeKodu);
       if (!sube) { alert('Şube bilgisi bulunamadı!'); setLoading(false); return; }
@@ -431,7 +426,8 @@ const SatisTeklifPage: React.FC = () => {
       const havaleTutar = havaleToplamHesapla();
       const kartTutar   = kartBrutToplamHesapla();
 
-      if (nakitTutar > 0 || havaleTutar > 0 || kartTutar > 0) {
+      // Kasa kaydı sadece mağaza şubeleri için — online/ticari kanallar için atla
+      if (sube.tip === 'magaza' && (nakitTutar > 0 || havaleTutar > 0 || kartTutar > 0)) {
         const ilkKart   = kartOdemeler.find(k => k.tutar > 0);
         const ilkHavale = havaleler.find(h => h.tutar > 0);
         const gun = bugunStr();
@@ -456,11 +452,32 @@ const SatisTeklifPage: React.FC = () => {
 
   const seciliTemsilciAdi = () => { const temsilci = kullanicilar.find(k => k.id === musteriTemsilcisiId); return temsilci ? temsilci.displayName || `${temsilci.ad} ${temsilci.soyad}` : ''; };
 
-  // ✅ Şube prefix — admin için seçilen şube, normal için kendi şubesi
   const subePrefix = (() => {
     const sube = getSubeByKod(aktifSubeKodu as SubeKodu);
     return sube ? String(sube.satisKoduPrefix) : '';
   })();
+
+  const subeButon = (sube: any, renk: string) => (
+    <button
+      key={sube.kod}
+      type="button"
+      onClick={() => setAdminSeciliSube(sube.kod)}
+      style={{
+        padding: '8px 18px',
+        borderRadius: 30,
+        border: '2px solid',
+        borderColor: adminSeciliSube === sube.kod ? renk : '#e5e7eb',
+        background: adminSeciliSube === sube.kod ? renk : 'white',
+        color: adminSeciliSube === sube.kod ? 'white' : '#374151',
+        fontWeight: 600,
+        fontSize: 13,
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+      }}
+    >
+      {sube.ad.replace(' Şubesi', '')}
+    </button>
+  );
 
   return (
     <div className="satis-form-container">
@@ -479,37 +496,39 @@ const SatisTeklifPage: React.FC = () => {
 
       <form onSubmit={handleSubmit}>
 
-        {/* ✅ YENİ: ADMIN ŞUBE SEÇİMİ */}
+        {/* ADMIN ŞUBE SEÇİMİ */}
         {currentUser && isAdmin && (
           <section className="form-section" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
             <h3 className="section-title">🏪 Satış Şubesi</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>Bu satışın yapıldığı şubeyi seçin:</span>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {SUBELER.map(sube => (
-                  <button
-                    key={sube.kod}
-                    type="button"
-                    onClick={() => setAdminSeciliSube(sube.kod)}
-                    style={{
-                      padding: '8px 18px',
-                      borderRadius: 30,
-                      border: '2px solid',
-                      borderColor: adminSeciliSube === sube.kod ? '#d97706' : '#e5e7eb',
-                      background: adminSeciliSube === sube.kod ? '#d97706' : 'white',
-                      color: adminSeciliSube === sube.kod ? 'white' : '#374151',
-                      fontWeight: 600,
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    {sube.ad.replace(' Şubesi', '')}
-                  </button>
-                ))}
+
+              {/* Mağazalar */}
+              <div>
+                <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>🏬 Mağazalar</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {MAGAZA_SUBELER.map(sube => subeButon(sube, '#d97706'))}
+                </div>
               </div>
+
+              {/* Online Kanallar */}
+              <div>
+                <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>🌐 Online Kanallar</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {ONLINE_SUBELER.map(sube => subeButon(sube, '#7c3aed'))}
+                </div>
+              </div>
+
+              {/* Ticari */}
+              <div>
+                <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>🏢 Ticari</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {TICARI_SUBELER.map(sube => subeButon(sube, '#059669'))}
+                </div>
+              </div>
+
               {aktifSubeKodu && (
-                <span style={{ fontSize: 12, color: '#d97706', fontWeight: 600, padding: '4px 12px', background: '#fef3c7', borderRadius: 20 }}>
+                <span style={{ fontSize: 12, color: '#d97706', fontWeight: 600, padding: '4px 12px', background: '#fef3c7', borderRadius: 20, alignSelf: 'flex-start' }}>
                   ✓ Seçili: {getSubeByKod(aktifSubeKodu as SubeKodu)?.ad || aktifSubeKodu}
                 </span>
               )}

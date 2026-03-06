@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { collection, getDocs, doc, setDoc, Timestamp, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu } from '../types/satis';
-import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
+import { getSubeByKod, SUBELER, MAGAZA_SUBELER, ONLINE_SUBELER, TICARI_SUBELER, SubeKodu } from '../types/sube';
 import { User } from '../types/user';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -599,9 +599,28 @@ const CiroPerformansPage: React.FC = () => {
           <div className="cp-sube-filtre">
             <span className="cp-sube-label">Şube:</span>
             <button className={`cp-sube-btn ${seciliSube === 'tumu' ? 'active' : ''}`} onClick={() => setSeciliSube('tumu')}>Tümü</button>
-            {SUBELER.map(sube => (
+
+            {/* Mağazalar */}
+            <span style={{ fontSize: 11, color: '#9ca3af', margin: '0 4px' }}>|</span>
+            {MAGAZA_SUBELER.map(sube => (
               <button key={sube.kod} className={`cp-sube-btn ${seciliSube === sube.kod ? 'active' : ''}`} onClick={() => setSeciliSube(sube.kod as SubeKodu)} style={seciliSube === sube.kod ? { background: getSubeRenk(sube.kod) } : {}}>
                 {sube.ad.replace(' Şubesi', '')}
+              </button>
+            ))}
+
+            {/* Online */}
+            <span style={{ fontSize: 11, color: '#9ca3af', margin: '0 4px' }}>|</span>
+            {ONLINE_SUBELER.map(sube => (
+              <button key={sube.kod} className={`cp-sube-btn ${seciliSube === sube.kod ? 'active' : ''}`} onClick={() => setSeciliSube(sube.kod as SubeKodu)} style={seciliSube === sube.kod ? { background: '#7c3aed' } : {}}>
+                🌐 {sube.ad}
+              </button>
+            ))}
+
+            {/* Ticari */}
+            <span style={{ fontSize: 11, color: '#9ca3af', margin: '0 4px' }}>|</span>
+            {TICARI_SUBELER.map(sube => (
+              <button key={sube.kod} className={`cp-sube-btn ${seciliSube === sube.kod ? 'active' : ''}`} onClick={() => setSeciliSube(sube.kod as SubeKodu)} style={seciliSube === sube.kod ? { background: '#059669' } : {}}>
+                🏢 {sube.ad}
               </button>
             ))}
           </div>
