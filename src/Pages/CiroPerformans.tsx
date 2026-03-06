@@ -418,9 +418,12 @@ const CiroPerformansPage: React.FC = () => {
     [zamanFiltreliSatislar, aktifSube]
   );
 
-  // Tüm kullanıcılar (admin dahil) satıcı listesinde görünür
+  // Admin her zaman tüm şubelerde görünür, satıcı sadece kendi şubesinde
   const filtreliSaticilar: User[] = useMemo(
-    () => aktifSube ? saticilar.filter(u => u.subeKodu === aktifSube) : saticilar,
+    () => {
+      if (!aktifSube) return saticilar;
+      return saticilar.filter(u => isAdmin(u.role) || u.subeKodu === aktifSube);
+    },
     [saticilar, aktifSube]
   );
 
