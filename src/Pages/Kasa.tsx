@@ -285,21 +285,33 @@ const kasaPrintPreviewYap = (params: {
     <div class="ozet-kart gunsonu"><label>Gün Sonu Bakiyesi</label><strong>${fTL(kasaGun.gunSonuBakiyesi || 0)}</strong></div>
   </div>
 
-  <h2>💸 Günlük Giderler</h2>
+  <h2>💸 Para Hareketleri</h2>
   ${(() => {
-    const giderler = (kasaGun.hareketler || []).filter(h =>
-      h.tip === KasaHareketTipi.GIDER || h.tip === KasaHareketTipi.DIGER
+    const hareketler = (kasaGun.hareketler || []).filter(h =>
+      h.tip === KasaHareketTipi.GIDER ||
+      h.tip === KasaHareketTipi.DIGER ||
+      h.tip === KasaHareketTipi.CIKIS ||
+      h.tip === KasaHareketTipi.ADMIN_ALIM
     );
-    if (giderler.length === 0) return '<p style="color:#aaa;padding:8px 0">Bu gün gider kaydı yok.</p>';
-    const rows = giderler.map(h => {
-      const isGider = h.tip === KasaHareketTipi.GIDER;
+    if (hareketler.length === 0) return '<p style="color:#aaa;padding:8px 0">Bu gün para hareketi kaydı yok.</p>';
+    const rows = hareketler.map(h => {
+      const tipRenk =
+        h.tip === KasaHareketTipi.GIDER      ? '#dc2626' :
+        h.tip === KasaHareketTipi.ADMIN_ALIM ? '#7c3aed' :
+        h.tip === KasaHareketTipi.CIKIS      ? '#d97706' :
+        '#5f6368';
+      const tipLabel =
+        h.tip === KasaHareketTipi.GIDER      ? '💸 Gider' :
+        h.tip === KasaHareketTipi.ADMIN_ALIM ? '👤 Admin Çıkışı' :
+        h.tip === KasaHareketTipi.CIKIS      ? '📤 Çıkış' :
+        '📝 Diğer';
       return '<tr>' +
         '<td style="font-family:IBM Plex Mono,monospace;font-size:11px">' + (h.saat || '—') + '</td>' +
-        '<td><span style="font-weight:700;color:' + (isGider ? '#dc2626' : '#5f6368') + '">' + (isGider ? '💸 Gider' : '📝 Diğer') + '</span></td>' +
+        '<td><span style="font-weight:700;color:' + tipRenk + '">' + tipLabel + '</span></td>' +
         '<td>' + esc(h.aciklama || '—') + '</td>' +
         '<td style="font-size:10px;color:#888">' + esc(h.belgeNo || '—') + '</td>' +
         '<td style="font-size:10px;color:#5f6368;font-style:italic">' + esc(h.not || '—') + '</td>' +
-        '<td style="font-family:IBM Plex Mono,monospace;font-weight:700;color:#dc2626">−' + fTL(h.tutar) + '</td>' +
+        '<td style="font-family:IBM Plex Mono,monospace;font-weight:700;color:' + tipRenk + '">−' + fTL(h.tutar) + '</td>' +
         '</tr>';
     }).join('');
     return '<table><thead><tr><th>Saat</th><th>Tip</th><th>Açıklama</th><th>Belge No</th><th>Not</th><th>Tutar</th></tr></thead><tbody>' + rows + '</tbody></table>';
