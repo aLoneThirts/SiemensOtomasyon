@@ -6,7 +6,7 @@ import { db } from '../firebase/config';
 import { SatisTeklifFormu, OdemeDurumu } from '../types/satis';
 import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
 import Layout from '../components/Layout';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
