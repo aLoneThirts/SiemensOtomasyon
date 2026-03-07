@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, getDoc, updateDoc, addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu, Kampanya, Urun, KartOdeme, YesilEtiket, BANKALAR, TAKSIT_SECENEKLERI } from '../types/satis';
 import { getSubeByKod } from '../types/sube';
@@ -22,7 +22,6 @@ const FATURA_NO_REGEX = /^(\d{1,4}|Kesilmedi)$/;
 const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
 const isFaturaNoGecerli = (val: string): boolean => !val || FATURA_NO_REGEX.test(val);
 
-// ✅ v7 FIX: Mars No — sadece 10 haneli sayı, yıl kısıtlaması kaldırıldı
 const MARS_NO_REGEX = /^\d{10}$/;
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
 
@@ -190,7 +189,6 @@ const SatisDuzenlePage: React.FC = () => {
         setFaturaNo(data.faturaNo || '');
         setServisNotu(data.servisNotu || '');
         setNotlar((data as any).notlar || '');
-
         setTeslimEdildiMi((data as any).teslimEdildiMi === true);
 
         const mb = data.musteriBilgileri as any;
@@ -247,6 +245,71 @@ const SatisDuzenlePage: React.FC = () => {
   const urunEkle = () => setUrunler(prev => [...prev, { id: Date.now().toString(), kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }]);
   const urunSil = (index: number) => { if (urunler.length > 1) setUrunler(prev => prev.filter((_, i) => i !== index)); };
 
+  // ── Peşinat ──────────────────────────────────────────────────────
+  const pesinatEkle = () => setPesinatlar(prev => [...prev, { id: Date.now().toString(), tutar: 0, aciklama: '' }]);
+  const pesinatSil = (pid: string) => setPesinatlar(prev => prev.filter(p => p.id !== pid));
+  const handlePesinatChange = (pid: string, field: 'tutar' | 'aciklama', value: any) => {
+    setPesinatlar(prev => prev.map(p => p.id === pid ? { ...p, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : p));
+  };
+
+  // ── Havale ───────────────────────────────────────────────────────
+  const havaleEkle = () => setHavaleler(prev => [...prev, { id: Date.now().toString(), tutar: 0, banka: HAVALE_BANKALARI[0] }]);
+  const havaleSil = (hid: string) => setHavaleler(prev => prev.filter(h => h.id !== hid));
+  const handleHavaleChange = (hid: string, field: 'tutar' | 'banka', value: any) => {
+    setHavaleler(prev => prev.map(h => h.id === hid ? { ...h, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : h));
+  };
+
+  // ── Kart ─────────────────────────────────────────────────────────
+  const kartEkle = () => setKartOdemeler(prev => [...prev, { id: Date.now().toString(), banka: BANKALAR[0], taksitSayisi: 1, tutar: 0, kesintiOrani: 0 }]);
+  const kartSil = (index: number) => setKartOdemeler(prev => prev.filter((_, i) => i !== index));
+  const handleKartChange = (index: number, field: keyof KartOdeme, value: any) => {
+    const yeniKartlar = [...kartOdemeler];
+    const yeniKart = { ...yeniKartlar[index], [field]: field === 'tutar' ? (value === '' ? 0 : parseFloat(value) || 0) : field === 'taksitSayisi' ? parseInt(value) || 1 : value };
+    if (field === 'banka' || field === 'taksitSayisi') {
+      const banka = field === 'banka' ? value : yeniKartlar[index].banka;
+      const taksit = field === 'taksitSayisi' ? (parseInt(value) || 1) : yeniKartlar[index].taksitSayisi;
+      yeniKart.kesintiOrani = getKesintiOrani(banka, taksit);
+    }
+    yeniKartlar[index] = yeniKart;
+    setKartOdemeler(yeniKartlar);
+  };
+
+  // ── Fatura No ────────────────────────────────────────────────────
+  const handleFaturaNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const normalized = normalizeFaturaNo(e.target.value);
+    setFaturaNo(normalized);
+    setFaturaNoHata(false);
+    setFaturaNoHataMesaj('');
+  };
+  const handleFaturaNoBlur = () => {
+    if (faturaNo && !isFaturaNoGecerli(faturaNo)) {
+      setFaturaNoHata(true);
+      setFaturaNoHataMesaj("Fatura No yalnızca 1-4 haneli rakam veya 'Kesilmedi' olabilir.");
+    }
+  };
+
+  // ── Mars ─────────────────────────────────────────────────────────
+  const marsEkle = () => {
+    if (marsListesi.length >= MAX_MARS) return;
+    setMarsListesi(prev => [...prev, { marsNo: '', teslimatTarihi: '', etiket: etiketAd(prev.length) }]);
+  };
+  const marsSil = (index: number) => setMarsListesi(prev => prev.filter((_, i) => i !== index));
+  const marsGuncelle = (index: number, field: 'marsNo' | 'teslimatTarihi', value: string) => {
+    const yeni = [...marsListesi];
+    if (field === 'marsNo') {
+      const sadeceSayi = value.replace(/\D/g, '');
+      yeni[index] = { ...yeni[index], marsNo: sadeceSayi };
+      if (sadeceSayi && !isMarsNoGecerli(sadeceSayi)) {
+        setMarsNoHatalar(prev => ({ ...prev, [index]: `${sadeceSayi.length}/10 hane — 10 haneli sayı gerekli` }));
+      } else {
+        setMarsNoHatalar(prev => { const k = { ...prev }; delete k[index]; return k; });
+      }
+    } else {
+      yeni[index] = { ...yeni[index], [field]: value };
+    }
+    setMarsListesi(yeni);
+  };
+
   const kampanyaToggle = (kampanyaId: string) => setSeciliKampanyaIds(prev => prev.includes(kampanyaId) ? prev.filter(k => k !== kampanyaId) : [...prev, kampanyaId]);
   const seciliKampanyalar = kampanyaAdminListesi.filter(k => seciliKampanyaIds.includes(k.id!));
 
@@ -259,88 +322,25 @@ const SatisDuzenlePage: React.FC = () => {
     return result;
   };
 
-  const yesilEtiketToplamIndirim = () => eslesenYesilEtiketler().reduce((t, e) => t + e.maliyet * e.adet, 0);
-
-  const kartEkle = () => setKartOdemeler(prev => [...prev, { id: Date.now().toString(), banka: BANKALAR[0], taksitSayisi: 1, tutar: 0, kesintiOrani: 0 }]);
-  const kartSil = (index: number) => setKartOdemeler(prev => prev.filter((_, i) => i !== index));
-  const handleKartChange = (index: number, field: keyof KartOdeme, value: any) => {
-    const yeniKartlar = [...kartOdemeler];
-    const yeniKart = { ...yeniKartlar[index], [field]: field === 'tutar' ? (parseFloat(value) || 0) : field === 'taksitSayisi' ? (parseInt(value) || 1) : value };
-    if (field === 'banka' || field === 'taksitSayisi') {
-      const banka = field === 'banka' ? value : yeniKartlar[index].banka;
-      const taksit = field === 'taksitSayisi' ? (parseInt(value) || 1) : yeniKartlar[index].taksitSayisi;
-      yeniKart.kesintiOrani = getKesintiOrani(banka, taksit);
-    }
-    yeniKartlar[index] = yeniKart;
-    setKartOdemeler(yeniKartlar);
+  // ✅ YEŞİL ETİKET ALANI
+  const yesilEtiketAlaniMaliyet = (): number => {
+    const etiketler = eslesenYesilEtiketler();
+    if (etiketler.length === 0) return 0;
+    const yesilEtiketliKodlar = new Set(etiketler.map(e => e.urunKodu.trim().toLowerCase()));
+    const yesilEtiketliToplam = etiketler.reduce((t, e) => t + e.maliyet * e.adet, 0);
+    const normalUrunlerToplam = urunler
+      .filter(u => !yesilEtiketliKodlar.has(u.kod.trim().toLowerCase()))
+      .reduce((t, u) => t + (u.alisFiyati - (u.bip || 0)) * u.adet, 0);
+    const kampanya = seciliKampanyalar.reduce((t, k) => t + (k.tutar || 0), 0);
+    return Math.max(0, yesilEtiketliToplam + normalUrunlerToplam - kampanya);
   };
 
-  const pesinatEkle = () => setPesinatlar(prev => [...prev, { id: Date.now().toString(), tutar: 0, aciklama: '' }]);
-  const pesinatSil = (pesinatId: string) => setPesinatlar(prev => prev.filter(p => p.id !== pesinatId));
-  const handlePesinatChange = (pesinatId: string, field: 'tutar' | 'aciklama', value: any) => {
-    setPesinatlar(prev => prev.map(p => p.id === pesinatId ? { ...p, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : p));
-  };
-
-  const havaleEkle = () => setHavaleler(prev => [...prev, { id: Date.now().toString(), tutar: 0, banka: HAVALE_BANKALARI[0] }]);
-  const havaleSil = (havaleId: string) => setHavaleler(prev => prev.filter(h => h.id !== havaleId));
-  const handleHavaleChange = (havaleId: string, field: 'tutar' | 'banka', value: any) => {
-    setHavaleler(prev => prev.map(h => h.id === havaleId ? { ...h, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : h));
-  };
-
-  const marsEkle = () => {
-    if (marsListesi.length >= MAX_MARS) return;
-    setMarsListesi(prev => [...prev, { marsNo: '', teslimatTarihi: '', etiket: etiketAd(prev.length) }]);
-  };
-  const marsSil = (index: number) => { if (index === 0) return; setMarsListesi(prev => prev.filter((_, i) => i !== index)); };
-  const marsGuncelle = (index: number, field: 'marsNo' | 'teslimatTarihi', value: string) => {
-    if (field === 'marsNo') {
-      const sadeceSayi = value.replace(/\D/g, '');
-      setMarsListesi(prev => prev.map((item, i) => i === index ? { ...item, marsNo: sadeceSayi } : item));
-      if (sadeceSayi && !isMarsNoGecerli(sadeceSayi)) {
-        setMarsNoHatalar(prev => ({ ...prev, [index]: `Mars No 10 haneli sayı olmalıdır. (${sadeceSayi.length}/10)` }));
-      } else {
-        setMarsNoHatalar(prev => { const copy = { ...prev }; delete copy[index]; return copy; });
-      }
-    } else {
-      setMarsListesi(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
-    }
-  };
-
-  const handleFaturaNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const normalized = normalizeFaturaNo(e.target.value);
-    setFaturaNo(normalized);
-    setFaturaNoHata(false);
-    setFaturaNoHataMesaj('');
-  };
-
-  const handleFaturaNoBlur = () => {
-    if (faturaNo && !isFaturaNoGecerli(faturaNo)) {
-      setFaturaNoHata(true);
-      setFaturaNoHataMesaj("Fatura No yalnızca 1-4 haneli rakam veya 'Kesilmedi' olabilir.");
-    }
-  };
-
-  const isTeslimatTarihiGecerli = (tarih: string): boolean => {
-    if (!tarih || !satisTarihi) return true;
-    return tarih >= satisTarihi;
-  };
-
+  // ✅ KIRMIZI ALAN
   const alisToplamı = () => urunler.reduce((s, u) => s + u.alisFiyati * u.adet, 0);
   const bipToplamı = () => urunler.reduce((s, u) => s + (u.bip || 0) * u.adet, 0);
   const toplamTutar = () => manuelSatisTutari ?? 0;
   const kampanyaToplamiHesapla = () => seciliKampanyalar.reduce((t, k) => t + (k.tutar || 0), 0);
-
-  const toplamMaliyet = () => {
-    const normalMaliyet = Math.max(0, alisToplamı() - bipToplamı() - kampanyaToplamiHesapla());
-    const etiketler = eslesenYesilEtiketler();
-    if (etiketler.length === 0) return normalMaliyet;
-    let yesilEtiketliAlis = 0;
-    for (const e of etiketler) {
-      const urun = urunler.find(u => u.kod.trim().toLowerCase() === e.urunKodu.trim().toLowerCase());
-      if (urun) yesilEtiketliAlis += urun.alisFiyati * urun.adet;
-    }
-    return Math.max(0, normalMaliyet - yesilEtiketliAlis + yesilEtiketToplamIndirim());
-  };
+  const toplamMaliyet = (): number => Math.max(0, alisToplamı() - bipToplamı() - kampanyaToplamiHesapla());
 
   const pesinatToplam = () => pesinatlar.reduce((t, p) => t + (p.tutar || 0), 0);
   const havaleToplam = () => havaleler.reduce((t, h) => t + (h.tutar || 0), 0);
@@ -396,9 +396,6 @@ const SatisDuzenlePage: React.FC = () => {
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  //  satisiIptalEt — v7 FIX: kasaya dokunmaz, sadece status değiştirir
-  // ═══════════════════════════════════════════════════════════════
   const satisiIptalEt = async () => {
     if (!satis?.id) return;
     const sube = getSubeByKod(subeKodu as any);
@@ -420,11 +417,6 @@ const SatisDuzenlePage: React.FC = () => {
       const toplamOdenenTutar = pesinatToplam() + havaleToplam() + kartBrutToplam();
       const yeniIadeDurumu = toplamOdenenTutar > 0 ? 'IADE_GEREKIYOR' : undefined;
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { satisDurumu: 'IPTAL', onayDurumu: false, iptalTarihi: new Date(), guncellemeTarihi: new Date(), ...(yeniIadeDurumu ? { iadeDurumu: yeniIadeDurumu } : {}) });
-
-      // ═══ v7 FIX: İptal anında kasaya DOKUNMA ═══
-      // İptal sadece status değiştirir, kasaya etki "İadeyi Onayla" butonunda olur
-      // kasaIptalKaydiOlustur SADECE iadeOnayla'da çağrılır (çift iade önlemi)
-
       setSatis(prev => prev ? { ...prev, satisDurumu: 'IPTAL', iadeDurumu: yeniIadeDurumu } as any : prev);
       setIptalPopup(false);
       if (yeniIadeDurumu) {
@@ -436,9 +428,6 @@ const SatisDuzenlePage: React.FC = () => {
     finally { setIptalIslemYapiliyor(false); }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  //  iadeOnayla — v7 FIX: TEK NOKTA — kasaIptalKaydiOlustur SADECE burada çağrılır
-  // ═══════════════════════════════════════════════════════════════
   const iadeOnayla = async () => {
     if (!satis?.id || !subeKodu || !currentUser) return;
     const sube = getSubeByKod(subeKodu as any);
@@ -456,16 +445,7 @@ const SatisDuzenlePage: React.FC = () => {
       const kartTutar   = kartBrutToplam();
 
       await kasaIadeEkle({ subeKodu, gun, satisId, satisKodu, musteriIsim: musteriIsimVal, nakitTutar, kartTutar, havaleTutar, yapan, yapanId, iadeSebebi: 'Satış iptali iadesi' });
-
-      // ═══ v6 FIX: İptal kaydı oluştur (kasaIptalKayitlari koleksiyonuna) ═══
-      // Bu kayıt getTahsilatlar ve recalcNakitSatis tarafından okunacak
-      await kasaIptalKaydiOlustur({
-        satis: { ...satis, id: satisId } as any,
-        subeKodu,
-        iptalYapan: yapan,
-        iptalYapanId: yapanId,
-      });
-
+      await kasaIptalKaydiOlustur({ satis: { ...satis, id: satisId } as any, subeKodu, iptalYapan: yapan, iptalYapanId: yapanId });
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { iadeDurumu: 'IADE_ODENDI', iadeOnayTarihi: new Date(), iadeOnaylayan: yapan, guncellemeTarihi: new Date() });
       setSatis(prev => prev ? { ...prev, iadeDurumu: 'IADE_ODENDI' } as any : prev);
       setIadePopup(false);
@@ -482,66 +462,21 @@ const SatisDuzenlePage: React.FC = () => {
     setIptalIslemYapiliyor(true);
     try {
       const yeniOnay = iptaldenCikarStatusu === 'ONAYLI';
+      const mevcutIadeDurumu: string | undefined = (satis as any).iadeDurumu;
       const nakitTutar = pesinatToplam();
       const havaleTutar = havaleToplam();
       const kartTutar = kartBrutToplam();
       const toplamOdenenVal = nakitTutar + havaleTutar + kartTutar;
 
-      // ═══ v7 FIX: İptalden çıkarılırken kasaIptalKayitlari'nda kayıt varsa
-      // kasaya geri ekle (pozitif tahsilat) + iptal kaydını sil
-      // Bu sayede iade durumu ne olursa olsun doğru çalışır
-      let kasayaGeriEklendi = false;
-
-      if (toplamOdenenVal > 0 && currentUser && subeKodu) {
-        // kasaIptalKayitlari'nda bu satış için kayıt var mı kontrol et
-        const iptalSnap = await getDocs(
-          query(
-            collection(db, `subeler/${sube.dbPath}/kasaIptalKayitlari`),
-            where('satisId', '==', satis.id),
-          )
-        );
-
-        if (!iptalSnap.empty) {
-          // Kasaya pozitif tahsilat olarak geri ekle
-          await kasaTahsilatEkle({
-            subeKodu,
-            gun: bugunStr(),
-            satisId: satis.id!,
-            satisKodu: satis.satisKodu ?? id ?? '',
-            musteriIsim: (satis as any).musteriBilgileri?.isim ?? '—',
-            nakitTutar,
-            kartTutar,
-            havaleTutar,
-            yapan: `${currentUser.ad} ${currentUser.soyad}`,
-            yapanId: currentUser.uid || '',
-            aciklama: 'İptalden çıkarma — ödeme geri kasaya eklendi',
-            satisTarihi: undefined,
-          });
-
-          // İptal kayıtlarını "geri alındı" olarak işaretle (silmek yerine — permission sorunu önlenir)
-          for (const iptalDocSnap of iptalSnap.docs) {
-            await updateDoc(iptalDocSnap.ref, {
-              iptalGeriAlindi: true,
-              geriAlinmaTarihi: new Date(),
-              geriAlanKullanici: `${currentUser.ad} ${currentUser.soyad}`,
-            });
-          }
-
-          kasayaGeriEklendi = true;
-        }
+      if (mevcutIadeDurumu === 'IADE_ODENDI' && toplamOdenenVal > 0 && currentUser && subeKodu) {
+        await kasaTahsilatEkle({ subeKodu, gun: bugunStr(), satisId: satis.id!, satisKodu: satis.satisKodu ?? id ?? '', musteriIsim: (satis as any).musteriBilgileri?.isim ?? '—', nakitTutar, kartTutar, havaleTutar, yapan: `${currentUser.ad} ${currentUser.soyad}`, yapanId: currentUser.uid || '', aciklama: 'İptalden çıkarma — iade geri alındı', satisTarihi: undefined });
       }
 
-      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
-        satisDurumu: iptaldenCikarStatusu,
-        onayDurumu: yeniOnay,
-        iptalTarihi: null,
-        iadeDurumu: null,
-        guncellemeTarihi: new Date(),
-      });
+      await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { satisDurumu: iptaldenCikarStatusu, onayDurumu: yeniOnay, iptalTarihi: null, iadeDurumu: null, guncellemeTarihi: new Date() });
       setSatis(prev => prev ? { ...prev, satisDurumu: iptaldenCikarStatusu, onayDurumu: yeniOnay, iadeDurumu: null } as any : prev);
       setIptaldenCikarPopup(false);
 
-      if (kasayaGeriEklendi) {
+      if (mevcutIadeDurumu === 'IADE_ODENDI' && toplamOdenenVal > 0) {
         alert(`✅ Satış "${iptaldenCikarStatusu === 'ONAYLI' ? 'Onaylı' : 'Beklemede'}" statüsüne alındı.\n💵 ${formatPrice(toplamOdenenVal)} bugünün kasasına geri eklendi.`);
       } else {
         alert(`✅ Satış "${iptaldenCikarStatusu === 'ONAYLI' ? 'Onaylı' : 'Beklemede'}" statüsüne alındı.`);
@@ -579,8 +514,6 @@ const SatisDuzenlePage: React.FC = () => {
       }
     }
 
-    // v7 FIX: Mars No ve Teslimat Tarihi karşılıklı zorunluluk
-    // Biri girilince diğeri de zorunlu
     const orijinalGiris = marsListesi[0];
     if (orijinalGiris?.marsNo?.trim() && !orijinalGiris?.teslimatTarihi) {
       alert('❌ Mars No girildiğinde teslimat tarihi zorunludur.');
@@ -626,13 +559,8 @@ const SatisDuzenlePage: React.FC = () => {
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, id!), {
         musteriBilgileri: {
           ...((satis as any).musteriBilgileri || {}),
-          isim: musteriIsim,
-          unvan: musteriUnvan,
-          vkNo: musteriVkNo,
-          vd: musteriVd,
-          adres: musteriAdres,
-          faturaAdresi: musteriFaturaAdresi,
-          cep: musteriCep,
+          isim: musteriIsim, unvan: musteriUnvan, vkNo: musteriVkNo, vd: musteriVd,
+          adres: musteriAdres, faturaAdresi: musteriFaturaAdresi, cep: musteriCep,
         },
         urunler: urunler.map(u => ({
           ...u,
@@ -681,6 +609,11 @@ const SatisDuzenlePage: React.FC = () => {
       console.error('Güncelleme hatası:', error);
       alert('❌ Bir hata oluştu!');
     }
+  };
+
+  const isTeslimatTarihiGecerli = (tarih: string): boolean => {
+    if (!tarih || !satisTarihi) return true;
+    return tarih >= satisTarihi;
   };
 
   if (loading) return <Layout pageTitle="Satış Düzenle"><div className="duzenle-loading">Yükleniyor...</div></Layout>;
@@ -796,38 +729,15 @@ const SatisDuzenlePage: React.FC = () => {
         <div className="duzenle-section">
           <h2 className="duzenle-section-title">Müşteri Bilgileri</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-            <div>
-              <label className="duzenle-label">İsim / Ad Soyad *</label>
-              <input type="text" value={musteriIsim} onChange={e => setMusteriIsim(e.target.value)} placeholder="Müşteri adı soyadı" className="duzenle-input" disabled={alanlarKilitli} required />
-            </div>
-            <div>
-              <label className="duzenle-label">Ünvan</label>
-              <input type="text" value={musteriUnvan} onChange={e => setMusteriUnvan(e.target.value)} placeholder="Şirket ünvanı" className="duzenle-input" disabled={alanlarKilitli} />
-            </div>
-            <div>
-              <label className="duzenle-label">Vergi Kimlik No</label>
-              <input type="text" value={musteriVkNo} onChange={e => setMusteriVkNo(e.target.value)} placeholder="VK No" className="duzenle-input" disabled={alanlarKilitli} />
-            </div>
-            <div>
-              <label className="duzenle-label">Vergi Dairesi</label>
-              <input type="text" value={musteriVd} onChange={e => setMusteriVd(e.target.value)} placeholder="Vergi dairesi" className="duzenle-input" disabled={alanlarKilitli} />
-            </div>
-            <div>
-              <label className="duzenle-label">Adres</label>
-              <input type="text" value={musteriAdres} onChange={e => setMusteriAdres(e.target.value)} placeholder="Teslimat adresi" className="duzenle-input" disabled={alanlarKilitli} />
-            </div>
-            <div>
-              <label className="duzenle-label">Fatura Adresi</label>
-              <input type="text" value={musteriFaturaAdresi} onChange={e => setMusteriFaturaAdresi(e.target.value)} placeholder="Fatura adresi" className="duzenle-input" disabled={alanlarKilitli} />
-            </div>
-            <div>
-              <label className="duzenle-label">Cep Telefonu</label>
-              <input type="text" value={musteriCep} onChange={e => setMusteriCep(e.target.value)} placeholder="Cep tel." className="duzenle-input" disabled={alanlarKilitli} />
-            </div>
+            <div><label className="duzenle-label">İsim / Ad Soyad *</label><input type="text" value={musteriIsim} onChange={e => setMusteriIsim(e.target.value)} placeholder="Müşteri adı soyadı" className="duzenle-input" disabled={alanlarKilitli} required /></div>
+            <div><label className="duzenle-label">Ünvan</label><input type="text" value={musteriUnvan} onChange={e => setMusteriUnvan(e.target.value)} placeholder="Şirket ünvanı" className="duzenle-input" disabled={alanlarKilitli} /></div>
+            <div><label className="duzenle-label">Vergi Kimlik No</label><input type="text" value={musteriVkNo} onChange={e => setMusteriVkNo(e.target.value)} placeholder="VK No" className="duzenle-input" disabled={alanlarKilitli} /></div>
+            <div><label className="duzenle-label">Vergi Dairesi</label><input type="text" value={musteriVd} onChange={e => setMusteriVd(e.target.value)} placeholder="Vergi dairesi" className="duzenle-input" disabled={alanlarKilitli} /></div>
+            <div><label className="duzenle-label">Adres</label><input type="text" value={musteriAdres} onChange={e => setMusteriAdres(e.target.value)} placeholder="Teslimat adresi" className="duzenle-input" disabled={alanlarKilitli} /></div>
+            <div><label className="duzenle-label">Fatura Adresi</label><input type="text" value={musteriFaturaAdresi} onChange={e => setMusteriFaturaAdresi(e.target.value)} placeholder="Fatura adresi" className="duzenle-input" disabled={alanlarKilitli} /></div>
+            <div><label className="duzenle-label">Cep Telefonu</label><input type="text" value={musteriCep} onChange={e => setMusteriCep(e.target.value)} placeholder="Cep tel." className="duzenle-input" disabled={alanlarKilitli} /></div>
           </div>
-          <small style={{ color: '#9ca3af', fontSize: 11, marginTop: 6, display: 'block' }}>
-            💡 Teslim alacak kişi bilgisi "İsim" alanına yazılabilir.
-          </small>
+          <small style={{ color: '#9ca3af', fontSize: 11, marginTop: 6, display: 'block' }}>💡 Teslim alacak kişi bilgisi "İsim" alanına yazılabilir.</small>
         </div>
 
         <div className="duzenle-section">
@@ -858,7 +768,9 @@ const SatisDuzenlePage: React.FC = () => {
           <div className="duzenle-maliyet-notu">
             <div>Alış: {formatPrice(alisToplamı())} − BİP: {formatPrice(bipToplamı())}</div>
             {kampanyaToplamiHesapla() > 0 && <div style={{ color: '#15803d' }}>Kampanya: −{formatPrice(kampanyaToplamiHesapla())}</div>}
-            {yesilEtiketToplamIndirim() > 0 && <div style={{ color: '#15803d' }}>Yeşil Etiket: +{formatPrice(yesilEtiketToplamIndirim())}</div>}
+            {eslesenYesilEtiketler().length > 0 && (
+              <div style={{ color: '#15803d' }}>Yeşil Etiket Maliyeti: {formatPrice(yesilEtiketAlaniMaliyet())}</div>
+            )}
             <div style={{ fontWeight: 700 }}>TOPLAM MALİYET = {formatPrice(toplamMaliyet())}</div>
           </div>
         </div>
@@ -952,12 +864,8 @@ const SatisDuzenlePage: React.FC = () => {
             const odenen = toplamOdenen();
             const tutar  = toplamTutar();
             const fark   = odenen - tutar;
-            if (tutar > 0 && fark > 0) {
-              return <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '2px solid #dc2626', color: '#dc2626', fontWeight: 700, fontSize: 13 }}>🚫 Toplam ödeme ({formatPrice(odenen)}) satış tutarını ({formatPrice(tutar)}) <strong>{formatPrice(fark)}</strong> aşıyor!</div>;
-            }
-            if (tutar > 0 && odenen > 0 && fark === 0) {
-              return <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', fontWeight: 600, fontSize: 13 }}>✅ Ödeme tam — satış tutarı karşılandı.</div>;
-            }
+            if (tutar > 0 && fark > 0) return <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '2px solid #dc2626', color: '#dc2626', fontWeight: 700, fontSize: 13 }}>🚫 Toplam ödeme ({formatPrice(odenen)}) satış tutarını ({formatPrice(tutar)}) <strong>{formatPrice(fark)}</strong> aşıyor!</div>;
+            if (tutar > 0 && odenen > 0 && fark === 0) return <div style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', fontWeight: 600, fontSize: 13 }}>✅ Ödeme tam — satış tutarı karşılandı.</div>;
             return null;
           })()}
         </div>
@@ -976,7 +884,6 @@ const SatisDuzenlePage: React.FC = () => {
               <label className="duzenle-label">Servis Notu</label>
               <input type="text" value={servisNotu} onChange={e => setServisNotu(e.target.value)} className="duzenle-input" disabled={alanlarKilitli} />
             </div>
-
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="duzenle-label">Teslim Edildi</label>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4 }}>
@@ -992,7 +899,6 @@ const SatisDuzenlePage: React.FC = () => {
                 </label>
               </div>
             </div>
-
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="duzenle-label">📝 Notlar</label>
               <textarea value={notlar} onChange={e => setNotlar(e.target.value)} placeholder="Satışa ait notları buraya girin..." rows={3} disabled={alanlarKilitli}
@@ -1037,7 +943,6 @@ const SatisDuzenlePage: React.FC = () => {
                       <label className="duzenle-label">Teslimat Tarihi</label>
                       <input type="date" value={giris.teslimatTarihi} min={satisTarihi || undefined} onChange={e => marsGuncelle(index, 'teslimatTarihi', e.target.value)} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} disabled={alanlarKilitli} style={{ borderColor: giris.teslimatTarihi && !isTeslimatTarihiGecerli(giris.teslimatTarihi) ? '#ef4444' : undefined }} />
                       {giris.teslimatTarihi && !isTeslimatTarihiGecerli(giris.teslimatTarihi) && <small style={{ color: '#ef4444', display: 'block' }}>Teslimat tarihi, satış tarihinden önce olamaz.</small>}
-                      {/* v7: Mars-teslimat karşılıklı zorunluluk */}
                       {index === 0 && giris.marsNo?.trim() && !giris.teslimatTarihi && <small style={{ color: '#d97706', display: 'block' }}>⚠️ Mars No girildiğinde teslimat tarihi zorunludur.</small>}
                       {index === 0 && giris.teslimatTarihi && !giris.marsNo?.trim() && <small style={{ color: '#d97706', display: 'block' }}>⚠️ Teslimat tarihi girildiğinde Mars No zorunludur.</small>}
                     </div>
