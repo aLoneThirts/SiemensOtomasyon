@@ -312,7 +312,7 @@ const Dashboard: React.FC = () => {
 
     // ── VERİ SATIRLARI ───────────────────────────────────────────
     let topMaliyet = 0, topNakit = 0, topKredi = 0, topAcik = 0, topHavale = 0;
-    let topToplam  = 0, topHesaba = 0, topKazanc = 0;
+    let topToplam  = 0, topHesaba = 0, topKazanc = 0, topYuzde = 0;
 
     filtreliSatislar.forEach((s, idx) => {
       const row = idx + 1;
@@ -388,6 +388,7 @@ const Dashboard: React.FC = () => {
       // Yüzde (sayı olarak, PCT_FMT ile gösterilir)
       const yuzde = maliyet > 0 ? Math.round((kazanc / maliyet) * 100) : 0;
       setCell(row, C_YUZDE, yuzde, numStyle(PCT_FMT));
+      topYuzde += yuzde;
     });
 
     // ── GENEL TOPLAM SATIRI (SARI, KALIN) ───────────────────────
@@ -404,7 +405,7 @@ const Dashboard: React.FC = () => {
     setCell(gRow, C_KAZANC,  topKazanc,  gtKazanc(topKazanc));
 
     // Genel karlılık: toplam kazanç / toplam ciro * 100
-    const genelYuzde = topToplam > 0 ? Math.round((topKazanc / topToplam) * 100) : 0;
+    const genelYuzde = filtreliSatislar.length > 0 ? Math.round(topYuzde / filtreliSatislar.length) : 0;
     setCell(gRow, C_YUZDE, genelYuzde, gtPct);
 
     // ── Çalışma alanı tanımı ─────────────────────────────────────
