@@ -176,22 +176,25 @@ const Dashboard: React.FC = () => {
     const wb = XLSX.utils.book_new();
     const ws: any = {};
 
-    // ── Maliyet hesaplama (SatisDetay ile aynı mantık) ──────────
+    // ── Maliyet hesaplama: SADECE normal alış−BİP−kampanya ───────
+    // Yeşil etiket özel fiyatı ana maliyete dahil edilmez (Bölüm 2 fix)
     const maliyetHesapla = (s: SatisTeklifFormu): number => {
       const kampanyaToplami = (s as any).kampanyaToplami || 0;
+      const alis = (s.urunler || []).reduce((t, u) => t + ((u as any).alisFiyatSnapshot ?? u.alisFiyati ?? 0) * u.adet, 0);
+      const bip  = (s.urunler || []).reduce((t, u) => t + ((u as any).bipSnapshot ?? u.bip ?? 0) * u.adet, 0);
+      return Math.max(0, alis - bip - kampanyaToplami);
+    };
+
+    // ── Prim 2: Yeşil etiket maliyeti (SatisDetay yesil kutu ile aynı) ──
+    const prim2Hesapla = (s: SatisTeklifFormu): number => {
       const yesilEtiketler: any[] = s.yesilEtiketler || [];
-
-      if (yesilEtiketler.length === 0) {
-        const alis = (s.urunler || []).reduce((t, u) => t + ((u as any).alisFiyatSnapshot ?? u.alisFiyati ?? 0) * u.adet, 0);
-        const bip  = (s.urunler || []).reduce((t, u) => t + ((u as any).bipSnapshot ?? u.bip ?? 0) * u.adet, 0);
-        return Math.max(0, alis - bip - kampanyaToplami);
-      }
-
+      if (yesilEtiketler.length === 0) return 0;
+      const kampanyaToplami = (s as any).kampanyaToplami || 0;
       const yesilKodlar = new Set(yesilEtiketler.map((e: any) => (e.urunKodu || '').trim().toLowerCase()));
-      const normalAlis  = (s.urunler || []).filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase())).reduce((t, u) => t + ((u as any).alisFiyatSnapshot ?? u.alisFiyati ?? 0) * u.adet, 0);
-      const normalBip   = (s.urunler || []).filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase())).reduce((t, u) => t + ((u as any).bipSnapshot ?? u.bip ?? 0) * u.adet, 0);
-      const yesilOzel   = yesilEtiketler.reduce((t: number, e: any) => t + (e.tutar || 0), 0);
-      return Math.max(0, (normalAlis - normalBip) + yesilOzel - kampanyaToplami);
+      const normalAlis = (s.urunler || []).filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase())).reduce((t, u) => t + ((u as any).alisFiyatSnapshot ?? u.alisFiyati ?? 0) * u.adet, 0);
+      const normalBip  = (s.urunler || []).filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase())).reduce((t, u) => t + ((u as any).bipSnapshot ?? u.bip ?? 0) * u.adet, 0);
+      const yesilOzel  = yesilEtiketler.reduce((t: number, e: any) => t + (e.tutar || 0), 0);
+      return Math.max(0, yesilOzel + normalAlis - normalBip - kampanyaToplami);
     };
 
     // ── Ödeme tutarları ──────────────────────────────────────────
@@ -319,15 +322,23 @@ const Dashboard: React.FC = () => {
       setCell(row, C_TEMSILCI, (s as any).musteriTemsilcisi || '');
       setCell(row, C_MUSTERI,  s.musteriBilgileri?.isim || '');
 
-      // Ürünler — her ürün ayrı kolona
+      // Ürünler — her ürün ayrı kolona, yeşil etiketliler açık yeşil arka plan
+      const yesilKodlarSet = new Set((s.yesilEtiketler || []).map((e: any) => (e.urunKodu || '').trim().toLowerCase()));
       (s.urunler || []).forEach((u, ui) => {
         if (ui >= maxUrun) return;
         const kod  = u.kod || '';
         const adet = u.adet || 1;
-        setCell(row, C_URUN0 + ui, adet > 1 ? `${kod} x${adet}` : kod);
+        const isYesil = yesilKodlarSet.has((kod).trim().toLowerCase());
+        const urunStyle = isYesil ? {
+          fill: { fgColor: { rgb: 'C6EFCE' }, patternType: 'solid' },
+          font: { color: { rgb: '276221' } },
+        } : undefined;
+        setCell(row, C_URUN0 + ui, adet > 1 ? `${kod} x${adet}` : kod, urunStyle);
       });
 
-      // Prim / KVKK / Prim2 → BOŞ (manuel doldurulacak)
+      // Prim → BOŞ (manuel), KVKK → BOŞ (manuel), Prim2 → OTOMATİK (yeşil etiket maliyeti)
+      const prim2 = prim2Hesapla(s);
+      if (prim2 > 0) setCell(row, C_PRIM2, prim2, numStyle(TL_FMT));
 
       // Maliyet
       const maliyet = maliyetHesapla(s);
@@ -423,7 +434,7 @@ const Dashboard: React.FC = () => {
     ws['!rows'] = [{ hpt: 28 }];
 
     XLSX.utils.book_append_sheet(wb, ws, 'Satışlar');
-    XLSX.writeFile(wb, `Satislar_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.xlsx`);
+    XLSX.writeFile(wb, `Satislar_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.xlsx`, { bookType: 'xlsx', type: 'binary' });
   };
 
   // =============================================

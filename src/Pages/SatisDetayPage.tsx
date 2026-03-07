@@ -70,26 +70,14 @@ const SatisDetayPage: React.FC = () => {
   const yesilEtiketToplamHesapla = () =>
     satis?.yesilEtiketler?.reduce((sum, e) => sum + (e.tutar || 0), 0) || 0;
 
-  // ✅ FIX: Yeşil etiketli ürünlerin BİP'i maliyet hesabına dahil edilmez
+  // ✅ ANA MALİYET: Sadece normal alış − BİP − kampanya
+  // Yeşil etiket özel fiyatı bu hesaba ASLA dahil edilmez
   const toplamMaliyetHesapla = () => {
     if (!satis) return 0;
-    const yesilEtiketler: YesilEtiket[] = satis.yesilEtiketler || [];
-    if (yesilEtiketler.length === 0) {
-      return Math.max(0, alisToplamHesapla() - bipToplamHesapla() - kampanyaToplamiHesapla());
-    }
-    const yesilKodlar = new Set(
-      yesilEtiketler.map(e => (e.urunKodu || '').trim().toLowerCase())
-    );
-    const normalAlis = (satis.urunler || [])
-      .filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase()))
-      .reduce((s: number, u: any) => s + urunAlis(u) * u.adet, 0);
-    const normalBip = (satis.urunler || [])
-      .filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase()))
-      .reduce((s: number, u: any) => s + urunBip(u) * u.adet, 0);
-    const yesilOzel = yesilEtiketler.reduce((s, e) => s + (e.tutar || 0), 0);
-    return Math.max(0, (normalAlis - normalBip) + yesilOzel - kampanyaToplamiHesapla());
+    return Math.max(0, alisToplamHesapla() - bipToplamHesapla() - kampanyaToplamiHesapla());
   };
 
+  // ✅ YEŞİL ETİKET MALİYETİ: Ayrı bilgi alanı, kar/zarar hesabını etkilemez
   const yesilEtiketKontrolMaliyeti = () => {
     if (!satis) return 0;
     const yesilEtiketler: YesilEtiket[] = satis.yesilEtiketler || [];
@@ -100,7 +88,6 @@ const SatisDetayPage: React.FC = () => {
     const normalAlis = (satis.urunler || [])
       .filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase()))
       .reduce((s: number, u: any) => s + urunAlis(u) * u.adet, 0);
-    // ✅ FIX: Sadece normal ürünlerin BİP'i düşülür, yeşil etiketli ürünün BİP'i dahil edilmez
     const normalBip = (satis.urunler || [])
       .filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase()))
       .reduce((s: number, u: any) => s + urunBip(u) * u.adet, 0);
@@ -160,7 +147,6 @@ const SatisDetayPage: React.FC = () => {
     return acik > 0 ? acik : 0;
   };
 
-  // ✅ #6 Ünvan + Teslim Alan Kişi birleşik gösterimi
   const unvanVeTeslimatGoster = () => {
     const unvan = (satis as any)?.musteriBilgileri?.unvan || '';
     return unvan || null;
@@ -187,7 +173,6 @@ const SatisDetayPage: React.FC = () => {
     );
   }
 
-  // ✅ Yardımcı değişkenler
   const unvanGosterim = unvanVeTeslimatGoster();
   const faturaAdresi = satis?.musteriBilgileri?.faturaAdresi || '';
   const teslimatAdresi = satis?.musteriBilgileri?.adres || '';
@@ -230,7 +215,6 @@ const SatisDetayPage: React.FC = () => {
             <div className="sol-kolon">
               <div className="baslik-alt">MÜŞTERİ BİLGİLERİ</div>
               <div className="satir-item">ÜNVAN: {satis.musteriBilgileri?.isim}</div>
-              {/* ✅ #4/#6 Ünvan + Teslim alan kişi */}
               {unvanGosterim && (
                 <div className="satir-item" style={{ color: '#0369a1', fontWeight: 600 }}>
                   ŞİRKET ÜNVANI: {unvanGosterim}
@@ -239,8 +223,6 @@ const SatisDetayPage: React.FC = () => {
               <div className="satir-item">V.K NO: {satis.musteriBilgileri?.vkNo || '-'}</div>
               <div className="satir-item">V.D: {satis.musteriBilgileri?.vd || '-'}</div>
               <div className="satir-item">CEP: {satis.musteriBilgileri?.cep || '-'}</div>
-
-              {/* ✅ #7 Adresler ayrı gösterim */}
               {faturaAdresi ? (
                 <>
                   <div className="satir-item">FATURA ADRESİ: {faturaAdresi}</div>
@@ -274,16 +256,9 @@ const SatisDetayPage: React.FC = () => {
               <div className="satir-item">MAĞAZA: {satis.magaza || '-'}</div>
               <div className="satir-item">FATURA NO: {satis.faturaNo || '-'}</div>
               <div className="satir-item">SERVİS: {satis.servisNotu || '-'}</div>
-
-              {/* ✅ #5 Teslim Edildi renk gösterimi: Evet = sarı zemin */}
               <div className="satir-item" style={teslimEdildi ? {
-                background: '#fef08a',
-                color: '#854d0e',
-                fontWeight: 700,
-                padding: '3px 8px',
-                borderRadius: 6,
-                display: 'inline-block',
-                marginTop: 2,
+                background: '#fef08a', color: '#854d0e', fontWeight: 700,
+                padding: '3px 8px', borderRadius: 6, display: 'inline-block', marginTop: 2,
               } : {}}>
                 TESLİM EDİLDİ Mİ?: {teslimEdildi ? '✅ EVET' : 'HAYIR'}
               </div>
@@ -406,35 +381,29 @@ const SatisDetayPage: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
-                  {(() => {
-                    const yesilKodlar2 = new Set(
-                      satis.yesilEtiketler!.map(e => (e.urunKodu || '').trim().toLowerCase())
-                    );
-                    const normalAlis2 = (satis.urunler || [])
-                      .filter(u => !yesilKodlar2.has((u.kod || '').trim().toLowerCase()))
-                      .reduce((s: number, u: any) => s + urunAlis(u) * u.adet, 0);
-                    // ✅ FIX: Sadece normal ürünlerin BİP'i
-                    const normalBip2 = (satis.urunler || [])
-                      .filter(u => !yesilKodlar2.has((u.kod || '').trim().toLowerCase()))
-                      .reduce((s: number, u: any) => s + urunBip(u) * u.adet, 0);
-                    const yesilOzel2 = satis.yesilEtiketler!.reduce((s, e) => s + (e.tutar || 0), 0);
-                    const kontrolMaliyet = Math.max(0, yesilOzel2 + normalAlis2 - normalBip2 - kampanyaToplamiHesapla());
-
-                    return (
-                      <div className="etiket-toplam">
-                        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4, fontWeight: 400 }}>
-                          ℹ️ Bilgi amaçlı — Kâr/zarar hesabını etkilemez
-                        </div>
-                        YEŞİL ETİKET MALİYETİ: {formatPrice(kontrolMaliyet)}
-                        <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 400, marginTop: 4, lineHeight: 1.5 }}>
-                          Yeşil özel: {formatPrice(yesilOzel2)}
-                          {normalAlis2 > 0 && <> + Normal alış: {formatPrice(normalAlis2)}</>}
-                          {normalBip2 > 0 && <> − BİP: {formatPrice(normalBip2)}</>}
-                          {kampanyaToplamiHesapla() > 0 && <> − Kampanya: {formatPrice(kampanyaToplamiHesapla())}</>}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <div className="etiket-toplam">
+                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4, fontWeight: 400 }}>
+                      ℹ️ Bilgi amaçlı — Kâr/zarar hesabını etkilemez
+                    </div>
+                    YEŞİL ETİKET MALİYETİ: {formatPrice(yesilEtiketKontrolMaliyeti())}
+                    <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 400, marginTop: 4, lineHeight: 1.5 }}>
+                      {(() => {
+                        const yesilEtiketler = satis.yesilEtiketler || [];
+                        const yesilKodlar2 = new Set(yesilEtiketler.map(e => (e.urunKodu || '').trim().toLowerCase()));
+                        const normalAlis2 = (satis.urunler || []).filter(u => !yesilKodlar2.has((u.kod || '').trim().toLowerCase())).reduce((s: number, u: any) => s + urunAlis(u) * u.adet, 0);
+                        const normalBip2  = (satis.urunler || []).filter(u => !yesilKodlar2.has((u.kod || '').trim().toLowerCase())).reduce((s: number, u: any) => s + urunBip(u) * u.adet, 0);
+                        const yesilOzel2  = yesilEtiketler.reduce((s, e) => s + (e.tutar || 0), 0);
+                        return (
+                          <>
+                            Yeşil özel: {formatPrice(yesilOzel2)}
+                            {normalAlis2 > 0 && <> + Normal alış: {formatPrice(normalAlis2)}</>}
+                            {normalBip2 > 0 && <> − BİP: {formatPrice(normalBip2)}</>}
+                            {kampanyaToplamiHesapla() > 0 && <> − Kampanya: {formatPrice(kampanyaToplamiHesapla())}</>}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
                 </>
               ) : (
                 <div className="kutu-satir">Yeşil etiket yok</div>
