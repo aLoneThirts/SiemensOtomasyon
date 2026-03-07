@@ -251,21 +251,34 @@ const Dashboard: React.FC = () => {
       ws[addr] = { v, t: typeof v === 'number' ? 'n' : 's', ...(style ? { s: style } : {}) };
     };
 
+    // TL formatı: 14.999 ₺ veya -7.500 ₺
+    const TL_FMT = '#,##0 [$₺-41F];[RED]-#,##0 [$₺-41F]';
+    const PCT_FMT = '0"%"';
+
     // ── Stil tanımları ───────────────────────────────────────────
     const headerStyle = {
       font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
-      fill: { fgColor: { rgb: '1A6B5E' }, patternType: 'solid' },
+      fill: { fgColor: { rgb: '1E7A6D' }, patternType: 'solid' },
       alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
     };
     const manuelHeaderStyle = {
       ...headerStyle,
       fill: { fgColor: { rgb: '4A90D9' }, patternType: 'solid' },
     };
-    const numStyle = { alignment: { horizontal: 'right' } };
-    const genelToplamStyle = () => ({
+    const numStyle = (fmt: string) => ({ numFmt: fmt, alignment: { horizontal: 'right' } });
+
+    // Genel Toplam satırı: SARI arka plan, kalın yazı
+    const gtBase = {
       font: { bold: true, sz: 11 },
-      fill: { fgColor: { rgb: 'D9D9D9' }, patternType: 'solid' },
+      fill: { fgColor: { rgb: 'FFD700' }, patternType: 'solid' },
       alignment: { horizontal: 'right', vertical: 'center' },
+    };
+    const gtTL = { ...gtBase, numFmt: TL_FMT };
+    const gtPct = { ...gtBase, numFmt: PCT_FMT, alignment: { horizontal: 'center', vertical: 'center' } };
+    const gtText = { ...gtBase, alignment: { horizontal: 'left', vertical: 'center' } };
+    const gtKazanc = (v: number) => ({
+      ...gtTL,
+      font: { bold: true, sz: 11, color: { rgb: v >= 0 ? '15803D' : 'DC2626' } },
     });
 
     // ── BAŞLIK SATIRI (satır 0) ──────────────────────────────────
@@ -318,72 +331,70 @@ const Dashboard: React.FC = () => {
 
       // Maliyet
       const maliyet = maliyetHesapla(s);
-      if (maliyet) setCell(row, C_MALIYET, maliyet, numStyle);
+      if (maliyet) setCell(row, C_MALIYET, maliyet, numStyle(TL_FMT));
       topMaliyet += maliyet;
 
       // Nakit
       const nakit = nakitHesapla(s);
-      if (nakit) setCell(row, C_NAKIT, nakit, numStyle);
+      if (nakit) setCell(row, C_NAKIT, nakit, numStyle(TL_FMT));
       topNakit += nakit;
 
       // Kredi Kartı (brüt)
       const kredi = kartBrutHesapla(s);
-      if (kredi) setCell(row, C_KREDI, kredi, numStyle);
+      if (kredi) setCell(row, C_KREDI, kredi, numStyle(TL_FMT));
       topKredi += kredi;
 
       // Açık Hesap
       const toplamOdenen = nakit + havaleHesapla(s) + kredi;
       const acik = Math.max(0, (s.toplamTutar || 0) - toplamOdenen);
-      if (acik > 0) setCell(row, C_ACIK, acik, numStyle);
+      if (acik > 0) setCell(row, C_ACIK, acik, numStyle(TL_FMT));
       topAcik += acik;
 
       // Havale (sadece tutar)
       const havale = havaleHesapla(s);
-      if (havale) setCell(row, C_HAVALE, havale, numStyle);
+      if (havale) setCell(row, C_HAVALE, havale, numStyle(TL_FMT));
       topHavale += havale;
 
       // Toplam
       const toplam = s.toplamTutar || 0;
-      if (toplam) setCell(row, C_TOPLAM, toplam, numStyle);
+      if (toplam) setCell(row, C_TOPLAM, toplam, numStyle(TL_FMT));
       topToplam += toplam;
 
       // Hesaba Geçen
       const hesaba = hesabaGecenHesapla(s);
-      if (hesaba) setCell(row, C_HESABA, hesaba, numStyle);
+      if (hesaba) setCell(row, C_HESABA, hesaba, numStyle(TL_FMT));
       topHesaba += hesaba;
 
-      // Kazanç (sayısal, + veya -)
+      // Kazanç (sayısal, TL formatında, + yeşil - kırmızı)
       const kazanc = s.zarar ?? 0;
       setCell(row, C_KAZANC, kazanc, {
+        numFmt: TL_FMT,
         alignment: { horizontal: 'right' },
         font: { color: { rgb: kazanc >= 0 ? '15803D' : 'DC2626' } },
       });
       topKazanc += kazanc;
 
-      // Yüzde
+      // Yüzde (sayı olarak, PCT_FMT ile gösterilir)
       const yuzde = maliyet > 0 ? Math.round((kazanc / maliyet) * 100) : 0;
-      setCell(row, C_YUZDE, `${yuzde >= 0 ? '%' + yuzde : '%-' + Math.abs(yuzde)}`);
+      setCell(row, C_YUZDE, yuzde, numStyle(PCT_FMT));
     });
 
-    // ── GENEL TOPLAM SATIRI ──────────────────────────────────────
+    // ── GENEL TOPLAM SATIRI (SARI, KALIN) ───────────────────────
     const gRow = filtreliSatislar.length + 1;
-    const GT = genelToplamStyle();
 
-    setCell(gRow, C_TARIH,   'GENEL TOPLAM', GT);
-    setCell(gRow, C_MALIYET, topMaliyet, GT);
-    setCell(gRow, C_NAKIT,   topNakit,   GT);
-    setCell(gRow, C_KREDI,   topKredi,   GT);
-    setCell(gRow, C_ACIK,    topAcik,    GT);
-    setCell(gRow, C_HAVALE,  topHavale,  GT);
-    setCell(gRow, C_TOPLAM,  topToplam,  GT);
-    setCell(gRow, C_HESABA,  topHesaba,  GT);
-    setCell(gRow, C_KAZANC,  topKazanc,  {
-      ...GT,
-      font: { bold: true, color: { rgb: topKazanc >= 0 ? '15803D' : 'DC2626' } },
-    });
+    setCell(gRow, C_TARIH,   'GENEL TOPLAM', gtText);
+    setCell(gRow, C_MALIYET, topMaliyet, gtTL);
+    setCell(gRow, C_NAKIT,   topNakit,   gtTL);
+    setCell(gRow, C_KREDI,   topKredi,   gtTL);
+    setCell(gRow, C_ACIK,    topAcik,    gtTL);
+    setCell(gRow, C_HAVALE,  topHavale,  gtTL);
+    setCell(gRow, C_TOPLAM,  topToplam,  gtTL);
+    setCell(gRow, C_HESABA,  topHesaba,  gtTL);
+    setCell(gRow, C_KAZANC,  topKazanc,  gtKazanc(topKazanc));
 
-    const genelYuzde = topMaliyet > 0 ? Math.round((topKazanc / topMaliyet) * 100) : 0;
-    setCell(gRow, C_YUZDE, `${genelYuzde >= 0 ? '%' + genelYuzde : '%-' + Math.abs(genelYuzde)}`, GT);
+    // Genel karlılık: toplam kazanç / toplam ciro * 100
+    const genelYuzde = topToplam > 0 ? Math.round((topKazanc / topToplam) * 100) : 0;
+    setCell(gRow, C_YUZDE, genelYuzde, gtPct);
 
     // ── Çalışma alanı tanımı ─────────────────────────────────────
     ws['!ref'] = XLSX.utils.encode_range({ r: 0, c: 0 }, { r: gRow, c: TOTAL_COLS - 1 });
