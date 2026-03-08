@@ -55,6 +55,8 @@ const SatisDuzenlePage: React.FC = () => {
   const [faturaNoHata, setFaturaNoHata] = useState(false);
   const [faturaNoHataMesaj, setFaturaNoHataMesaj] = useState('');
   const [servisNotu, setServisNotu] = useState('');
+  // ✅ YENİ: Mağaza Teslimat alanı
+  const [magaza, setMagaza] = useState('');
   const [marsListesi, setMarsListesi] = useState<MarsGirisi[]>([]);
   const [notlar, setNotlar] = useState('');
   const [satisTarihi, setSatisTarihi] = useState('');
@@ -70,6 +72,8 @@ const SatisDuzenlePage: React.FC = () => {
   const [musteriCep, setMusteriCep] = useState('');
 
   const [urunCache, setUrunCache] = useState<Record<string, { ad: string; alis: number; bip: number }>>({});
+  // ✅ YENİ: Ürün arama dropdown state
+  const [urunAramaDropdown, setUrunAramaDropdown] = useState<{ index: number; sonuclar: string[] } | null>(null);
   const [kampanyaAdminListesi, setKampanyaAdminListesi] = useState<KampanyaAdmin[]>([]);
   const [seciliKampanyaIds, setSeciliKampanyaIds] = useState<string[]>([]);
   const [yesilEtiketAdminList, setYesilEtiketAdminList] = useState<YesilEtiketAdmin[]>([]);
@@ -189,6 +193,8 @@ const SatisDuzenlePage: React.FC = () => {
 
         setFaturaNo(data.faturaNo || '');
         setServisNotu(data.servisNotu || '');
+        // ✅ YENİ: Mağaza değerini yükle
+        setMagaza((data as any).magaza || '');
         setNotlar((data as any).notlar || '');
 
         setTeslimEdildiMi((data as any).teslimEdildiMi === true);
@@ -232,13 +238,32 @@ const SatisDuzenlePage: React.FC = () => {
     kesintiCacheYukle();
   }, [id]);
 
+  // ✅ YENİ: Ürün dropdown'dan seçim fonksiyonu
+  const urunSecDropdown = (index: number, kod: string) => {
+    const eslesme = urunCache[kod];
+    if (!eslesme) return;
+    const yeniUrunler = [...urunler];
+    yeniUrunler[index] = { ...yeniUrunler[index], kod, ad: eslesme.ad || '', alisFiyati: eslesme.alis, bip: eslesme.bip };
+    setUrunler(yeniUrunler);
+    setUrunAramaDropdown(null);
+  };
+
   const handleUrunChange = (index: number, field: keyof Urun, value: any) => {
     const yeniUrunler = [...urunler];
     yeniUrunler[index] = { ...yeniUrunler[index], [field]: field === 'adet' || field === 'alisFiyati' || field === 'bip' ? parseFloat(value) || 0 : value };
     if (field === 'kod') {
-      const trimmed = String(value).trim();
+      // ✅ YENİ: Dropdown mantığı eklendi
+      const trimmed = String(value).trim().toUpperCase();
       const eslesme = urunCache[trimmed];
-      if (eslesme) yeniUrunler[index] = { ...yeniUrunler[index], kod: trimmed, ad: eslesme.ad || yeniUrunler[index].ad, alisFiyati: eslesme.alis, bip: eslesme.bip };
+      if (eslesme) {
+        yeniUrunler[index] = { ...yeniUrunler[index], kod: trimmed, ad: eslesme.ad || yeniUrunler[index].ad, alisFiyati: eslesme.alis, bip: eslesme.bip };
+        setUrunAramaDropdown(null);
+      } else if (trimmed.length >= 2) {
+        const eslesenler = Object.keys(urunCache).filter(k => k.toUpperCase().includes(trimmed)).slice(0, 10);
+        setUrunAramaDropdown(eslesenler.length > 0 ? { index, sonuclar: eslesenler } : null);
+      } else {
+        setUrunAramaDropdown(null);
+      }
     }
     setUrunler(yeniUrunler);
     if (field === 'alisFiyati' || field === 'adet') setManuelSatisTutari(null);
@@ -420,10 +445,6 @@ const SatisDuzenlePage: React.FC = () => {
       const yeniIadeDurumu = toplamOdenenTutar > 0 ? 'IADE_GEREKIYOR' : undefined;
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), { satisDurumu: 'IPTAL', onayDurumu: false, iptalTarihi: new Date(), guncellemeTarihi: new Date(), ...(yeniIadeDurumu ? { iadeDurumu: yeniIadeDurumu } : {}) });
 
-      // ═══ v7 FIX: İptal anında kasaya DOKUNMA ═══
-      // İptal sadece status değiştirir, kasaya etki "İadeyi Onayla" butonunda olur
-      // kasaIptalKaydiOlustur SADECE iadeOnayla'da çağrılır (çift iade önlemi)
-
       setSatis(prev => prev ? { ...prev, satisDurumu: 'IPTAL', iadeDurumu: yeniIadeDurumu } as any : prev);
       setIptalPopup(false);
       if (yeniIadeDurumu) {
@@ -456,8 +477,6 @@ const SatisDuzenlePage: React.FC = () => {
 
       await kasaIadeEkle({ subeKodu, gun, satisId, satisKodu, musteriIsim: musteriIsimVal, nakitTutar, kartTutar, havaleTutar, yapan, yapanId, iadeSebebi: 'Satış iptali iadesi' });
 
-      // ═══ v6 FIX: İptal kaydı oluştur (kasaIptalKayitlari koleksiyonuna) ═══
-      // Bu kayıt getTahsilatlar ve recalcNakitSatis tarafından okunacak
       await kasaIptalKaydiOlustur({
         satis: { ...satis, id: satisId } as any,
         subeKodu,
@@ -533,8 +552,6 @@ const SatisDuzenlePage: React.FC = () => {
       }
     }
 
-    // v7 FIX: Mars No ve Teslimat Tarihi karşılıklı zorunluluk
-    // Biri girilince diğeri de zorunlu
     const orijinalGiris = marsListesi[0];
     if (orijinalGiris?.marsNo?.trim() && !orijinalGiris?.teslimatTarihi) {
       alert('❌ Mars No girildiğinde teslimat tarihi zorunludur.');
@@ -613,6 +630,8 @@ const SatisDuzenlePage: React.FC = () => {
         odemeDurumu: acikHesap() > 0 ? 'ACIK_HESAP' : 'ODENDI',
         pesinatTutar: pesinatToplam(), havaleTutar: havaleToplam(),
         marsNo: orijinal.marsNo, faturaNo, servisNotu,
+        // ✅ YENİ: magaza alanı kaydediliyor
+        magaza: magaza.trim() || null,
         notlar: notlar.trim() || null,
         teslimEdildiMi,
         toplamTutar: toplamTutar(), zarar: karZarar(),
@@ -794,9 +813,45 @@ const SatisDuzenlePage: React.FC = () => {
           </div>
           {urunler.map((urun, index) => (
             <div key={urun.id} className="duzenle-urun-row">
-              <div className="duzenle-urun-kod-wrap">
-                <input type="text" value={urun.kod} onChange={e => handleUrunChange(index, 'kod', e.target.value)} placeholder="Ürün kodu" className="duzenle-input mono" disabled={alanlarKilitli} />
-                {urunCache[urun.kod?.trim()] && <span className="urun-found-badge">✓ Eşleşti</span>}
+              {/* ✅ YENİ: Dropdown ile ürün arama */}
+              <div className="duzenle-urun-kod-wrap" style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  value={urun.kod}
+                  onChange={e => handleUrunChange(index, 'kod', e.target.value)}
+                  onBlur={() => setTimeout(() => setUrunAramaDropdown(null), 200)}
+                  placeholder="Ürün kodu"
+                  className="duzenle-input mono"
+                  disabled={alanlarKilitli}
+                  autoComplete="off"
+                />
+                {urunCache[urun.kod?.trim().toUpperCase()] && <span className="urun-found-badge">✓ Eşleşti</span>}
+                {urunAramaDropdown?.index === index && urunAramaDropdown.sonuclar.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
+                    background: '#fff', border: '1px solid #d1fae5', borderRadius: 8,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: 220, overflowY: 'auto'
+                  }}>
+                    {urunAramaDropdown.sonuclar.map(kod => {
+                      const info = urunCache[kod];
+                      return (
+                        <div
+                          key={kod}
+                          onMouseDown={() => urunSecDropdown(index, kod)}
+                          style={{
+                            padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f0fdf4',
+                            display: 'flex', justifyContent: 'space-between', fontSize: 13
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, color: '#065f46' }}>{kod}</span>
+                          <span style={{ color: '#15803d', fontWeight: 600, fontSize: 12 }}>
+                            ₺{info?.alis?.toLocaleString('tr-TR') || 0}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <input type="text" value={urun.ad} onChange={e => handleUrunChange(index, 'ad', e.target.value)} placeholder="Ürün adı" className="duzenle-input" disabled={alanlarKilitli} />
               <input type="number" value={urun.adet} onChange={e => handleUrunChange(index, 'adet', e.target.value)} className="duzenle-input" min="1" disabled={alanlarKilitli} />
@@ -926,6 +981,18 @@ const SatisDuzenlePage: React.FC = () => {
               {!faturaNoHata && faturaNo && isFaturaNoGecerli(faturaNo) && <small style={{ color: '#16a34a' }}>✅ Geçerli</small>}
               <small style={{ color: '#9ca3af', fontSize: 11 }}>1-4 haneli rakam veya "Kesilmedi"</small>
             </div>
+            {/* ✅ YENİ: Mağaza Teslimat alanı */}
+            <div>
+              <label className="duzenle-label">Mağaza Teslimat</label>
+              <input
+                type="text"
+                value={magaza}
+                onChange={e => setMagaza(e.target.value)}
+                placeholder="Mağaza adı"
+                className="duzenle-input"
+                disabled={alanlarKilitli}
+              />
+            </div>
             <div>
               <label className="duzenle-label">Servis Notu</label>
               <input type="text" value={servisNotu} onChange={e => setServisNotu(e.target.value)} className="duzenle-input" disabled={alanlarKilitli} />
@@ -991,7 +1058,6 @@ const SatisDuzenlePage: React.FC = () => {
                       <label className="duzenle-label">Teslimat Tarihi</label>
                       <input type="date" value={giris.teslimatTarihi} min={satisTarihi || undefined} onChange={e => marsGuncelle(index, 'teslimatTarihi', e.target.value)} className={`duzenle-input ${index > 0 ? 'input-blue' : ''}`} disabled={alanlarKilitli} style={{ borderColor: giris.teslimatTarihi && !isTeslimatTarihiGecerli(giris.teslimatTarihi) ? '#ef4444' : undefined }} />
                       {giris.teslimatTarihi && !isTeslimatTarihiGecerli(giris.teslimatTarihi) && <small style={{ color: '#ef4444', display: 'block' }}>Teslimat tarihi, satış tarihinden önce olamaz.</small>}
-                      {/* v7: Mars-teslimat karşılıklı zorunluluk */}
                       {index === 0 && giris.marsNo?.trim() && !giris.teslimatTarihi && <small style={{ color: '#d97706', display: 'block' }}>⚠️ Mars No girildiğinde teslimat tarihi zorunludur.</small>}
                       {index === 0 && giris.teslimatTarihi && !giris.marsNo?.trim() && <small style={{ color: '#d97706', display: 'block' }}>⚠️ Teslimat tarihi girildiğinde Mars No zorunludur.</small>}
                     </div>
