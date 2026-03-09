@@ -185,10 +185,6 @@ const SatisTeklifPage: React.FC = () => {
     return result;
   };
 
-  // ✅ YEŞİL ETİKET ALANI için hesaplama:
-  // Yeşil etiketli ürün → greenLabelPrice * adet
-  // Normal ürünler → (alis - bip) * adet
-  // Kampanya → toplam tutardan düşülür
   const yesilEtiketAlaniMaliyetHesapla = (): number => {
     const etiketler = eslesenYesilEtiketler();
     if (etiketler.length === 0) return 0;
@@ -201,7 +197,6 @@ const SatisTeklifPage: React.FC = () => {
     return Math.max(0, yesilEtiketliToplam + normalUrunlerToplam - kampanya);
   };
 
-  // ✅ KIRMIZI ALAN (toplamMaliyet) — yeşil etiket karışmaz, her zamanki gibi
   const toplamMaliyetHesapla = (): number => {
     return Math.max(0, alisToplamHesapla() - bipToplamHesapla() - kampanyaToplamiHesapla());
   };
@@ -267,6 +262,13 @@ const SatisTeklifPage: React.FC = () => {
     }
     setUrunler(yeniUrunler);
     if (field === 'alisFiyati' || field === 'adet') setManuelSatisTutari(null);
+  };
+
+  // ✅ YENİ: Ürün bazlı teslim checkbox handler
+  const handleUrunDeliveredChange = (index: number, checked: boolean) => {
+    const yeniUrunler = [...urunler];
+    yeniUrunler[index] = { ...yeniUrunler[index], delivered: checked } as any;
+    setUrunler(yeniUrunler);
   };
 
   const urunSecDropdown = (index: number, kod: string) => {
@@ -399,6 +401,7 @@ const SatisTeklifPage: React.FC = () => {
         musteriTemsilcisiAd: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
         musteriTemsilcisiTel,
         musteriTemsilcisi: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
+        // ✅ YENİ: delivered field'ı ...u spread ile otomatik kaydedilir
         urunler: urunler.map(u => ({
           ...u,
           alisFiyatSnapshot: u.alisFiyati,
@@ -625,8 +628,11 @@ const SatisTeklifPage: React.FC = () => {
             <h3 className="section-title">Ürünler</h3>
             <button type="button" onClick={urunEkle} className="btn-add">+ Ürün Ekle</button>
           </div>
+          {/* ✅ YENİ: Teslim Edildi sütunu eklendi */}
           <div className="urun-table-header">
-            <span>Ürün Kodu</span><span>Ürün Adı</span><span>Adet</span><span>Alış (TL)</span><span>BİP (TL)</span><span></span>
+            <span>Ürün Kodu</span><span>Ürün Adı</span><span>Adet</span><span>Alış (TL)</span><span>BİP (TL)</span>
+            <span style={{ textAlign: 'center' }}>Teslim Edildi</span>
+            <span></span>
           </div>
           {urunler.map((urun, index) => (
             <div key={urun.id} className="urun-row">
@@ -643,6 +649,19 @@ const SatisTeklifPage: React.FC = () => {
               <input type="number" min="1" value={urun.adet} onChange={e => handleUrunChange(index, 'adet', e.target.value)} required />
               <input type="number" min="0" value={urun.alisFiyati || ''} onChange={e => handleUrunChange(index, 'alisFiyati', e.target.value)} required />
               <input type="number" min="0" value={urun.bip || ''} onChange={e => handleUrunChange(index, 'bip', e.target.value)} />
+              {/* ✅ YENİ: Ürün bazlı teslim checkbox */}
+              <label style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                gap: 4, fontSize: 11, color: '#374151', cursor: 'pointer', minWidth: 64,
+              }}>
+                <input
+                  type="checkbox"
+                  checked={(urun as any).delivered === true}
+                  onChange={e => handleUrunDeliveredChange(index, e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#16a34a' }}
+                />
+                ✓
+              </label>
               {urunler.length > 1 && <button type="button" onClick={() => urunSil(index)} className="btn-remove">Sil</button>}
             </div>
           ))}

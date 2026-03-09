@@ -55,7 +55,6 @@ const SatisDuzenlePage: React.FC = () => {
   const [faturaNoHata, setFaturaNoHata] = useState(false);
   const [faturaNoHataMesaj, setFaturaNoHataMesaj] = useState('');
   const [servisNotu, setServisNotu] = useState('');
-  // ✅ YENİ: Mağaza Teslimat alanı
   const [magaza, setMagaza] = useState('');
   const [marsListesi, setMarsListesi] = useState<MarsGirisi[]>([]);
   const [notlar, setNotlar] = useState('');
@@ -72,7 +71,6 @@ const SatisDuzenlePage: React.FC = () => {
   const [musteriCep, setMusteriCep] = useState('');
 
   const [urunCache, setUrunCache] = useState<Record<string, { ad: string; alis: number; bip: number }>>({});
-  // ✅ YENİ: Ürün arama dropdown state
   const [urunAramaDropdown, setUrunAramaDropdown] = useState<{ index: number; sonuclar: string[] } | null>(null);
   const [kampanyaAdminListesi, setKampanyaAdminListesi] = useState<KampanyaAdmin[]>([]);
   const [seciliKampanyaIds, setSeciliKampanyaIds] = useState<string[]>([]);
@@ -193,7 +191,6 @@ const SatisDuzenlePage: React.FC = () => {
 
         setFaturaNo(data.faturaNo || '');
         setServisNotu(data.servisNotu || '');
-        // ✅ YENİ: Mağaza değerini yükle
         setMagaza((data as any).magaza || '');
         setNotlar((data as any).notlar || '');
 
@@ -238,7 +235,6 @@ const SatisDuzenlePage: React.FC = () => {
     kesintiCacheYukle();
   }, [id]);
 
-  // ✅ YENİ: Ürün dropdown'dan seçim fonksiyonu
   const urunSecDropdown = (index: number, kod: string) => {
     const eslesme = urunCache[kod];
     if (!eslesme) return;
@@ -252,7 +248,6 @@ const SatisDuzenlePage: React.FC = () => {
     const yeniUrunler = [...urunler];
     yeniUrunler[index] = { ...yeniUrunler[index], [field]: field === 'adet' || field === 'alisFiyati' || field === 'bip' ? parseFloat(value) || 0 : value };
     if (field === 'kod') {
-      // ✅ YENİ: Dropdown mantığı eklendi
       const trimmed = String(value).trim().toUpperCase();
       const eslesme = urunCache[trimmed];
       if (eslesme) {
@@ -267,6 +262,14 @@ const SatisDuzenlePage: React.FC = () => {
     }
     setUrunler(yeniUrunler);
     if (field === 'alisFiyati' || field === 'adet') setManuelSatisTutari(null);
+  };
+
+  // ✅ YENİ: Ürün bazlı teslim checkbox handler
+  const handleUrunDeliveredChange = (index: number, checked: boolean) => {
+    if (alanlarKilitli) return;
+    const yeniUrunler = [...urunler];
+    yeniUrunler[index] = { ...yeniUrunler[index], delivered: checked } as any;
+    setUrunler(yeniUrunler);
   };
 
   const urunEkle = () => setUrunler(prev => [...prev, { id: Date.now().toString(), kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }]);
@@ -355,8 +358,6 @@ const SatisDuzenlePage: React.FC = () => {
   const toplamTutar = () => manuelSatisTutari ?? 0;
   const kampanyaToplamiHesapla = () => seciliKampanyalar.reduce((t, k) => t + (k.tutar || 0), 0);
 
-  // ✅ FIX: Yeşil etiket maliyeti kar/zarar hesabını etkilemez.
-  // Her ürün kendi alisFiyati - bip değeriyle hesaplanır, yeşil etiket ayrı tutulur.
   const toplamMaliyet = () => {
     return Math.max(
       0,
@@ -419,9 +420,6 @@ const SatisDuzenlePage: React.FC = () => {
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  //  satisiIptalEt — v7 FIX: kasaya dokunmaz, sadece status değiştirir
-  // ═══════════════════════════════════════════════════════════════
   const satisiIptalEt = async () => {
     if (!satis?.id) return;
     const sube = getSubeByKod(subeKodu as any);
@@ -455,9 +453,6 @@ const SatisDuzenlePage: React.FC = () => {
     finally { setIptalIslemYapiliyor(false); }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  //  iadeOnayla — v7 FIX: TEK NOKTA — kasaIptalKaydiOlustur SADECE burada çağrılır
-  // ═══════════════════════════════════════════════════════════════
   const iadeOnayla = async () => {
     if (!satis?.id || !subeKodu || !currentUser) return;
     const sube = getSubeByKod(subeKodu as any);
@@ -604,6 +599,7 @@ const SatisDuzenlePage: React.FC = () => {
           faturaAdresi: musteriFaturaAdresi,
           cep: musteriCep,
         },
+        // ✅ YENİ: delivered field'ı ...u spread ile otomatik kaydedilir
         urunler: urunler.map(u => ({
           ...u,
           alisFiyatSnapshot: (u as any).alisFiyatSnapshot ?? u.alisFiyati,
@@ -629,7 +625,6 @@ const SatisDuzenlePage: React.FC = () => {
         odemeDurumu: acikHesap() > 0 ? 'ACIK_HESAP' : 'ODENDI',
         pesinatTutar: pesinatToplam(), havaleTutar: havaleToplam(),
         marsNo: orijinal.marsNo, faturaNo, servisNotu,
-        // ✅ YENİ: magaza alanı kaydediliyor
         magaza: magaza.trim() || null,
         notlar: notlar.trim() || null,
         teslimEdildiMi,
@@ -807,12 +802,14 @@ const SatisDuzenlePage: React.FC = () => {
             <h2 className="duzenle-section-title">Ürünler</h2>
             {!alanlarKilitli && <button type="button" onClick={urunEkle} className="duzenle-btn-add">+ Ürün Ekle</button>}
           </div>
+          {/* ✅ YENİ: Teslim sütunu eklendi */}
           <div className="duzenle-urun-header">
-            <span>Ürün Kodu</span><span>Ürün Adı</span><span>Adet</span><span>Alış (TL)</span><span>BİP (TL)</span><span></span>
+            <span>Ürün Kodu</span><span>Ürün Adı</span><span>Adet</span><span>Alış (TL)</span><span>BİP (TL)</span>
+            <span style={{ textAlign: 'center' }}>Teslim Edildi</span>
+            <span></span>
           </div>
           {urunler.map((urun, index) => (
             <div key={urun.id} className="duzenle-urun-row">
-              {/* ✅ YENİ: Dropdown ile ürün arama */}
               <div className="duzenle-urun-kod-wrap" style={{ position: 'relative' }}>
                 <input
                   type="text"
@@ -856,6 +853,22 @@ const SatisDuzenlePage: React.FC = () => {
               <input type="number" value={urun.adet} onChange={e => handleUrunChange(index, 'adet', e.target.value)} className="duzenle-input" min="1" disabled={alanlarKilitli} />
               <input type="number" value={urun.alisFiyati || ''} onChange={e => handleUrunChange(index, 'alisFiyati', e.target.value)} placeholder="0" className="duzenle-input mono" disabled={alanlarKilitli} />
               <input type="number" value={urun.bip || ''} onChange={e => handleUrunChange(index, 'bip', e.target.value)} placeholder="0" className="duzenle-input mono" disabled={alanlarKilitli} />
+              {/* ✅ YENİ: Ürün bazlı teslim checkbox */}
+              <label style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                gap: 4, fontSize: 11, color: '#374151',
+                cursor: alanlarKilitli ? 'not-allowed' : 'pointer',
+                minWidth: 64, opacity: alanlarKilitli ? 0.6 : 1,
+              }}>
+                <input
+                  type="checkbox"
+                  checked={(urun as any).delivered === true}
+                  onChange={e => handleUrunDeliveredChange(index, e.target.checked)}
+                  disabled={alanlarKilitli}
+                  style={{ width: 16, height: 16, cursor: alanlarKilitli ? 'not-allowed' : 'pointer', accentColor: '#16a34a' }}
+                />
+                ✓
+              </label>
               {urunler.length > 1 && !alanlarKilitli && <button type="button" onClick={() => urunSil(index)} className="duzenle-btn-remove">Sil</button>}
             </div>
           ))}
@@ -980,7 +993,6 @@ const SatisDuzenlePage: React.FC = () => {
               {!faturaNoHata && faturaNo && isFaturaNoGecerli(faturaNo) && <small style={{ color: '#16a34a' }}>✅ Geçerli</small>}
               <small style={{ color: '#9ca3af', fontSize: 11 }}>1-4 haneli rakam veya "Kesilmedi"</small>
             </div>
-            {/* ✅ YENİ: Mağaza Teslimat alanı */}
             <div>
               <label className="duzenle-label">Mağaza Teslimat</label>
               <input

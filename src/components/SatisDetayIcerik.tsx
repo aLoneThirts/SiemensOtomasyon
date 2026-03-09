@@ -204,7 +204,10 @@ const SatisDetayIcerik: React.FC<Props> = ({ satis, onPrint, drawerMode = false 
               {satis.urunler && satis.urunler.length > 0 ? (
                 satis.urunler.map((urun: any, index) => (
                   <tr key={index}>
-                    <td>{urun.kod}</td>
+                    {/* ✅ YENİ: delivered true ise ürün kodu hücresi sarıya boyanır */}
+                    <td style={urun.delivered ? { background: '#FFF3A3' } : {}}>
+                      {urun.kod}
+                    </td>
                     <td>{urun.adet}</td>
                     <td>
                       {formatPrice(urunAlis(urun))}
