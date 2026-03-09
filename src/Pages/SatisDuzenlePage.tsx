@@ -355,15 +355,14 @@ const SatisDuzenlePage: React.FC = () => {
   const toplamTutar = () => manuelSatisTutari ?? 0;
   const kampanyaToplamiHesapla = () => seciliKampanyalar.reduce((t, k) => t + (k.tutar || 0), 0);
 
-  // ✅ FIX: Yeşil etiketli ürünlerin BİP'i maliyet hesabına dahil edilmez
+  // ✅ FIX: Yeşil etiket maliyeti kar/zarar hesabını etkilemez.
+  // Her ürün kendi alisFiyati - bip değeriyle hesaplanır, yeşil etiket ayrı tutulur.
   const toplamMaliyet = () => {
-    const etiketler = eslesenYesilEtiketler();
-    const yesilKodlar = new Set(etiketler.map(e => e.urunKodu.trim().toLowerCase()));
-    const normalMaliyet = urunler
-      .filter(u => !yesilKodlar.has(u.kod.trim().toLowerCase()))
-      .reduce((t, u) => t + (u.alisFiyati - (u.bip || 0)) * u.adet, 0);
-    const yesilMaliyet = etiketler.reduce((t, e) => t + e.maliyet * e.adet, 0);
-    return Math.max(0, normalMaliyet + yesilMaliyet - kampanyaToplamiHesapla());
+    return Math.max(
+      0,
+      urunler.reduce((t, u) => t + (u.alisFiyati - (u.bip || 0)) * u.adet, 0)
+      - kampanyaToplamiHesapla()
+    );
   };
 
   const pesinatToplam = () => pesinatlar.reduce((t, p) => t + (p.tutar || 0), 0);
