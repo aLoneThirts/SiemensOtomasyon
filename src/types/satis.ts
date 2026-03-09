@@ -186,7 +186,7 @@ export const BANKALAR = [
   'Garanti Bankası', 'İş Bankası', 'Yapı Kredi', 'Akbank',
   'Ziraat Bankası', 'Halkbank', 'QNB Finansbank', 'Denizbank',
   'TEB', 'ING', 'Vakıfbank', 'Kuveyt Türk', 'Türkiye Finans',
-  'Albaraka Türk', 'Şekerbank', 'HSBC', 'Citibank',
+  'Albaraka Türk', 'Şekerbank', 'HSBC', 'Citibank', 'Web Tahsilat',
 ];
 
 export const TAKSIT_SECENEKLERI = [

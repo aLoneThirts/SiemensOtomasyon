@@ -6,7 +6,7 @@ import { db } from '../firebase/config';
 import { SatisTeklifFormu, OdemeDurumu } from '../types/satis';
 import { getSubeByKod, SUBELER, SubeKodu } from '../types/sube';
 import Layout from '../components/Layout';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -169,7 +169,274 @@ const Dashboard: React.FC = () => {
     return { bugunSatislar, yarinSatislar };
   }, [satislar]);
 
-  const excelExport = () => { const data = filtreliSatislar.map(s => ({ "Satış Kodu": s.satisKodu, "Şube": getSubeByKod(s.subeKodu as SubeKodu)?.ad || '', "Müşteri": s.musteriBilgileri?.isim || '', "Toplam Tutar": s.toplamTutar, "Kar/Zarar": s.zarar ?? 0, "Satış Tarihi": formatDate(s.tarih), "Teslimat Tarihi": formatDate(s.teslimatTarihi), "Durum": (s as any).satisDurumu === 'IPTAL' ? 'İptal' : s.onayDurumu ? 'Onaylı' : 'Beklemede', "Ödeme": s.odemeDurumu, "Fatura No": s.faturaNo || '' })); const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Satışlar'); ws['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 15 }]; XLSX.writeFile(wb, `Satislar_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.xlsx`); };
+  // =============================================
+  // YENİ EXCEL EXPORT
+  // =============================================
+  const excelExport = () => {
+    const wb = XLSX.utils.book_new();
+    const ws: any = {};
+
+    // ── Maliyet hesaplama: SADECE normal alış−BİP−kampanya ───────
+    // Yeşil etiket özel fiyatı ana maliyete dahil edilmez (Bölüm 2 fix)
+    const maliyetHesapla = (s: SatisTeklifFormu): number => {
+      const kampanyaToplami = (s as any).kampanyaToplami || 0;
+      const alis = (s.urunler || []).reduce((t, u) => t + ((u as any).alisFiyatSnapshot ?? u.alisFiyati ?? 0) * u.adet, 0);
+      const bip  = (s.urunler || []).reduce((t, u) => t + ((u as any).bipSnapshot ?? u.bip ?? 0) * u.adet, 0);
+      return Math.max(0, alis - bip - kampanyaToplami);
+    };
+
+    // ── Prim 2: Yeşil etiket maliyeti (SatisDetay yesil kutu ile aynı) ──
+    const prim2Hesapla = (s: SatisTeklifFormu): number => {
+      const yesilEtiketler: any[] = s.yesilEtiketler || [];
+      if (yesilEtiketler.length === 0) return 0;
+      const kampanyaToplami = (s as any).kampanyaToplami || 0;
+      const yesilKodlar = new Set(yesilEtiketler.map((e: any) => (e.urunKodu || '').trim().toLowerCase()));
+      const normalAlis = (s.urunler || []).filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase())).reduce((t, u) => t + ((u as any).alisFiyatSnapshot ?? u.alisFiyati ?? 0) * u.adet, 0);
+      const normalBip  = (s.urunler || []).filter(u => !yesilKodlar.has((u.kod || '').trim().toLowerCase())).reduce((t, u) => t + ((u as any).bipSnapshot ?? u.bip ?? 0) * u.adet, 0);
+      const yesilOzel  = yesilEtiketler.reduce((t: number, e: any) => t + (e.tutar || 0), 0);
+      return Math.max(0, yesilOzel + normalAlis - normalBip - kampanyaToplami);
+    };
+
+    // ── Ödeme tutarları ──────────────────────────────────────────
+    const nakitHesapla = (s: SatisTeklifFormu): number => {
+      const pesinatlar: any[] = (s as any).pesinatlar || [];
+      if (pesinatlar.length > 0) return pesinatlar.reduce((t: number, p: any) => t + (p.tutar || 0), 0);
+      return (s as any).pesinatToplam || s.pesinatTutar || 0;
+    };
+
+    const havaleHesapla = (s: SatisTeklifFormu): number => {
+      const havaleler: any[] = (s as any).havaleler || [];
+      if (havaleler.length > 0) return havaleler.reduce((t: number, h: any) => t + (h.tutar || 0), 0);
+      return (s as any).havaleToplam || s.havaleTutar || 0;
+    };
+
+    const kartBrutHesapla = (s: SatisTeklifFormu): number => {
+      if ((s as any).kartBrutToplam !== undefined) return (s as any).kartBrutToplam;
+      return (s.kartOdemeler || []).reduce((t, k) => t + (k.tutar || 0), 0);
+    };
+
+    const kartKesintiHesapla = (s: SatisTeklifFormu): number => {
+      if ((s as any).kartKesintiToplam !== undefined) return (s as any).kartKesintiToplam;
+      return (s.kartOdemeler || []).reduce((t, k) => t + (k.tutar * (k.kesintiOrani || 0)) / 100, 0);
+    };
+
+    const hesabaGecenHesapla = (s: SatisTeklifFormu): number => {
+      if ((s as any).hesabaGecenToplam !== undefined) return (s as any).hesabaGecenToplam;
+      return nakitHesapla(s) + havaleHesapla(s) + kartBrutHesapla(s) - kartKesintiHesapla(s);
+    };
+
+    // ── Maksimum ürün sayısı (dinamik kolon) ────────────────────
+    const maxUrun = Math.max(10, ...filtreliSatislar.map(s => (s.urunler || []).length));
+
+    // ── Kolon indeksleri ─────────────────────────────────────────
+    const C_TARIH    = 0;
+    const C_KOD      = 1;
+    const C_TEMSILCI = 2;
+    const C_MUSTERI  = 3;
+    const C_URUN0    = 4;
+    const C_PRIM     = C_URUN0 + maxUrun;
+    const C_KVKK     = C_PRIM + 1;
+    const C_PRIM2    = C_PRIM + 2;
+    const C_MALIYET  = C_PRIM + 3;
+    const C_NAKIT    = C_PRIM + 4;
+    const C_KREDI    = C_PRIM + 5;
+    const C_ACIK     = C_PRIM + 6;
+    const C_HAVALE   = C_PRIM + 7;
+    const C_TOPLAM   = C_PRIM + 8;
+    const C_HESABA   = C_PRIM + 9;
+    const C_KAZANC   = C_PRIM + 10;
+    const C_YUZDE    = C_PRIM + 11;
+    const TOTAL_COLS = C_YUZDE + 1;
+
+    // ── Hücre yazma yardımcısı ───────────────────────────────────
+    const setCell = (r: number, c: number, v: any, style?: any) => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      ws[addr] = { v, t: typeof v === 'number' ? 'n' : 's', ...(style ? { s: style } : {}) };
+    };
+
+    // TL formatı: 14.999 ₺ veya -7.500 ₺
+    const TL_FMT = '#,##0 [$₺-41F];[RED]-#,##0 [$₺-41F]';
+    const PCT_FMT = '0"%"';
+
+    // ── Stil tanımları ───────────────────────────────────────────
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
+      fill: { fgColor: { rgb: '1E7A6D' }, patternType: 'solid' },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    };
+    const manuelHeaderStyle = {
+      ...headerStyle,
+      fill: { fgColor: { rgb: '4A90D9' }, patternType: 'solid' },
+    };
+    const numStyle = (fmt: string) => ({ numFmt: fmt, alignment: { horizontal: 'right' } });
+
+    // Genel Toplam satırı: SARI arka plan, kalın yazı
+    const gtBase = {
+      font: { bold: true, sz: 11 },
+      fill: { fgColor: { rgb: 'FFD700' }, patternType: 'solid' },
+      alignment: { horizontal: 'right', vertical: 'center' },
+    };
+    const gtTL = { ...gtBase, numFmt: TL_FMT };
+    const gtPct = { ...gtBase, numFmt: PCT_FMT, alignment: { horizontal: 'center', vertical: 'center' } };
+    const gtText = { ...gtBase, alignment: { horizontal: 'left', vertical: 'center' } };
+    const gtKazanc = (v: number) => ({
+      ...gtTL,
+      font: { bold: true, sz: 11, color: { rgb: v >= 0 ? '15803D' : 'DC2626' } },
+    });
+
+    // ── BAŞLIK SATIRI (satır 0) ──────────────────────────────────
+    const basliklar: [number, string, boolean][] = [
+      [C_TARIH,    'Tarih',              false],
+      [C_KOD,      'Satış Kodu',         false],
+      [C_TEMSILCI, 'Müşteri Temsilcisi', false],
+      [C_MUSTERI,  'Müşteri Adı',        false],
+      ...Array.from({ length: maxUrun }, (_, i) => [C_URUN0 + i, `Ürün ${i + 1}`, false] as [number, string, boolean]),
+      [C_PRIM,    'Prim',       true],
+      [C_KVKK,    'KVKK',      true],
+      [C_PRIM2,   'Prim 2',    true],
+      [C_MALIYET, 'Maliyet',   false],
+      [C_NAKIT,   'Nakit',     false],
+      [C_KREDI,   'Kredi Kartı', false],
+      [C_ACIK,    'Açık Hesap', false],
+      [C_HAVALE,  'Havale',    false],
+      [C_TOPLAM,  'Toplam',    false],
+      [C_HESABA,  'Hesaba Geçen', false],
+      [C_KAZANC,  'Kazanç',    false],
+      [C_YUZDE,   'Yüzde %',   false],
+    ];
+
+    basliklar.forEach(([col, label, isManuel]) => {
+      const addr = XLSX.utils.encode_cell({ r: 0, c: col });
+      ws[addr] = { v: label, t: 's', s: isManuel ? manuelHeaderStyle : headerStyle };
+    });
+
+    // ── VERİ SATIRLARI ───────────────────────────────────────────
+    let topMaliyet = 0, topNakit = 0, topKredi = 0, topAcik = 0, topHavale = 0;
+    let topToplam  = 0, topHesaba = 0, topKazanc = 0, topYuzde = 0;
+
+    filtreliSatislar.forEach((s, idx) => {
+      const row = idx + 1;
+
+      setCell(row, C_TARIH,    formatDate(s.tarih));
+      setCell(row, C_KOD,      s.satisKodu || '');
+      setCell(row, C_TEMSILCI, (s as any).musteriTemsilcisi || '');
+      setCell(row, C_MUSTERI,  s.musteriBilgileri?.isim || '');
+
+      // Ürünler — her ürün ayrı kolona, yeşil etiketliler açık yeşil arka plan
+      const yesilKodlarSet = new Set((s.yesilEtiketler || []).map((e: any) => (e.urunKodu || '').trim().toLowerCase()));
+      (s.urunler || []).forEach((u, ui) => {
+        if (ui >= maxUrun) return;
+        const kod  = u.kod || '';
+        const adet = u.adet || 1;
+        const isYesil = yesilKodlarSet.has((kod).trim().toLowerCase());
+        const urunStyle = isYesil ? {
+          fill: { fgColor: { rgb: 'C6EFCE' }, patternType: 'solid' },
+          font: { color: { rgb: '276221' } },
+        } : undefined;
+        setCell(row, C_URUN0 + ui, adet > 1 ? `${kod} x${adet}` : kod, urunStyle);
+      });
+
+      // Prim → BOŞ (manuel), KVKK → BOŞ (manuel), Prim2 → OTOMATİK (yeşil etiket maliyeti)
+      const prim2 = prim2Hesapla(s);
+      if (prim2 > 0) setCell(row, C_PRIM2, prim2, numStyle(TL_FMT));
+
+      // Maliyet
+      const maliyet = maliyetHesapla(s);
+      if (maliyet) setCell(row, C_MALIYET, maliyet, numStyle(TL_FMT));
+      topMaliyet += maliyet;
+
+      // Nakit
+      const nakit = nakitHesapla(s);
+      if (nakit) setCell(row, C_NAKIT, nakit, numStyle(TL_FMT));
+      topNakit += nakit;
+
+      // Kredi Kartı (brüt)
+      const kredi = kartBrutHesapla(s);
+      if (kredi) setCell(row, C_KREDI, kredi, numStyle(TL_FMT));
+      topKredi += kredi;
+
+      // Açık Hesap
+      const toplamOdenen = nakit + havaleHesapla(s) + kredi;
+      const acik = Math.max(0, (s.toplamTutar || 0) - toplamOdenen);
+      if (acik > 0) setCell(row, C_ACIK, acik, numStyle(TL_FMT));
+      topAcik += acik;
+
+      // Havale (sadece tutar)
+      const havale = havaleHesapla(s);
+      if (havale) setCell(row, C_HAVALE, havale, numStyle(TL_FMT));
+      topHavale += havale;
+
+      // Toplam
+      const toplam = s.toplamTutar || 0;
+      if (toplam) setCell(row, C_TOPLAM, toplam, numStyle(TL_FMT));
+      topToplam += toplam;
+
+      // Hesaba Geçen
+      const hesaba = hesabaGecenHesapla(s);
+      if (hesaba) setCell(row, C_HESABA, hesaba, numStyle(TL_FMT));
+      topHesaba += hesaba;
+
+      // Kazanç (sayısal, TL formatında, + yeşil - kırmızı)
+      const kazanc = s.zarar ?? 0;
+      setCell(row, C_KAZANC, kazanc, {
+        numFmt: TL_FMT,
+        alignment: { horizontal: 'right' },
+        font: { color: { rgb: kazanc >= 0 ? '15803D' : 'DC2626' } },
+      });
+      topKazanc += kazanc;
+
+      // Yüzde (sayı olarak, PCT_FMT ile gösterilir)
+      const yuzde = maliyet > 0 ? Math.round((kazanc / maliyet) * 100) : 0;
+      setCell(row, C_YUZDE, yuzde, numStyle(PCT_FMT));
+      topYuzde += yuzde;
+    });
+
+    // ── GENEL TOPLAM SATIRI (SARI, KALIN) ───────────────────────
+    const gRow = filtreliSatislar.length + 1;
+
+    setCell(gRow, C_TARIH,   'GENEL TOPLAM', gtText);
+    setCell(gRow, C_MALIYET, topMaliyet, gtTL);
+    setCell(gRow, C_NAKIT,   topNakit,   gtTL);
+    setCell(gRow, C_KREDI,   topKredi,   gtTL);
+    setCell(gRow, C_ACIK,    topAcik,    gtTL);
+    setCell(gRow, C_HAVALE,  topHavale,  gtTL);
+    setCell(gRow, C_TOPLAM,  topToplam,  gtTL);
+    setCell(gRow, C_HESABA,  topHesaba,  gtTL);
+    setCell(gRow, C_KAZANC,  topKazanc,  gtKazanc(topKazanc));
+
+    // Genel karlılık: toplam kazanç / toplam ciro * 100
+    const genelYuzde = filtreliSatislar.length > 0 ? Math.round(topYuzde / filtreliSatislar.length) : 0;
+    setCell(gRow, C_YUZDE, genelYuzde, gtPct);
+
+    // ── Çalışma alanı tanımı ─────────────────────────────────────
+    ws['!ref'] = XLSX.utils.encode_range({ r: 0, c: 0 }, { r: gRow, c: TOTAL_COLS - 1 });
+
+    // ── Kolon genişlikleri ───────────────────────────────────────
+    ws['!cols'] = [
+      { wch: 12 }, // Tarih
+      { wch: 14 }, // Satış Kodu
+      { wch: 22 }, // Müşteri Temsilcisi
+      { wch: 22 }, // Müşteri Adı
+      ...Array.from({ length: maxUrun }, () => ({ wch: 16 })),
+      { wch: 8  }, // Prim
+      { wch: 8  }, // KVKK
+      { wch: 8  }, // Prim 2
+      { wch: 14 }, // Maliyet
+      { wch: 14 }, // Nakit
+      { wch: 14 }, // Kredi Kartı
+      { wch: 14 }, // Açık Hesap
+      { wch: 14 }, // Havale
+      { wch: 14 }, // Toplam
+      { wch: 14 }, // Hesaba Geçen
+      { wch: 13 }, // Kazanç
+      { wch: 10 }, // Yüzde
+    ];
+
+    ws['!rows'] = [{ hpt: 28 }];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Satışlar');
+    XLSX.writeFile(wb, `Satislar_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.xlsx`, { bookType: 'xlsx', type: 'binary' });
+  };
 
   // =============================================
   // SIRALAMA
