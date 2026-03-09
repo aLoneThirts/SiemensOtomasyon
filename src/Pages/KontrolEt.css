@@ -258,6 +258,7 @@
   justify-content: center;
   transition: all 0.2s ease;
   -webkit-tap-highlight-color: transparent;
+  text-decoration: none;
 }
 
 .btn-goster {
@@ -417,7 +418,7 @@
   border-left: 4px solid #dc2626 !important;
 }
 
-/* ── İPTAL ONAY DIALOG ── */
+/* ── İPTAL ONAY ── */
 .iptal-dialog {
   display: flex; 
   flex-direction: column;
@@ -472,6 +473,113 @@
 .btn-iptal-hayir:active { 
   background: #e2e8f0; 
   transform: scale(0.96); 
+}
+
+/* =============================================
+   DRAWER
+   ============================================= */
+.kontrol-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.kontrol-drawer-overlay.acik {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.kontrol-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(680px, 100vw);
+  height: 100dvh;
+  background: white;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.18);
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.kontrol-drawer.acik {
+  transform: translateX(0);
+}
+
+.kontrol-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 2px solid #e5e7eb;
+  background: linear-gradient(135deg, #1f2937, #374151);
+  flex-shrink: 0;
+}
+
+.kontrol-drawer-baslik {
+  font-size: 16px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.5px;
+}
+
+.kontrol-drawer-aksiyonlar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kontrol-drawer-tam-sayfa {
+  padding: 7px 14px;
+  background: rgba(255,255,255,0.15);
+  color: white;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.3);
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.kontrol-drawer-tam-sayfa:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+.kontrol-drawer-kapat {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.15);
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.kontrol-drawer-kapat:hover {
+  background: rgba(255,255,255,0.28);
+}
+
+.kontrol-drawer-icerik {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.kontrol-drawer-yukleniyor {
+  text-align: center;
+  padding: 60px 20px;
+  font-size: 15px;
+  color: #6b7280;
+  font-weight: 600;
 }
 
 /* =============================================

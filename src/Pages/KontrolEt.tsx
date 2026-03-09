@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, doc, updateDoc, Timestamp, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, getDoc, Timestamp, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SatisTeklifFormu } from '../types/satis';
 import { getSubeByKod, SUBELER } from '../types/sube';
 import Layout from '../components/Layout';
+import SatisDetayIcerik from '../components/SatisDetayIcerik';
 import './KontrolEt.css';
+import './SatisDetay.css';
 
 const SAYFA_BOYUTU = 10;
 
@@ -26,6 +28,11 @@ const KontrolEt: React.FC = () => {
   const [filtreSube, setFiltreSube] = useState('');
   const [filtreKod, setFiltreKod] = useState('');
 
+  // Drawer state
+  const [drawerSatis, setDrawerSatis] = useState<SatisTeklifFormu | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerAcik, setDrawerAcik] = useState(false);
+
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
   useEffect(() => {
@@ -33,12 +40,63 @@ const KontrolEt: React.FC = () => {
     fetchSatislar();
   }, [currentUser]);
 
+  // ESC ile drawer kapat
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') drawerKapat();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Drawer body scroll kilidi
+  useEffect(() => {
+    if (drawerAcik) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [drawerAcik]);
+
+  const drawerKapat = () => {
+    setDrawerAcik(false);
+    setTimeout(() => setDrawerSatis(null), 300); // animasyon bittikten sonra temizle
+  };
+
+  const drawerAc = async (satis: SatisTeklifFormu) => {
+    // Eğer aynı satış zaten açıksa sadece drawer'ı aç
+    if (drawerSatis?.id === satis.id) {
+      setDrawerAcik(true);
+      return;
+    }
+    setDrawerLoading(true);
+    setDrawerAcik(true);
+    setDrawerSatis(satis); // önce mevcut satış verisiyle aç (hızlı)
+    try {
+      // Firestore'dan tam detayı çek
+      const sube = getSubeByKod(satis.subeKodu);
+      if (sube && satis.id) {
+        const satisDoc = await getDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id));
+        if (satisDoc.exists()) {
+          setDrawerSatis({ id: satisDoc.id, ...satisDoc.data(), subeKodu: satis.subeKodu } as SatisTeklifFormu);
+        }
+      }
+    } catch (err) {
+      console.error('Drawer detay yüklenemedi:', err);
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  // Link href'i oluştur — link mantığı için
+  const detayUrl = (satis: SatisTeklifFormu) =>
+    `/satis-detay/${satis.subeKodu}/${satis.id}`;
+
   const fetchSatislar = async () => {
     try {
       setLoading(true);
       const liste: SatisTeklifFormu[] = [];
-
-      // Son 90 gün — daha eski bekleyen onay varsa zaten sorunlu
       const doksan = new Date();
       doksan.setDate(doksan.getDate() - 90);
       doksan.setHours(0, 0, 0, 0);
@@ -77,13 +135,12 @@ const KontrolEt: React.FC = () => {
     }
   };
 
-  const filtrele = (liste: SatisTeklifFormu[]) => {
-    return liste.filter(s => {
+  const filtrele = (liste: SatisTeklifFormu[]) =>
+    liste.filter(s => {
       const subeUygun = !filtreSube || s.subeKodu === filtreSube;
       const kodUygun = !filtreKod || s.satisKodu?.toLowerCase().includes(filtreKod.toLowerCase());
       return subeUygun && kodUygun;
     });
-  };
 
   const bekleyenTumu = filtrele(
     satislar.filter(s => s.onayDurumu === false && !(s as any).iptalTalebi && (s as any).satisDurumu !== 'IPTAL')
@@ -97,7 +154,6 @@ const KontrolEt: React.FC = () => {
     satislar.filter(s => (s as any).iptalTalebi === true && (s as any).satisDurumu !== 'IPTAL')
   );
 
-  // ✅ P0-2 FIX: Sadece admin onay toggle yapabilir
   const onayToggle = async (satis: SatisTeklifFormu) => {
     if (!isAdmin) { alert('Bu işlem için admin yetkisi gereklidir.'); return; }
     if (!satis.id) return;
@@ -130,11 +186,8 @@ const KontrolEt: React.FC = () => {
     setGuncellemeyorum(satis.id);
     try {
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
-        satisDurumu: 'IPTAL',
-        onayDurumu: false,
-        iptalTalebi: false,
-        iptalOnayTarihi: new Date(),
-        guncellemeTarihi: new Date()
+        satisDurumu: 'IPTAL', onayDurumu: false, iptalTalebi: false,
+        iptalOnayTarihi: new Date(), guncellemeTarihi: new Date()
       });
       setSatislar(prev => prev.map(s =>
         s.id === satis.id ? { ...s, satisDurumu: 'IPTAL', iptalTalebi: false } as any : s
@@ -153,8 +206,7 @@ const KontrolEt: React.FC = () => {
     setGuncellemeyorum(satis.id);
     try {
       await updateDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id), {
-        iptalTalebi: false,
-        guncellemeTarihi: new Date()
+        iptalTalebi: false, guncellemeTarihi: new Date()
       });
       setSatislar(prev => prev.map(s =>
         s.id === satis.id ? { ...s, iptalTalebi: false } as any : s
@@ -243,7 +295,20 @@ const KontrolEt: React.FC = () => {
                 </td>
                 <td>
                   <div className="islem-btns">
-                    <button className="btn-goster" onClick={() => navigate(`/satis-detay/${satis.subeKodu}/${satis.id}`)} title="Görüntüle">👁️</button>
+                    {/* Görüntüle: link mantığında, sol tık → drawer, middle/ctrl/cmd → yeni sekme */}
+                    <a
+                      href={detayUrl(satis)}
+                      className="btn-goster"
+                      title="Görüntüle"
+                      onClick={e => {
+                        // Modifier tuş veya middle click → linkin doğal davranışına bırak (yeni sekme)
+                        if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+                        e.preventDefault();
+                        drawerAc(satis);
+                      }}
+                    >
+                      👁️
+                    </a>
                     <button className="btn-duzenle" onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)} title="Düzenle">✏️</button>
                   </div>
                 </td>
@@ -364,6 +429,41 @@ const KontrolEt: React.FC = () => {
           </div>
         </>
       )}
+
+      {/* DRAWER OVERLAY */}
+      {(drawerAcik || drawerSatis) && (
+        <div className={`kontrol-drawer-overlay ${drawerAcik ? 'acik' : ''}`} onClick={drawerKapat} />
+      )}
+
+      {/* DRAWER PANEL */}
+      <div className={`kontrol-drawer ${drawerAcik ? 'acik' : ''}`}>
+        <div className="kontrol-drawer-header">
+          <div className="kontrol-drawer-baslik">
+            {drawerSatis?.satisKodu || 'Satış Detayı'}
+          </div>
+          <div className="kontrol-drawer-aksiyonlar">
+            {drawerSatis && (
+              <a
+                href={detayUrl(drawerSatis)}
+                className="kontrol-drawer-tam-sayfa"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Tam sayfada aç"
+              >
+                ↗ Tam Sayfa
+              </a>
+            )}
+            <button className="kontrol-drawer-kapat" onClick={drawerKapat} title="Kapat">✕</button>
+          </div>
+        </div>
+        <div className="kontrol-drawer-icerik">
+          {drawerLoading ? (
+            <div className="kontrol-drawer-yukleniyor">Yükleniyor...</div>
+          ) : drawerSatis ? (
+            <SatisDetayIcerik satis={drawerSatis} drawerMode={true} />
+          ) : null}
+        </div>
+      </div>
     </Layout>
   );
 };
