@@ -119,7 +119,21 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const dateToString = (date: any): string => { if (!date) return ''; if (date instanceof Timestamp) return date.toDate().toISOString().split('T')[0]; if (date instanceof Date) return date.toISOString().split('T')[0]; return ''; };
+  // ─── TARİH YARDIMCILARI ───────────────────────────────────────────────────
+  // FIX: toISOString() UTC döndürdüğü için Türkiye'de gece 00:00-02:59 arası
+  // girilen satışlar bir önceki güne kayıyordu. Kasa.tsx'teki bugunStrLocal()
+  // ile aynı mantık kullanılarak local saat bazlı string üretilir.
+  const toLocalDateString = (date: Date): string =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+  const dateToString = (date: any): string => {
+    if (!date) return '';
+    if (date instanceof Timestamp) return toLocalDateString(date.toDate());
+    if (date instanceof Date)      return toLocalDateString(date);
+    return '';
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const getAyBasiSonu = (): { ayBasi: Date; aySonu: Date } => { const n = new Date(); const ayBasi = new Date(n.getFullYear(), n.getMonth(), 1); ayBasi.setHours(0, 0, 0, 0); const aySonu = new Date(n.getFullYear(), n.getMonth() + 1, 0); aySonu.setHours(23, 59, 59, 999); return { ayBasi, aySonu }; };
   const toDateSafe = (d: any): Date => { if (!d) return new Date(0); if (d instanceof Timestamp) return d.toDate(); if (d instanceof Date) return d; return new Date(d); };
 
@@ -176,8 +190,6 @@ const Dashboard: React.FC = () => {
     const wb = XLSX.utils.book_new();
     const ws: any = {};
 
-    // ── Maliyet hesaplama: SADECE normal alış−BİP−kampanya ───────
-    // Yeşil etiket özel fiyatı ana maliyete dahil edilmez (Bölüm 2 fix)
     const maliyetHesapla = (s: SatisTeklifFormu): number => {
       const kampanyaToplami = (s as any).kampanyaToplami || 0;
       const alis = (s.urunler || []).reduce((t, u) => t + ((u as any).alisFiyatSnapshot ?? u.alisFiyati ?? 0) * u.adet, 0);
@@ -185,7 +197,6 @@ const Dashboard: React.FC = () => {
       return Math.max(0, alis - bip - kampanyaToplami);
     };
 
-    // ── Prim 2: Yeşil etiket maliyeti (SatisDetay yesil kutu ile aynı) ──
     const prim2Hesapla = (s: SatisTeklifFormu): number => {
       const yesilEtiketler: any[] = s.yesilEtiketler || [];
       if (yesilEtiketler.length === 0) return 0;
@@ -197,7 +208,6 @@ const Dashboard: React.FC = () => {
       return Math.max(0, yesilOzel + normalAlis - normalBip - kampanyaToplami);
     };
 
-    // ── Ödeme tutarları ──────────────────────────────────────────
     const nakitHesapla = (s: SatisTeklifFormu): number => {
       const pesinatlar: any[] = (s as any).pesinatlar || [];
       if (pesinatlar.length > 0) return pesinatlar.reduce((t: number, p: any) => t + (p.tutar || 0), 0);
@@ -225,10 +235,8 @@ const Dashboard: React.FC = () => {
       return nakitHesapla(s) + havaleHesapla(s) + kartBrutHesapla(s) - kartKesintiHesapla(s);
     };
 
-    // ── Maksimum ürün sayısı (dinamik kolon) ────────────────────
     const maxUrun = Math.max(10, ...filtreliSatislar.map(s => (s.urunler || []).length));
 
-    // ── Kolon indeksleri ─────────────────────────────────────────
     const C_TARIH    = 0;
     const C_KOD      = 1;
     const C_TEMSILCI = 2;
@@ -248,17 +256,14 @@ const Dashboard: React.FC = () => {
     const C_YUZDE    = C_PRIM + 11;
     const TOTAL_COLS = C_YUZDE + 1;
 
-    // ── Hücre yazma yardımcısı ───────────────────────────────────
     const setCell = (r: number, c: number, v: any, style?: any) => {
       const addr = XLSX.utils.encode_cell({ r, c });
       ws[addr] = { v, t: typeof v === 'number' ? 'n' : 's', ...(style ? { s: style } : {}) };
     };
 
-    // TL formatı: 14.999 ₺ veya -7.500 ₺
     const TL_FMT = '#,##0 [$₺-41F];[RED]-#,##0 [$₺-41F]';
     const PCT_FMT = '0"%"';
 
-    // ── Stil tanımları ───────────────────────────────────────────
     const headerStyle = {
       font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
       fill: { fgColor: { rgb: '1E7A6D' }, patternType: 'solid' },
@@ -270,7 +275,6 @@ const Dashboard: React.FC = () => {
     };
     const numStyle = (fmt: string) => ({ numFmt: fmt, alignment: { horizontal: 'right' } });
 
-    // Genel Toplam satırı: SARI arka plan, kalın yazı
     const gtBase = {
       font: { bold: true, sz: 11 },
       fill: { fgColor: { rgb: 'FFD700' }, patternType: 'solid' },
@@ -284,7 +288,6 @@ const Dashboard: React.FC = () => {
       font: { bold: true, sz: 11, color: { rgb: v >= 0 ? '15803D' : 'DC2626' } },
     });
 
-    // ── BAŞLIK SATIRI (satır 0) ──────────────────────────────────
     const basliklar: [number, string, boolean][] = [
       [C_TARIH,    'Tarih',              false],
       [C_KOD,      'Satış Kodu',         false],
@@ -310,7 +313,6 @@ const Dashboard: React.FC = () => {
       ws[addr] = { v: label, t: 's', s: isManuel ? manuelHeaderStyle : headerStyle };
     });
 
-    // ── VERİ SATIRLARI ───────────────────────────────────────────
     let topMaliyet = 0, topNakit = 0, topKredi = 0, topAcik = 0, topHavale = 0;
     let topToplam  = 0, topHesaba = 0, topKazanc = 0, topYuzde = 0;
 
@@ -322,7 +324,6 @@ const Dashboard: React.FC = () => {
       setCell(row, C_TEMSILCI, (s as any).musteriTemsilcisi || '');
       setCell(row, C_MUSTERI,  s.musteriBilgileri?.isim || '');
 
-      // Ürünler — her ürün ayrı kolona, yeşil etiketliler açık yeşil arka plan
       const yesilKodlarSet = new Set((s.yesilEtiketler || []).map((e: any) => (e.urunKodu || '').trim().toLowerCase()));
       (s.urunler || []).forEach((u, ui) => {
         if (ui >= maxUrun) return;
@@ -336,47 +337,38 @@ const Dashboard: React.FC = () => {
         setCell(row, C_URUN0 + ui, adet > 1 ? `${kod} x${adet}` : kod, urunStyle);
       });
 
-      // Prim → BOŞ (manuel), KVKK → BOŞ (manuel), Prim2 → OTOMATİK (yeşil etiket maliyeti)
       const prim2 = prim2Hesapla(s);
       if (prim2 > 0) setCell(row, C_PRIM2, prim2, numStyle(TL_FMT));
 
-      // Maliyet
       const maliyet = maliyetHesapla(s);
       if (maliyet) setCell(row, C_MALIYET, maliyet, numStyle(TL_FMT));
       topMaliyet += maliyet;
 
-      // Nakit
       const nakit = nakitHesapla(s);
       if (nakit) setCell(row, C_NAKIT, nakit, numStyle(TL_FMT));
       topNakit += nakit;
 
-      // Kredi Kartı (brüt)
       const kredi = kartBrutHesapla(s);
       if (kredi) setCell(row, C_KREDI, kredi, numStyle(TL_FMT));
       topKredi += kredi;
 
-      // Açık Hesap
       const toplamOdenen = nakit + havaleHesapla(s) + kredi;
       const acik = Math.max(0, (s.toplamTutar || 0) - toplamOdenen);
       if (acik > 0) setCell(row, C_ACIK, acik, numStyle(TL_FMT));
       topAcik += acik;
 
-      // Havale (sadece tutar)
       const havale = havaleHesapla(s);
       if (havale) setCell(row, C_HAVALE, havale, numStyle(TL_FMT));
       topHavale += havale;
 
-      // Toplam
       const toplam = s.toplamTutar || 0;
       if (toplam) setCell(row, C_TOPLAM, toplam, numStyle(TL_FMT));
       topToplam += toplam;
 
-      // Hesaba Geçen
       const hesaba = hesabaGecenHesapla(s);
       if (hesaba) setCell(row, C_HESABA, hesaba, numStyle(TL_FMT));
       topHesaba += hesaba;
 
-      // Kazanç (sayısal, TL formatında, + yeşil - kırmızı)
       const kazanc = s.zarar ?? 0;
       setCell(row, C_KAZANC, kazanc, {
         numFmt: TL_FMT,
@@ -385,13 +377,11 @@ const Dashboard: React.FC = () => {
       });
       topKazanc += kazanc;
 
-      // Yüzde (sayı olarak, PCT_FMT ile gösterilir)
       const yuzde = maliyet > 0 ? Math.round((kazanc / maliyet) * 100) : 0;
       setCell(row, C_YUZDE, yuzde, numStyle(PCT_FMT));
       topYuzde += yuzde;
     });
 
-    // ── GENEL TOPLAM SATIRI (SARI, KALIN) ───────────────────────
     const gRow = filtreliSatislar.length + 1;
 
     setCell(gRow, C_TARIH,   'GENEL TOPLAM', gtText);
@@ -404,32 +394,29 @@ const Dashboard: React.FC = () => {
     setCell(gRow, C_HESABA,  topHesaba,  gtTL);
     setCell(gRow, C_KAZANC,  topKazanc,  gtKazanc(topKazanc));
 
-    // Genel karlılık: toplam kazanç / toplam ciro * 100
     const genelYuzde = filtreliSatislar.length > 0 ? Math.round(topYuzde / filtreliSatislar.length) : 0;
     setCell(gRow, C_YUZDE, genelYuzde, gtPct);
 
-    // ── Çalışma alanı tanımı ─────────────────────────────────────
     ws['!ref'] = XLSX.utils.encode_range({ r: 0, c: 0 }, { r: gRow, c: TOTAL_COLS - 1 });
 
-    // ── Kolon genişlikleri ───────────────────────────────────────
     ws['!cols'] = [
-      { wch: 12 }, // Tarih
-      { wch: 14 }, // Satış Kodu
-      { wch: 22 }, // Müşteri Temsilcisi
-      { wch: 22 }, // Müşteri Adı
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 22 },
       ...Array.from({ length: maxUrun }, () => ({ wch: 16 })),
-      { wch: 8  }, // Prim
-      { wch: 8  }, // KVKK
-      { wch: 8  }, // Prim 2
-      { wch: 14 }, // Maliyet
-      { wch: 14 }, // Nakit
-      { wch: 14 }, // Kredi Kartı
-      { wch: 14 }, // Açık Hesap
-      { wch: 14 }, // Havale
-      { wch: 14 }, // Toplam
-      { wch: 14 }, // Hesaba Geçen
-      { wch: 13 }, // Kazanç
-      { wch: 10 }, // Yüzde
+      { wch: 8  },
+      { wch: 8  },
+      { wch: 8  },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 13 },
+      { wch: 10 },
     ];
 
     ws['!rows'] = [{ hpt: 28 }];
@@ -484,9 +471,6 @@ const Dashboard: React.FC = () => {
     });
   }, [currentSatislar, siralamaAlani, siralamaYonu]);
 
-  // =============================================
-  // SIRALAMA BAŞLIK COMPONENT
-  // =============================================
   const SiralamaBaslik = ({ alan, label }: { alan: string; label: string }) => {
     const aktif = siralamaAlani === alan;
     return (
