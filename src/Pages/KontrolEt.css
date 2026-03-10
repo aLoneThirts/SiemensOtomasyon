@@ -336,28 +336,36 @@
 }
 
 /* =============================================
-   FİLTRELER - MOBİL DÜZENLEME
+   FİLTRELER
    ============================================= */
 .kontrol-filtre-bar {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px 16px;
   background: #f8fafc;
   border-radius: 16px;
   margin-bottom: 16px;
   border: 1px solid #e2e8f0;
 }
 
+/* Her satır: filtre grupları yan yana */
+.kontrol-filtre-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
 .kontrol-filtre-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   width: 100%;
 }
 
 .kontrol-filtre-item label {
-  font-size: 12px; 
+  font-size: 11px; 
   font-weight: 700;
   letter-spacing: 0.5px; 
   color: #475569;
@@ -366,19 +374,20 @@
 
 .kontrol-filtre-select,
 .kontrol-filtre-input {
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 2px solid #cbd5e1;
-  border-radius: 12px;
+  border-radius: 10px;
   font-size: 14px;
   color: #1e293b;
   background: white;
   width: 100%;
-  height: 48px;
+  height: 44px;
   outline: none;
   transition: all 0.2s;
   font-family: inherit;
   -webkit-appearance: none;
   appearance: none;
+  box-sizing: border-box;
 }
 .kontrol-filtre-select:focus,
 .kontrol-filtre-input:focus { 
@@ -386,27 +395,34 @@
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
 }
 
+.kontrol-filtre-date {
+  cursor: pointer;
+}
+
+.kontrol-filtre-sifirla-wrapper {
+  justify-content: flex-end;
+}
+
 .kontrol-filtre-sifirla {
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  background: white;
-  color: #475569;
+  padding: 0 16px;
+  border: 2px solid #fca5a5;
+  border-radius: 10px;
+  background: #fff5f5;
+  color: #dc2626;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
-  height: 48px;
+  height: 44px;
   white-space: nowrap;
   width: 100%;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
 }
 .kontrol-filtre-sifirla:active { 
   background: #fee2e2; 
-  color: #dc2626; 
-  border-color: #fca5a5; 
   transform: scale(0.96);
 }
 
@@ -637,43 +653,37 @@
 }
 
 /* =============================================
-   TABLET BOYUTU (576px ve üzeri)
+   TABLET (576px+)
    ============================================= */
 @media (min-width: 576px) {
-  .kontrol-filtre-bar {
+  .kontrol-filtre-row {
     flex-direction: row;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
+    align-items: flex-end;
+    gap: 10px;
   }
-  
+
   .kontrol-filtre-item {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
+    flex: 1 1 140px;
     width: auto;
-    flex: 1 1 auto;
   }
-  
-  .kontrol-filtre-item label {
-    font-size: 11px;
-    white-space: nowrap;
-  }
-  
+
   .kontrol-filtre-select,
   .kontrol-filtre-input {
-    width: 140px;
-    height: 40px;
-    padding: 8px 12px;
+    width: 100%;
+    height: 42px;
   }
-  
+
   .kontrol-filtre-sifirla {
+    height: 42px;
     width: auto;
-    height: 40px;
-    padding: 0 16px;
+    min-width: 140px;
   }
-  
+
+  .kontrol-filtre-sifirla-wrapper {
+    flex: 0 0 auto;
+  }
+
   .kontrol-pagination {
     justify-content: flex-end;
   }
@@ -689,7 +699,7 @@
 }
 
 /* =============================================
-   MASAÜSTÜ BOYUTU (768px ve üzeri)
+   MASAÜSTÜ (768px+)
    ============================================= */
 @media (min-width: 768px) {
   .kontrol-bolum-baslik {
@@ -750,7 +760,6 @@
   
   .kontrol-filtre-sifirla:hover {
     background: #fee2e2;
-    color: #dc2626;
     border-color: #fca5a5;
     transform: translateY(-1px);
   }
@@ -773,10 +782,23 @@
     font-size: 13px;
     padding: 7px 14px;
   }
+
+  .kontrol-filtre-bar {
+    gap: 8px;
+    padding: 14px 18px;
+  }
+
+  .kontrol-filtre-row {
+    gap: 12px;
+  }
+
+  .kontrol-filtre-item {
+    flex: 1 1 150px;
+  }
 }
 
 /* =============================================
-   BÜYÜK MASAÜSTÜ (1200px ve üzeri)
+   BÜYÜK MASAÜSTÜ (1200px+)
    ============================================= */
 @media (min-width: 1200px) {
   .kontrol-tablo {
@@ -790,10 +812,23 @@
   .kontrol-tablo td {
     padding: 16px 24px;
   }
-  
-  .kontrol-filtre-select,
-  .kontrol-filtre-input {
-    width: 160px;
+
+  /* Tek satırda tüm filtreler yan yana */
+  .kontrol-filtre-bar {
+    gap: 0;
+  }
+
+  .kontrol-filtre-row {
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+
+  .kontrol-filtre-bar > .kontrol-filtre-row:not(:last-child) {
+    margin-bottom: 10px;
+  }
+
+  .kontrol-filtre-item {
+    flex: 1 1 auto;
   }
 }
 
@@ -911,7 +946,7 @@
    YATAY TELEFON MODU
    ============================================= */
 @media (min-width: 480px) and (max-width: 767px) and (orientation: landscape) {
-  .kontrol-filtre-bar {
+  .kontrol-filtre-row {
     flex-direction: row;
     flex-wrap: wrap;
   }

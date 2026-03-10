@@ -28,6 +28,9 @@ const KontrolEt: React.FC = () => {
 
   const [filtreSube, setFiltreSube] = useState('');
   const [filtreKod, setFiltreKod] = useState('');
+  const [filtreMüşteri, setFiltreMüşteri] = useState('');
+  const [filtreTeslimatBas, setFiltreTeslimatBas] = useState('');
+  const [filtreTeslimatBit, setFiltreTeslimatBit] = useState('');
 
   const [drawerSatis, setDrawerSatis] = useState<SatisTeklifFormu | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
@@ -139,7 +142,31 @@ const KontrolEt: React.FC = () => {
     liste.filter(s => {
       const subeUygun = !filtreSube || s.subeKodu === filtreSube;
       const kodUygun = !filtreKod || s.satisKodu?.toLowerCase().includes(filtreKod.toLowerCase());
-      return subeUygun && kodUygun;
+      const musteriUygun = !filtreMüşteri || s.musteriBilgileri?.isim?.toLowerCase().includes(filtreMüşteri.toLowerCase());
+
+      let teslimatUygun = true;
+      if (filtreTeslimatBas || filtreTeslimatBit) {
+        const rawTarih = (s as any).yeniTeslimatTarihi || s.teslimatTarihi;
+        let teslimatDate: Date | null = null;
+        if (rawTarih) {
+          if (rawTarih instanceof Timestamp) teslimatDate = rawTarih.toDate();
+          else if (rawTarih instanceof Date) teslimatDate = rawTarih;
+          else teslimatDate = new Date(rawTarih);
+        }
+        if (!teslimatDate || isNaN(teslimatDate.getTime())) {
+          teslimatUygun = false;
+        } else {
+          const t = teslimatDate.getTime();
+          if (filtreTeslimatBas) teslimatUygun = teslimatUygun && t >= new Date(filtreTeslimatBas).getTime();
+          if (filtreTeslimatBit) {
+            const bitEnd = new Date(filtreTeslimatBit);
+            bitEnd.setHours(23, 59, 59, 999);
+            teslimatUygun = teslimatUygun && t <= bitEnd.getTime();
+          }
+        }
+      }
+
+      return subeUygun && kodUygun && musteriUygun && teslimatUygun;
     });
 
   const bekleyenTumu = filtrele(
@@ -231,6 +258,17 @@ const KontrolEt: React.FC = () => {
     } catch { return '-'; }
   };
 
+  const filtreAktif = !!(filtreSube || filtreKod || filtreMüşteri || filtreTeslimatBas || filtreTeslimatBit);
+
+  const filtreleriSifirla = () => {
+    setFiltreSube('');
+    setFiltreKod('');
+    setFiltreMüşteri('');
+    setFiltreTeslimatBas('');
+    setFiltreTeslimatBit('');
+    setBekleyenSayfa(1);
+  };
+
   const renderPagination = () => {
     if (toplamSayfa <= 1) return null;
     const pages = [];
@@ -295,7 +333,6 @@ const KontrolEt: React.FC = () => {
                 </td>
                 <td>
                   <div className="islem-btns">
-                    {/* Görüntüle: sol tık → drawer goruntule, ctrl/cmd → yeni sekme */}
                     <a
                       href={detayUrl(satis)}
                       className="btn-goster"
@@ -308,7 +345,6 @@ const KontrolEt: React.FC = () => {
                     >
                       👁️
                     </a>
-                    {/* Düzenle: sol tık → drawer duzenle, ctrl/cmd → yeni sekme */}
                     <a
                       href={duzenleUrl(satis)}
                       className="btn-duzenle"
@@ -355,28 +391,72 @@ const KontrolEt: React.FC = () => {
         <>
           {/* FİLTRELER */}
           <div className="kontrol-filtre-bar">
-            <div className="kontrol-filtre-item">
-              <label>ŞUBE</label>
-              <select value={filtreSube} onChange={e => { setFiltreSube(e.target.value); setBekleyenSayfa(1); }} className="kontrol-filtre-select">
-                <option value="">Tüm Şubeler</option>
-                {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
-              </select>
+            <div className="kontrol-filtre-row">
+              <div className="kontrol-filtre-item">
+                <label>ŞUBE</label>
+                <select
+                  value={filtreSube}
+                  onChange={e => { setFiltreSube(e.target.value); setBekleyenSayfa(1); }}
+                  className="kontrol-filtre-select"
+                >
+                  <option value="">Tüm Şubeler</option>
+                  {SUBELER.map(s => <option key={s.kod} value={s.kod}>{s.ad}</option>)}
+                </select>
+              </div>
+
+              <div className="kontrol-filtre-item">
+                <label>MÜŞTERİ</label>
+                <input
+                  type="text"
+                  placeholder="Müşteri ara..."
+                  value={filtreMüşteri}
+                  onChange={e => { setFiltreMüşteri(e.target.value); setBekleyenSayfa(1); }}
+                  className="kontrol-filtre-input"
+                />
+              </div>
+
+              <div className="kontrol-filtre-item">
+                <label>SATIŞ KODU</label>
+                <input
+                  type="text"
+                  placeholder="Satış kodu ara..."
+                  value={filtreKod}
+                  onChange={e => { setFiltreKod(e.target.value); setBekleyenSayfa(1); }}
+                  className="kontrol-filtre-input"
+                />
+              </div>
             </div>
-            <div className="kontrol-filtre-item">
-              <label>SATIŞ KODU</label>
-              <input
-                type="text"
-                placeholder="Satış kodu ara..."
-                value={filtreKod}
-                onChange={e => { setFiltreKod(e.target.value); setBekleyenSayfa(1); }}
-                className="kontrol-filtre-input"
-              />
+
+            <div className="kontrol-filtre-row">
+              <div className="kontrol-filtre-item">
+                <label>TESLİMAT BAŞL.</label>
+                <input
+                  type="date"
+                  value={filtreTeslimatBas}
+                  onChange={e => { setFiltreTeslimatBas(e.target.value); setBekleyenSayfa(1); }}
+                  className="kontrol-filtre-input kontrol-filtre-date"
+                />
+              </div>
+
+              <div className="kontrol-filtre-item">
+                <label>TESLİMAT BİTİŞ</label>
+                <input
+                  type="date"
+                  value={filtreTeslimatBit}
+                  onChange={e => { setFiltreTeslimatBit(e.target.value); setBekleyenSayfa(1); }}
+                  className="kontrol-filtre-input kontrol-filtre-date"
+                />
+              </div>
+
+              {filtreAktif && (
+                <div className="kontrol-filtre-item kontrol-filtre-sifirla-wrapper">
+                  <label>&nbsp;</label>
+                  <button className="kontrol-filtre-sifirla" onClick={filtreleriSifirla}>
+                    ✕ Filtreleri Temizle
+                  </button>
+                </div>
+              )}
             </div>
-            {(filtreSube || filtreKod) && (
-              <button className="kontrol-filtre-sifirla" onClick={() => { setFiltreSube(''); setFiltreKod(''); setBekleyenSayfa(1); }}>
-                ✕ Temizle
-              </button>
-            )}
           </div>
 
           {/* İPTAL TALEPLERİ */}
@@ -449,7 +529,6 @@ const KontrolEt: React.FC = () => {
       {/* DRAWER PANEL */}
       <div className={`kontrol-drawer ${drawerAcik ? 'acik' : ''}`}>
         <div className="kontrol-drawer-header">
-          {/* Sol: Satış kodu + Tab grubu */}
           <div className="kontrol-drawer-header-sol">
             <div className="kontrol-drawer-baslik">
               {drawerSatis?.satisKodu || 'Satış Detayı'}
@@ -472,7 +551,6 @@ const KontrolEt: React.FC = () => {
             )}
           </div>
 
-          {/* Sağ: Tam Sayfa + Kapat */}
           <div className="kontrol-drawer-aksiyonlar">
             {drawerSatis && (
               <a
