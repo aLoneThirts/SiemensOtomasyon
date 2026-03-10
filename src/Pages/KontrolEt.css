@@ -262,20 +262,24 @@
 }
 
 .btn-goster {
-  background: linear-gradient(135deg, #009999, #007373);
-  box-shadow: 0 2px 6px rgba(0, 153, 153, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  box-shadow: none;
 }
 .btn-goster:active { 
-  background: linear-gradient(135deg, #00b3b3, #008c8c); 
+  background: rgba(255, 255, 255, 0.35);
   transform: scale(0.94); 
 }
 
 .btn-duzenle {
-  background: linear-gradient(135deg, #ff9800, #f57c00);
-  box-shadow: 0 2px 6px rgba(255, 152, 0, 0.25);
+  background: rgba(255, 152, 0, 0.2);
+  border: 1px solid rgba(255, 152, 0, 0.45);
+  color: #fbbf24;
+  box-shadow: none;
 }
 .btn-duzenle:active { 
-  background: linear-gradient(135deg, #f57c00, #e65100); 
+  background: rgba(255, 152, 0, 0.45);
   transform: scale(0.94); 
 }
 
@@ -728,13 +732,13 @@
     width: 34px;
     height: 34px;
   }
-  
-  .btn-goster:hover, .btn-duzenle:hover {
-    transform: translateY(-2px);
+
+  .btn-goster:hover {
+    background: rgba(255, 255, 255, 0.25);
   }
-  
-  .btn-goster:active, .btn-duzenle:active {
-    transform: translateY(0);
+
+  .btn-duzenle:hover {
+    background: rgba(255, 152, 0, 0.32);
   }
   
   .kontrol-pag-btn:hover:not(:disabled) { 
