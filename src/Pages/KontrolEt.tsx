@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { collection, getDocs, doc, updateDoc, getDoc, Timestamp, query, where, orderBy } from 'firebase/firestore';
@@ -7,10 +7,12 @@ import { SatisTeklifFormu } from '../types/satis';
 import { getSubeByKod, SUBELER } from '../types/sube';
 import Layout from '../components/Layout';
 import SatisDetayIcerik from '../components/SatisDetayIcerik';
+import SatisDuzenleIcerik from '../components/SatisDuzenleIcerik';
 import './KontrolEt.css';
 import './SatisDetay.css';
 
 const SAYFA_BOYUTU = 10;
+type DrawerMod = 'goruntule' | 'duzenle';
 
 const KontrolEt: React.FC = () => {
   const { currentUser } = useAuth();
@@ -24,14 +26,13 @@ const KontrolEt: React.FC = () => {
   const [iptalAcik, setIptalAcik] = useState(true);
   const [bekleyenSayfa, setBekleyenSayfa] = useState(1);
 
-  // Filtreler
   const [filtreSube, setFiltreSube] = useState('');
   const [filtreKod, setFiltreKod] = useState('');
 
-  // Drawer state
   const [drawerSatis, setDrawerSatis] = useState<SatisTeklifFormu | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerAcik, setDrawerAcik] = useState(false);
+  const [drawerMod, setDrawerMod] = useState<DrawerMod>('goruntule');
 
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
@@ -40,7 +41,6 @@ const KontrolEt: React.FC = () => {
     fetchSatislar();
   }, [currentUser]);
 
-  // ESC ile drawer kapat
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') drawerKapat();
@@ -49,7 +49,6 @@ const KontrolEt: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Drawer body scroll kilidi
   useEffect(() => {
     if (drawerAcik) {
       document.body.style.overflow = 'hidden';
@@ -61,20 +60,22 @@ const KontrolEt: React.FC = () => {
 
   const drawerKapat = () => {
     setDrawerAcik(false);
-    setTimeout(() => setDrawerSatis(null), 300); // animasyon bittikten sonra temizle
+    setTimeout(() => {
+      setDrawerSatis(null);
+      setDrawerMod('goruntule');
+    }, 300);
   };
 
-  const drawerAc = async (satis: SatisTeklifFormu) => {
-    // Eğer aynı satış zaten açıksa sadece drawer'ı aç
+  const drawerAc = async (satis: SatisTeklifFormu, mod: DrawerMod = 'goruntule') => {
+    setDrawerMod(mod);
     if (drawerSatis?.id === satis.id) {
       setDrawerAcik(true);
       return;
     }
     setDrawerLoading(true);
     setDrawerAcik(true);
-    setDrawerSatis(satis); // önce mevcut satış verisiyle aç (hızlı)
+    setDrawerSatis(satis);
     try {
-      // Firestore'dan tam detayı çek
       const sube = getSubeByKod(satis.subeKodu);
       if (sube && satis.id) {
         const satisDoc = await getDoc(doc(db, `subeler/${sube.dbPath}/satislar`, satis.id));
@@ -89,9 +90,8 @@ const KontrolEt: React.FC = () => {
     }
   };
 
-  // Link href'i oluştur — link mantığı için
-  const detayUrl = (satis: SatisTeklifFormu) =>
-    `/satis-detay/${satis.subeKodu}/${satis.id}`;
+  const detayUrl = (satis: SatisTeklifFormu) => `/satis-detay/${satis.subeKodu}/${satis.id}`;
+  const duzenleUrl = (satis: SatisTeklifFormu) => `/satis-duzenle/${satis.subeKodu}/${satis.id}`;
 
   const fetchSatislar = async () => {
     try {
@@ -295,21 +295,32 @@ const KontrolEt: React.FC = () => {
                 </td>
                 <td>
                   <div className="islem-btns">
-                    {/* Görüntüle: link mantığında, sol tık → drawer, middle/ctrl/cmd → yeni sekme */}
+                    {/* Görüntüle: sol tık → drawer goruntule, ctrl/cmd → yeni sekme */}
                     <a
                       href={detayUrl(satis)}
                       className="btn-goster"
                       title="Görüntüle"
                       onClick={e => {
-                        // Modifier tuş veya middle click → linkin doğal davranışına bırak (yeni sekme)
                         if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
                         e.preventDefault();
-                        drawerAc(satis);
+                        drawerAc(satis, 'goruntule');
                       }}
                     >
                       👁️
                     </a>
-                    <button className="btn-duzenle" onClick={() => navigate(`/satis-duzenle/${satis.subeKodu}/${satis.id}`)} title="Düzenle">✏️</button>
+                    {/* Düzenle: sol tık → drawer duzenle, ctrl/cmd → yeni sekme */}
+                    <a
+                      href={duzenleUrl(satis)}
+                      className="btn-duzenle"
+                      title="Düzenle"
+                      onClick={e => {
+                        if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+                        e.preventDefault();
+                        drawerAc(satis, 'duzenle');
+                      }}
+                    >
+                      ✏️
+                    </a>
                   </div>
                 </td>
                 {tip === 'iptal' && (
@@ -438,13 +449,34 @@ const KontrolEt: React.FC = () => {
       {/* DRAWER PANEL */}
       <div className={`kontrol-drawer ${drawerAcik ? 'acik' : ''}`}>
         <div className="kontrol-drawer-header">
-          <div className="kontrol-drawer-baslik">
-            {drawerSatis?.satisKodu || 'Satış Detayı'}
+          {/* Sol: Satış kodu + Tab grubu */}
+          <div className="kontrol-drawer-header-sol">
+            <div className="kontrol-drawer-baslik">
+              {drawerSatis?.satisKodu || 'Satış Detayı'}
+            </div>
+            {drawerSatis && (
+              <div className="kontrol-drawer-tab-grup">
+                <button
+                  className={`kontrol-drawer-tab ${drawerMod === 'goruntule' ? 'aktif' : ''}`}
+                  onClick={() => setDrawerMod('goruntule')}
+                >
+                  👁️ Görüntüle
+                </button>
+                <button
+                  className={`kontrol-drawer-tab ${drawerMod === 'duzenle' ? 'aktif' : ''}`}
+                  onClick={() => setDrawerMod('duzenle')}
+                >
+                  ✏️ Düzenle
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Sağ: Tam Sayfa + Kapat */}
           <div className="kontrol-drawer-aksiyonlar">
             {drawerSatis && (
               <a
-                href={detayUrl(drawerSatis)}
+                href={drawerMod === 'duzenle' ? duzenleUrl(drawerSatis) : detayUrl(drawerSatis)}
                 className="kontrol-drawer-tam-sayfa"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -456,11 +488,25 @@ const KontrolEt: React.FC = () => {
             <button className="kontrol-drawer-kapat" onClick={drawerKapat} title="Kapat">✕</button>
           </div>
         </div>
+
         <div className="kontrol-drawer-icerik">
           {drawerLoading ? (
             <div className="kontrol-drawer-yukleniyor">Yükleniyor...</div>
           ) : drawerSatis ? (
-            <SatisDetayIcerik satis={drawerSatis} drawerMode={true} />
+            drawerMod === 'goruntule' ? (
+              <SatisDetayIcerik satis={drawerSatis} drawerMode={true} />
+            ) : (
+              <SatisDuzenleIcerik
+                subeKodu={drawerSatis.subeKodu}
+                satisId={drawerSatis.id!}
+                drawerMode={true}
+                onKaydet={() => {
+                  fetchSatislar();
+                  setDrawerMod('goruntule');
+                }}
+                onIptal={() => setDrawerMod('goruntule')}
+              />
+            )
           ) : null}
         </div>
       </div>

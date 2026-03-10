@@ -11,6 +11,7 @@ import './SatisDuzenle.css';
 import { kasaTahsilatEkle, kasaIadeEkle } from '../services/kasaService';
 import { kasaIptalKaydiOlustur } from '../services/kasaIptalService';
 
+
 interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: boolean; subeKodu: string; tutar?: number; }
 interface YesilEtiketAdmin { id?: string; urunKodu: string; urunTuru?: string; maliyet: number; aciklama?: string; }
 interface MarsGirisi { marsNo: string; teslimatTarihi: string; etiket: string; }

@@ -514,31 +514,80 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 14px 16px;
   border-bottom: 2px solid #e5e7eb;
   background: linear-gradient(135deg, #1f2937, #374151);
   flex-shrink: 0;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .kontrol-drawer-baslik {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: white;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 .kontrol-drawer-aksiyonlar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
 }
 
+/* ── DRAWER TAB GRUBU ── */
+.kontrol-drawer-tab-grup {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.kontrol-drawer-tab {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  letter-spacing: 0.3px;
+}
+
+.kontrol-drawer-tab:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.kontrol-drawer-tab.aktif {
+  background: white;
+  color: #1f2937;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.kontrol-drawer-tab.aktif:hover {
+  background: white;
+  color: #1f2937;
+}
+
+/* ── TAM SAYFA LİNKİ ── */
 .kontrol-drawer-tam-sayfa {
-  padding: 7px 14px;
+  padding: 7px 12px;
   background: rgba(255,255,255,0.15);
   color: white;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   text-decoration: none;
   border: 1px solid rgba(255,255,255,0.3);
@@ -562,6 +611,7 @@
   align-items: center;
   justify-content: center;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 .kontrol-drawer-kapat:hover {
   background: rgba(255,255,255,0.28);
@@ -700,6 +750,25 @@
     border-color: #fca5a5;
     transform: translateY(-1px);
   }
+
+  .kontrol-drawer-header {
+    padding: 16px 20px;
+    flex-wrap: nowrap;
+  }
+
+  .kontrol-drawer-baslik {
+    font-size: 16px;
+  }
+
+  .kontrol-drawer-tab {
+    font-size: 13px;
+    padding: 7px 14px;
+  }
+
+  .kontrol-drawer-tam-sayfa {
+    font-size: 13px;
+    padding: 7px 14px;
+  }
 }
 
 /* =============================================
@@ -774,6 +843,11 @@
     padding: 8px 12px;
     font-size: 12px;
   }
+
+  .kontrol-drawer-tab {
+    font-size: 11px;
+    padding: 5px 8px;
+  }
 }
 
 /* =============================================
@@ -813,6 +887,20 @@
   
   .satir-bekleyen:active { background: #fff5f5; }
   .satir-onaylandi:active { background: #f0fdf4; }
+
+  .kontrol-drawer-tab:hover {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .kontrol-drawer-tab.aktif:hover {
+    background: white;
+    color: #1f2937;
+  }
+
+  .kontrol-drawer-tab:active {
+    transform: scale(0.96);
+  }
 }
 
 /* =============================================
