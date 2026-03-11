@@ -1,26 +1,16 @@
 // ===================================================
-//  KASA SERVICE — v7 BUG FIX
+//  KASA SERVICE — v8
 //
-//  🔴 v6'daki PROBLEM:
-//     getTahsilatlar → getSatislar('tahsilatlar') kullanıyordu
-//     Bu fonksiyon satıştaki toplam pesinatTutar'a bakıyordu
-//     → 1000 TL kapora + 5500 TL kalan = 6500 TL toplam pesinatTutar
-//     → Bugün 5500 TL ödense de sistem 6500 TL gösteriyordu
+//  v7'den v8'e değişiklikler:
+//  🔴 v7'deki PROBLEM:
+//     kasaIadeEkle → created_at her zaman "şu an" yazıyordu
+//     → Eski bir peşinat düzenlendiğinde ters kayıt bugünün
+//       kasasına düşüyordu, oysa eski günün kasasına düşmeli
 //
-//     recalcNakitSatis → aynı şekilde satış dokümanındaki toplam
-//     pesinatTutar'a bakıyordu → kasa bakiyesi de yanlış hesaplanıyordu
-//
-//  ✅ v7 ÇÖZÜMLER:
-//     1. getTahsilatlar artık kasaTahsilatHareketleri'nden okur
-//        → Her ödeme eventi ayrı kayıt olarak orada
-//        → 1000 TL kapora 08.03'te, 5500 TL kalan 11.03'te görünür
-//     2. recalcNakitSatis önceki gün tahsilatları için
-//        kasaTahsilatHareketleri'nden okur
-//        → Aynı mantık, kasa bakiyesi de doğru hesaplanır
-//
-//  📋 DEĞİŞEN FONKSİYONLAR:
-//     1. getTahsilatlar → kasaTahsilatHareketleri'nden okur
-//     2. recalcNakitSatis → önceki gün tahsilatları için kasaTahsilatHareketleri
+//  ✅ v8 ÇÖZÜM:
+//     kasaIadeEkle → artık "gun" parametresine göre created_at yazar
+//     → Eski peşinat 09.03'te girilmişse, ters kayıt da 09.03'e düşer
+//     → Geçmiş kasalar asla yanlış etkilenmez
 // ===================================================
 
 import {
@@ -143,14 +133,6 @@ export type SatisFiltreTip = 'bugun' | 'haftabasindan' | 'buay' | '30gun' | 'tah
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  🔧 recalcNakitSatis — v7: kasaTahsilatHareketleri'nden okur
-//
-//  Bugünkü satışlar → satislar koleksiyonundan (olusturmaTarihi = bugün)
-//  Önceki günlerin tahsilatları → kasaTahsilatHareketleri'nden (created_at = bugün)
-//
-//  Bu sayede:
-//  - 08.03'te 1000 TL kapora alındı → 08.03 kasasına yazıldı
-//  - 11.03'te 5500 TL kalan alındı → 11.03 kasasına yazıldı
-//  - Her gün kendi tahsilatını gösterir ✅
 // ═══════════════════════════════════════════════════════════════════════════
 export const recalcNakitSatis = async (
   subeKodu: string,
@@ -172,7 +154,6 @@ export const recalcNakitSatis = async (
   let havaleSatis = 0;
 
   // ── 1. Bugünkü satışlar (olusturmaTarihi = bugün) ────────────────────────
-  // Bu gün açılmış satışların ilk ödemeleri buradan alınır.
   try {
     const satisSnap = await getDocs(
       query(
@@ -204,10 +185,9 @@ export const recalcNakitSatis = async (
     console.error('recalcNakitSatis satislar hatası:', err);
   }
 
-  // ── 2. Önceki günlerden bugün tahsil edilenler → kasaTahsilatHareketleri ─
-  // kasaTahsilatEkle() her çağrıldığında buraya yazar.
-  // created_at = bugün olan TAHSILAT kayıtları, satisTarihi = bugün olmayanlar
-  // → bunlar önceki günlerden gelen tahsilatlar
+  // ── 2. kasaTahsilatHareketleri — created_at bu güne ait olanlar ──────────
+  // ✅ v8: kasaIadeEkle artık gun'e göre created_at yazdığından,
+  // eski peşinat ters kayıtları doğru güne düşer.
   try {
     const tahsilatSnap = await getDocs(
       query(
@@ -220,8 +200,6 @@ export const recalcNakitSatis = async (
 
     tahsilatSnap.docs.forEach((tahDoc) => {
       const data = tahDoc.data();
-      // Bugünkü satışların ödemeleri zaten satisSnap'ten alındı
-      // Burada sadece önceki günlerin tahsilatlarını say
       if (data.satisTarihi && data.satisTarihi === gun) return;
       nakitSatis  += Number(data.nakitTutar  ?? 0);
       kartSatis   += Number(data.kartTutar   ?? 0);
@@ -244,13 +222,36 @@ export const recalcNakitSatis = async (
     iptalSnap.docs.forEach((iptalDoc) => {
       const data = iptalDoc.data();
       if (data.iptalGeriAlindi === true) return;
-      // Tutarlar zaten negatif (ör: nakitTutar: -5500)
       nakitSatis  += Number(data.nakitTutar  ?? 0);
       kartSatis   += Number(data.kartTutar   ?? 0);
       havaleSatis += Number(data.havaleTutar ?? 0);
     });
   } catch (err) {
     console.error('recalcNakitSatis iptal kayıtları hatası:', err);
+  }
+
+  // ── 4. kasaTahsilatHareketleri — IADE tipindekiler (peşinat ters kayıtları)
+  // ✅ v8: kasaIadeEkle artık gun'e göre created_at yazdığından
+  // bu sorguda doğru günün ters kayıtları gelir.
+  try {
+    const iadeSnap = await getDocs(
+      query(
+        collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
+        where('created_at', '>=', Timestamp.fromDate(gunBaslangic)),
+        where('created_at', '<=', Timestamp.fromDate(gunBitis)),
+        where('tip', '==', 'IADE'),
+      )
+    );
+
+    iadeSnap.docs.forEach((iadeDoc) => {
+      const data = iadeDoc.data();
+      // Tutarlar zaten negatif
+      nakitSatis  += Number(data.nakitTutar  ?? 0);
+      kartSatis   += Number(data.kartTutar   ?? 0);
+      havaleSatis += Number(data.havaleTutar ?? 0);
+    });
+  } catch (err) {
+    console.error('recalcNakitSatis iade hareketleri hatası:', err);
   }
 
   return { nakitSatis, kartSatis, havaleSatis };
@@ -315,8 +316,7 @@ export const recalculateTumGunler = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  getBugununKasaGunu — v6: Her açılışta recalc çağırıp kasaGun'ü günceller
-//  (değişmedi)
+//  getBugununKasaGunu (değişmedi)
 // ═══════════════════════════════════════════════════════════════════════════
 export const getBugununKasaGunu = async (
   subeKodu: string,
@@ -391,7 +391,6 @@ export const getBugununKasaGunu = async (
     }
   });
 
-  // Transaction sonrası canlı recalc çalıştır
   const { nakitSatis, kartSatis, havaleSatis } = await recalcNakitSatis(subeKodu, today);
 
   const gunSonuBakiyesi = hesaplaGunSonu({
@@ -587,17 +586,7 @@ export const getSatislar = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  getTahsilatlar — v7: kasaTahsilatHareketleri'nden okur
-//
-//  🔴 v6'daki problem:
-//     getSatislar('tahsilatlar') → satıştaki toplam pesinatTutar'a bakıyordu
-//     → 1000 TL kapora + 5500 TL kalan = 6500 TL pesinatTutar
-//     → Bugün 5500 TL ödense de 6500 TL gösteriyordu
-//
-//  ✅ v7 çözüm:
-//     kasaTahsilatHareketleri → her ödeme eventi ayrı kayıt
-//     → 1000 TL kapora 08.03'te yazıldı, 5500 TL kalan 11.03'te yazıldı
-//     → Bugün (11.03) sadece 5500 TL görünür ✅
+//  getTahsilatlar — v7: kasaTahsilatHareketleri'nden okur (değişmedi)
 // ═══════════════════════════════════════════════════════════════════════════
 export const getTahsilatlar = async (
   subeKodu: string,
@@ -618,10 +607,7 @@ export const getTahsilatlar = async (
 
     const ozet: KasaTahsilatOzet = { ...bos, tahsilatlar: [] };
 
-    // ── 1. kasaTahsilatHareketleri — her ödeme eventi ayrı kayıt ──────────
-    // kasaTahsilatEkle() her çağrıldığında buraya yazar.
-    // 1000 TL kapora (08.03) ve 5500 TL ödeme (11.03) → ayrı satır.
-    // Bugün için sadece 5500 TL görünür. ✅
+    // ── 1. kasaTahsilatHareketleri — TAHSILAT tipindekiler ────────────────
     try {
       const tahsilatSnap = await getDocs(
         query(
@@ -665,7 +651,54 @@ export const getTahsilatlar = async (
       console.error('getTahsilatlar kasaTahsilatHareketleri hatası:', err);
     }
 
-    // ── 2. kasaIptalKayitlari — iptal iadeleri (negatif) ─────────────────
+    // ── 2. kasaTahsilatHareketleri — IADE tipindekiler (peşinat ters kayıtları)
+    // ✅ v8: kasaIadeEkle gun'e göre created_at yazdığından,
+    // bu sorguda o günün ters kayıtları gelir — negatif olarak gösterilir.
+    try {
+      const iadeSnap = await getDocs(
+        query(
+          collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
+          where('created_at', '>=', Timestamp.fromDate(gunBaslangic)),
+          where('created_at', '<=', Timestamp.fromDate(gunBitis)),
+          where('tip', '==', 'IADE'),
+        )
+      );
+
+      iadeSnap.docs.forEach((iadeDoc) => {
+        const data = iadeDoc.data();
+        const nakit  = Number(data.nakitTutar  ?? 0); // zaten negatif
+        const kart   = Number(data.kartTutar   ?? 0); // zaten negatif
+        const havale = Number(data.havaleTutar ?? 0); // zaten negatif
+
+        ozet.toplamNakit   += nakit;
+        ozet.toplamKart    += kart;
+        ozet.toplamHavale  += havale;
+        ozet.tahsilatTutar += nakit + kart + havale;
+        ozet.tahsilatAdeti += 1;
+
+        ozet.tahsilatlar.push({
+          id:              iadeDoc.id,
+          satisKodu:       data.satisKodu   ?? '',
+          musteriIsim:     data.musteriIsim ?? '—',
+          tutar:           nakit + kart + havale,
+          nakitTutar:      nakit,
+          kartTutar:       kart,
+          havaleTutar:     havale,
+          tarih:           toDate(data.created_at),
+          odemeDurumu:     'IADE',
+          onayDurumu:      false,
+          kullanici:       data.yapan ?? '—',
+          oncekiGunOdemesi: true,
+          satisTarihi:     data.satisTarihi ?? '',
+          iptalIadesi:     true,
+          aciklama:        data.aciklama ?? 'Peşinat ters kaydı',
+        });
+      });
+    } catch (err) {
+      console.error('getTahsilatlar iade hareketleri hatası:', err);
+    }
+
+    // ── 3. kasaIptalKayitlari — satış iptali iadeleri ────────────────────
     try {
       const iptalSnap = await getDocs(
         query(
@@ -679,9 +712,9 @@ export const getTahsilatlar = async (
         const data = iptalDoc.data();
         if (data.iptalGeriAlindi === true) return;
 
-        const nakit  = Number(data.nakitTutar  ?? 0); // zaten negatif
-        const kart   = Number(data.kartTutar   ?? 0); // zaten negatif
-        const havale = Number(data.havaleTutar ?? 0); // zaten negatif
+        const nakit  = Number(data.nakitTutar  ?? 0);
+        const kart   = Number(data.kartTutar   ?? 0);
+        const havale = Number(data.havaleTutar ?? 0);
 
         ozet.toplamNakit   += nakit;
         ozet.toplamKart    += kart;
@@ -972,7 +1005,11 @@ export const kasaTahsilatEkle = async (params: {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  kasaIadeEkle — v6 FIX: kasaGun dokümanını DEĞİŞTİRMEZ (değişmedi)
+//  kasaIadeEkle — v8 FIX
+//
+//  ✅ Artık "gun" parametresine göre created_at yazar.
+//  → Eski peşinat 09.03'te girilmişse, ters kayıt da 09.03 kasasına düşer.
+//  → Geçmiş kasalar asla yanlış etkilenmez.
 // ═══════════════════════════════════════════════════════════════════════════
 export const kasaIadeEkle = async (params: {
   subeKodu: string;
@@ -996,6 +1033,12 @@ export const kasaIadeEkle = async (params: {
   if (!sube) return false;
 
   try {
+    // ✅ v8: created_at = gun'ün öğlen 12:00'si
+    // Böylece kasaTahsilatHareketleri sorgusu (created_at filtreli)
+    // bu kaydı doğru günde bulur.
+    const [y, m, d] = gun.split('-').map(Number);
+    const createdAt = Timestamp.fromDate(new Date(y, m - 1, d, 12, 0, 0, 0));
+
     await addDoc(
       collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
       {
@@ -1009,11 +1052,11 @@ export const kasaIadeEkle = async (params: {
         aciklama: iadeSebebi ?? 'İade',
         iadeSebebi: iadeSebebi ?? '',
         iadeTarih: gun,
-        created_at: Timestamp.fromDate(new Date()),
+        created_at: createdAt,
       }
     );
 
-    console.log(`✅ kasaIadeEkle: Audit trail yazıldı (kasaGun güncellenmedi) — ${satisKodu}`);
+    console.log(`✅ kasaIadeEkle: ${satisKodu} — gun: ${gun}`);
     return true;
   } catch (err) {
     console.error('kasaIadeEkle hata:', err);

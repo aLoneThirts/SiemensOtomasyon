@@ -23,7 +23,6 @@ const FATURA_NO_REGEX = /^(\d{1,4}|Kesilmedi)$/;
 const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
 const isFaturaNoGecerli = (val: string): boolean => !val || FATURA_NO_REGEX.test(val);
 
-// ✅ v7 FIX: Mars No — sadece 10 haneli sayı, yıl kısıtlaması kaldırıldı
 const MARS_NO_REGEX = /^\d{10}$/;
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
 
@@ -31,6 +30,13 @@ const bugunStr = (): string => {
   const n = new Date();
   return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
 };
+
+// ✅ v8: Peşinat, havale ve kart tiplerinde "gun" alanı eklendi.
+// Bu alan hangi günün kasasına yazıldığını takip eder.
+// Düzenleme sırasında eski tutarın ters kaydı doğru güne düşer.
+type PesinatItem = { id: string; tutar: number; aciklama: string; gun?: string };
+type HavaleItem  = { id: string; tutar: number; banka: string; gun?: string };
+type KartItem    = KartOdeme & { gun?: string };
 
 const SatisDuzenlePage: React.FC = () => {
   const { subeKodu, id } = useParams<{ subeKodu: string; id: string }>();
@@ -42,15 +48,19 @@ const SatisDuzenlePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const [urunler, setUrunler] = useState<Urun[]>([]);
-  const [pesinatlar, setPesinatlar] = useState<{ id: string; tutar: number; aciklama: string }[]>([]);
-  const [havaleler, setHavaleler] = useState<{ id: string; tutar: number; banka: string }[]>([]);
-  const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>([]);
+
+  // ✅ v8: gun alanı olan tipler
+  const [pesinatlar, setPesinatlar] = useState<PesinatItem[]>([]);
+  const [havaleler, setHavaleler]   = useState<HavaleItem[]>([]);
+  const [kartOdemeler, setKartOdemeler] = useState<KartItem[]>([]);
+
   const [kesintiCache, setKesintiCache] = useState<Record<string, Record<string, number>>>({});
   const [manuelSatisTutari, setManuelSatisTutari] = useState<number | null>(null);
 
-  const [orijinalPesinatlar, setOrijinalPesinatlar] = useState<{ id: string; tutar: number; aciklama: string }[]>([]);
-  const [orijinalHavaleler, setOrijinalHavaleler] = useState<{ id: string; tutar: number; banka: string }[]>([]);
-  const [orijinalKartOdemeler, setOrijinalKartOdemeler] = useState<KartOdeme[]>([]);
+  // ✅ v8: orijinal listeler de gun alanıyla tutuluyor
+  const [orijinalPesinatlar, setOrijinalPesinatlar] = useState<PesinatItem[]>([]);
+  const [orijinalHavaleler, setOrijinalHavaleler]   = useState<HavaleItem[]>([]);
+  const [orijinalKartOdemeler, setOrijinalKartOdemeler] = useState<KartItem[]>([]);
 
   const [faturaNo, setFaturaNo] = useState('');
   const [faturaNoHata, setFaturaNoHata] = useState(false);
@@ -177,18 +187,36 @@ const SatisDuzenlePage: React.FC = () => {
         setManuelSatisTutari((data as any).toplamTutar || null);
 
         const loadedPesinatlar: any[] = (data as any).pesinatlar || [];
-        const loadedHavaleler: any[] = (data as any).havaleler || [];
+        const loadedHavaleler: any[]  = (data as any).havaleler  || [];
         const loadedKartlar: KartOdeme[] = data.kartOdemeler || [];
 
-        const pList = loadedPesinatlar.length > 0 ? loadedPesinatlar : (data.pesinatTutar ? [{ id: '1', tutar: data.pesinatTutar, aciklama: '' }] : []);
-        const hList = loadedHavaleler.length > 0 ? loadedHavaleler : (data.havaleTutar ? [{ id: '1', tutar: data.havaleTutar, banka: (data as any).havaleBanka || HAVALE_BANKALARI[0] }] : []);
+        // ✅ v8: Satış tarihi — gun alanı yoksa fallback olarak kullanılır
+        const toDateStrLocal = (d: any): string => {
+          if (!d) return bugunStr();
+          try {
+            const date = typeof d === 'object' && 'toDate' in d ? d.toDate() : new Date(d);
+            return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+          } catch { return bugunStr(); }
+        };
+        const satisTarihiFallback = toDateStrLocal((data as any).olusturmaTarihi ?? (data as any).tarih);
+
+        // ✅ v8: Mevcut kayıtlarda gun yoksa satisTarihiFallback ile doldur
+        const pList: PesinatItem[] = loadedPesinatlar.length > 0
+          ? loadedPesinatlar.map((p: any) => ({ ...p, gun: p.gun ?? satisTarihiFallback }))
+          : (data.pesinatTutar ? [{ id: '1', tutar: data.pesinatTutar, aciklama: '', gun: satisTarihiFallback }] : []);
+
+        const hList: HavaleItem[] = loadedHavaleler.length > 0
+          ? loadedHavaleler.map((h: any) => ({ ...h, gun: h.gun ?? satisTarihiFallback }))
+          : (data.havaleTutar ? [{ id: '1', tutar: data.havaleTutar, banka: (data as any).havaleBanka || HAVALE_BANKALARI[0], gun: satisTarihiFallback }] : []);
+
+        const kList: KartItem[] = loadedKartlar.map((k: any) => ({ ...k, gun: k.gun ?? satisTarihiFallback }));
 
         setPesinatlar(pList);
         setHavaleler(hList);
-        setKartOdemeler(loadedKartlar);
+        setKartOdemeler(kList);
         setOrijinalPesinatlar(JSON.parse(JSON.stringify(pList)));
         setOrijinalHavaleler(JSON.parse(JSON.stringify(hList)));
-        setOrijinalKartOdemeler(JSON.parse(JSON.stringify(loadedKartlar)));
+        setOrijinalKartOdemeler(JSON.parse(JSON.stringify(kList)));
 
         setFaturaNo(data.faturaNo || '');
         setServisNotu(data.servisNotu || '');
@@ -265,7 +293,6 @@ const SatisDuzenlePage: React.FC = () => {
     if (field === 'alisFiyati' || field === 'adet') setManuelSatisTutari(null);
   };
 
-  // ✅ YENİ: Ürün bazlı teslim checkbox handler
   const handleUrunDeliveredChange = (index: number, checked: boolean) => {
     if (alanlarKilitli) return;
     const yeniUrunler = [...urunler];
@@ -290,7 +317,8 @@ const SatisDuzenlePage: React.FC = () => {
 
   const yesilEtiketToplamIndirim = () => eslesenYesilEtiketler().reduce((t, e) => t + e.maliyet * e.adet, 0);
 
-  const kartEkle = () => setKartOdemeler(prev => [...prev, { id: Date.now().toString(), banka: BANKALAR[0], taksitSayisi: 1, tutar: 0, kesintiOrani: 0 }]);
+  // ✅ v8: Yeni eklenen peşinat/havale/kart → gun = bugunStr()
+  const kartEkle = () => setKartOdemeler(prev => [...prev, { id: Date.now().toString(), banka: BANKALAR[0], taksitSayisi: 1, tutar: 0, kesintiOrani: 0, gun: bugunStr() } as KartItem]);
   const kartSil = (index: number) => setKartOdemeler(prev => prev.filter((_, i) => i !== index));
   const handleKartChange = (index: number, field: keyof KartOdeme, value: any) => {
     const yeniKartlar = [...kartOdemeler];
@@ -304,13 +332,13 @@ const SatisDuzenlePage: React.FC = () => {
     setKartOdemeler(yeniKartlar);
   };
 
-  const pesinatEkle = () => setPesinatlar(prev => [...prev, { id: Date.now().toString(), tutar: 0, aciklama: '' }]);
+  const pesinatEkle = () => setPesinatlar(prev => [...prev, { id: Date.now().toString(), tutar: 0, aciklama: '', gun: bugunStr() }]);
   const pesinatSil = (pesinatId: string) => setPesinatlar(prev => prev.filter(p => p.id !== pesinatId));
   const handlePesinatChange = (pesinatId: string, field: 'tutar' | 'aciklama', value: any) => {
     setPesinatlar(prev => prev.map(p => p.id === pesinatId ? { ...p, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : p));
   };
 
-  const havaleEkle = () => setHavaleler(prev => [...prev, { id: Date.now().toString(), tutar: 0, banka: HAVALE_BANKALARI[0] }]);
+  const havaleEkle = () => setHavaleler(prev => [...prev, { id: Date.now().toString(), tutar: 0, banka: HAVALE_BANKALARI[0], gun: bugunStr() }]);
   const havaleSil = (havaleId: string) => setHavaleler(prev => prev.filter(h => h.id !== havaleId));
   const handleHavaleChange = (havaleId: string, field: 'tutar' | 'banka', value: any) => {
     setHavaleler(prev => prev.map(h => h.id === havaleId ? { ...h, [field]: field === 'tutar' ? (parseFloat(value) || 0) : value } : h));
@@ -377,47 +405,212 @@ const SatisDuzenlePage: React.FC = () => {
   const acikHesap = () => { const a = toplamTutar() - toplamOdenen(); return a > 0 ? a : 0; };
   const karZarar = () => hesabaGecenToplam() - toplamMaliyet();
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  ✅ v8: odemeDeğisiklikleriniKasayaYansit — ID bazlı, gun'e duyarlı
+  //
+  //  Her peşinat/havale/kart için:
+  //  - Yeni eklendi  → kasaTahsilatEkle (bugünün kasasına)
+  //  - Silindi       → kasaIadeEkle (eski gun'ün kasasına)
+  //  - Tutar değişti → kasaIadeEkle (eski gun'ün kasasına) +
+  //                    kasaTahsilatEkle (bugünün kasasına)
+  //
+  //  Geçmiş kasalar asla yanlış etkilenmez.
+  // ═══════════════════════════════════════════════════════════════════════════
   const odemeDeğisiklikleriniKasayaYansit = async () => {
     if (!satis || !subeKodu || !currentUser) return;
+
     const musteriIsimVal = (satis as any).musteriBilgileri?.isim ?? '—';
-    const satisKodu = satis.satisKodu ?? id ?? '';
+    const satisKoduVal = satis.satisKodu ?? id ?? '';
     const satisId = satis.id ?? id ?? '';
-    const gun = bugunStr();
+    const bugun = bugunStr();
     const yapan = `${currentUser.ad} ${currentUser.soyad}`;
     const yapanId = currentUser.uid || '';
 
-    const eskiNakit = orijinalPesinatlar.reduce((t, p) => t + (p.tutar || 0), 0);
-    const yeniNakit = pesinatToplam();
-    const nakitFark = yeniNakit - eskiNakit;
+    const satisTarihiRaw = (satis as any).olusturmaTarihi ?? (satis as any).tarih;
+    const satisTarihiStr = satisTarihiRaw
+      ? (() => {
+          try {
+            const d = typeof satisTarihiRaw.toDate === 'function'
+              ? satisTarihiRaw.toDate()
+              : new Date(satisTarihiRaw);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          } catch { return undefined; }
+        })()
+      : undefined;
 
-    const eskiHavale = orijinalHavaleler.reduce((t, h) => t + (h.tutar || 0), 0);
-    const yeniHavale = havaleToplam();
-    const havaleFark = yeniHavale - eskiHavale;
+    // ── PEŞİNAT (nakit) ──────────────────────────────────────────────────
+    const orijinalPesinatObj: Record<string, PesinatItem> = {};
+    orijinalPesinatlar.forEach(p => { orijinalPesinatObj[p.id] = p; });
+    const yeniPesinatObj: Record<string, PesinatItem> = {};
+    pesinatlar.forEach(p => { yeniPesinatObj[p.id] = p; });
 
-    const eskiKart = orijinalKartOdemeler.reduce((t, k) => t + (k.tutar || 0), 0);
-    const yeniKart = kartBrutToplam();
-    const kartFark = yeniKart - eskiKart;
-
-    if (nakitFark === 0 && havaleFark === 0 && kartFark === 0) return;
-
-    const kasaNakit  = Math.max(0, nakitFark);
-    const kasaHavale = Math.max(0, havaleFark);
-    const kasaKart   = Math.max(0, kartFark);
-
-    if (kasaNakit > 0 || kasaHavale > 0 || kasaKart > 0) {
-      const satisTarihiRaw = (satis as any).olusturmaTarihi ?? (satis as any).tarih;
-      const satisTarihiStr = satisTarihiRaw ? (() => { try { const d = typeof satisTarihiRaw.toDate === 'function' ? satisTarihiRaw.toDate() : new Date(satisTarihiRaw); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; } catch { return undefined; } })() : undefined;
-      const ilkKart   = kartOdemeler.find(k => k.tutar > 0);
-      const ilkHavale = havaleler.find(h => h.tutar > 0);
-      await kasaTahsilatEkle({ subeKodu, gun, satisId, satisKodu, musteriIsim: musteriIsimVal, nakitTutar: kasaNakit, kartTutar: kasaKart, havaleTutar: kasaHavale, yapan, yapanId, aciklama: 'Satış güncelleme — ödeme eklendi', satisTarihi: satisTarihiStr, kartBanka: ilkKart?.banka ?? undefined, havaleBanka: ilkHavale?.banka ?? undefined });
+    for (const pid of Object.keys(orijinalPesinatObj)) {
+      const eski = orijinalPesinatObj[pid];
+      if (!yeniPesinatObj[pid]) {
+        // Silindi → ters kayıt eski gun'e
+        if (eski.tutar > 0) {
+          await kasaIadeEkle({
+            subeKodu, gun: eski.gun ?? bugun,
+            satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+            nakitTutar: eski.tutar, kartTutar: 0, havaleTutar: 0,
+            yapan, yapanId, iadeSebebi: 'Peşinat silindi',
+          });
+        }
+      } else {
+        const yeni = yeniPesinatObj[pid];
+        if (yeni.tutar !== eski.tutar) {
+          // Tutar değişti: eski gun'den geri al, bugüne yaz
+          if (eski.tutar > 0) {
+            await kasaIadeEkle({
+              subeKodu, gun: eski.gun ?? bugun,
+              satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+              nakitTutar: eski.tutar, kartTutar: 0, havaleTutar: 0,
+              yapan, yapanId, iadeSebebi: 'Peşinat güncellendi (eski tutar geri alındı)',
+            });
+          }
+          if (yeni.tutar > 0) {
+            await kasaTahsilatEkle({
+              subeKodu, gun: bugun,
+              satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+              nakitTutar: yeni.tutar, kartTutar: 0, havaleTutar: 0,
+              yapan, yapanId,
+              aciklama: 'Peşinat güncellendi (yeni tutar)',
+              satisTarihi: satisTarihiStr,
+            });
+          }
+        }
+      }
     }
 
-    const iadeNakit  = nakitFark  < 0 ? Math.abs(nakitFark)  : 0;
-    const iadeHavale = havaleFark < 0 ? Math.abs(havaleFark) : 0;
-    const iadeKart   = kartFark   < 0 ? Math.abs(kartFark)   : 0;
+    for (const pid of Object.keys(yeniPesinatObj)) {
+      if (!orijinalPesinatObj[pid] && yeniPesinatObj[pid].tutar > 0) {
+        const yeni = yeniPesinatObj[pid];
+        // Yeni eklendi → bugünün kasasına
+        await kasaTahsilatEkle({
+          subeKodu, gun: bugun,
+          satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+          nakitTutar: yeni.tutar, kartTutar: 0, havaleTutar: 0,
+          yapan, yapanId,
+          aciklama: 'Yeni peşinat eklendi',
+          satisTarihi: satisTarihiStr,
+        });
+      }
+    }
 
-    if (iadeNakit > 0 || iadeHavale > 0 || iadeKart > 0) {
-      await kasaIadeEkle({ subeKodu, gun, satisId, satisKodu, musteriIsim: musteriIsimVal, nakitTutar: iadeNakit, kartTutar: iadeKart, havaleTutar: iadeHavale, yapan, yapanId, iadeSebebi: 'Satış düzenleme — ödeme azaltıldı' });
+    // ── HAVALE ─────────────────────────────────────────────────────────────
+    const orijinalHavaleObj: Record<string, HavaleItem> = {};
+    orijinalHavaleler.forEach(h => { orijinalHavaleObj[h.id] = h; });
+    const yeniHavaleObj: Record<string, HavaleItem> = {};
+    havaleler.forEach(h => { yeniHavaleObj[h.id] = h; });
+
+    for (const hid of Object.keys(orijinalHavaleObj)) {
+      const eski = orijinalHavaleObj[hid];
+      if (!yeniHavaleObj[hid]) {
+        if (eski.tutar > 0) {
+          await kasaIadeEkle({
+            subeKodu, gun: eski.gun ?? bugun,
+            satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+            nakitTutar: 0, kartTutar: 0, havaleTutar: eski.tutar,
+            yapan, yapanId, iadeSebebi: 'Havale silindi',
+          });
+        }
+      } else {
+        const yeni = yeniHavaleObj[hid];
+        if (yeni.tutar !== eski.tutar) {
+          if (eski.tutar > 0) {
+            await kasaIadeEkle({
+              subeKodu, gun: eski.gun ?? bugun,
+              satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+              nakitTutar: 0, kartTutar: 0, havaleTutar: eski.tutar,
+              yapan, yapanId, iadeSebebi: 'Havale güncellendi (eski tutar geri alındı)',
+            });
+          }
+          if (yeni.tutar > 0) {
+            await kasaTahsilatEkle({
+              subeKodu, gun: bugun,
+              satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+              nakitTutar: 0, kartTutar: 0, havaleTutar: yeni.tutar,
+              yapan, yapanId,
+              aciklama: 'Havale güncellendi (yeni tutar)',
+              satisTarihi: satisTarihiStr,
+              havaleBanka: yeni.banka,
+            });
+          }
+        }
+      }
+    }
+
+    for (const hid of Object.keys(yeniHavaleObj)) {
+      if (!orijinalHavaleObj[hid] && yeniHavaleObj[hid].tutar > 0) {
+        const yeni = yeniHavaleObj[hid];
+        await kasaTahsilatEkle({
+          subeKodu, gun: bugun,
+          satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+          nakitTutar: 0, kartTutar: 0, havaleTutar: yeni.tutar,
+          yapan, yapanId,
+          aciklama: 'Yeni havale eklendi',
+          satisTarihi: satisTarihiStr,
+          havaleBanka: yeni.banka,
+        });
+      }
+    }
+
+    // ── KART ───────────────────────────────────────────────────────────────
+    const orijinalKartObj: Record<string, KartItem> = {};
+    orijinalKartOdemeler.forEach(k => { orijinalKartObj[k.id] = k; });
+    const yeniKartObj: Record<string, KartItem> = {};
+    kartOdemeler.forEach(k => { yeniKartObj[k.id] = k; });
+
+    for (const kid of Object.keys(orijinalKartObj)) {
+      const eski = orijinalKartObj[kid];
+      if (!yeniKartObj[kid]) {
+        if (eski.tutar > 0) {
+          await kasaIadeEkle({
+            subeKodu, gun: eski.gun ?? bugun,
+            satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+            nakitTutar: 0, kartTutar: eski.tutar, havaleTutar: 0,
+            yapan, yapanId, iadeSebebi: 'Kart ödemesi silindi',
+          });
+        }
+      } else {
+        const yeni = yeniKartObj[kid];
+        if (yeni.tutar !== eski.tutar) {
+          if (eski.tutar > 0) {
+            await kasaIadeEkle({
+              subeKodu, gun: eski.gun ?? bugun,
+              satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+              nakitTutar: 0, kartTutar: eski.tutar, havaleTutar: 0,
+              yapan, yapanId, iadeSebebi: 'Kart ödemesi güncellendi (eski tutar geri alındı)',
+            });
+          }
+          if (yeni.tutar > 0) {
+            await kasaTahsilatEkle({
+              subeKodu, gun: bugun,
+              satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+              nakitTutar: 0, kartTutar: yeni.tutar, havaleTutar: 0,
+              yapan, yapanId,
+              aciklama: 'Kart ödemesi güncellendi (yeni tutar)',
+              satisTarihi: satisTarihiStr,
+              kartBanka: yeni.banka,
+            });
+          }
+        }
+      }
+    }
+
+    for (const kid of Object.keys(yeniKartObj)) {
+      if (!orijinalKartObj[kid] && yeniKartObj[kid].tutar > 0) {
+        const yeni = yeniKartObj[kid];
+        await kasaTahsilatEkle({
+          subeKodu, gun: bugun,
+          satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal,
+          nakitTutar: 0, kartTutar: yeni.tutar, havaleTutar: 0,
+          yapan, yapanId,
+          aciklama: 'Yeni kart ödemesi eklendi',
+          satisTarihi: satisTarihiStr,
+          kartBanka: yeni.banka,
+        });
+      }
     }
   };
 
@@ -461,7 +654,7 @@ const SatisDuzenlePage: React.FC = () => {
     setIptalIslemYapiliyor(true);
     try {
       const musteriIsimVal = (satis as any).musteriBilgileri?.isim ?? '—';
-      const satisKodu = satis.satisKodu ?? id ?? '';
+      const satisKoduVal = satis.satisKodu ?? id ?? '';
       const satisId = satis.id!;
       const gun = bugunStr();
       const yapan = `${currentUser.ad} ${currentUser.soyad}`;
@@ -470,7 +663,7 @@ const SatisDuzenlePage: React.FC = () => {
       const havaleTutar = havaleToplam();
       const kartTutar   = kartBrutToplam();
 
-      await kasaIadeEkle({ subeKodu, gun, satisId, satisKodu, musteriIsim: musteriIsimVal, nakitTutar, kartTutar, havaleTutar, yapan, yapanId, iadeSebebi: 'Satış iptali iadesi' });
+      await kasaIadeEkle({ subeKodu, gun, satisId, satisKodu: satisKoduVal, musteriIsim: musteriIsimVal, nakitTutar, kartTutar, havaleTutar, yapan, yapanId, iadeSebebi: 'Satış iptali iadesi' });
 
       await kasaIptalKaydiOlustur({
         satis: { ...satis, id: satisId } as any,
@@ -600,7 +793,6 @@ const SatisDuzenlePage: React.FC = () => {
           faturaAdresi: musteriFaturaAdresi,
           cep: musteriCep,
         },
-        // ✅ YENİ: delivered field'ı ...u spread ile otomatik kaydedilir
         urunler: urunler.map(u => ({
           ...u,
           alisFiyatSnapshot: (u as any).alisFiyatSnapshot ?? u.alisFiyati,
@@ -611,6 +803,7 @@ const SatisDuzenlePage: React.FC = () => {
         kampanyalar: seciliKampanyalar.map(k => ({ id: k.id!, ad: k.ad, tutar: k.tutar || 0 })),
         kampanyaToplami: kampanyaToplamiHesapla(),
         yesilEtiketler: etiketler.map(e => ({ id: Date.now().toString(), urunKodu: e.urunKodu, ad: e.urunAdi, alisFiyati: e.maliyet, tutar: e.maliyet * e.adet })),
+        // ✅ v8: gun alanı da Firestore'a yazılır (spread ile otomatik gider)
         pesinatlar, havaleler,
         kartOdemeler: kartOdemeler.map(k => ({
           ...k,
@@ -803,7 +996,6 @@ const SatisDuzenlePage: React.FC = () => {
             <h2 className="duzenle-section-title">Ürünler</h2>
             {!alanlarKilitli && <button type="button" onClick={urunEkle} className="duzenle-btn-add">+ Ürün Ekle</button>}
           </div>
-          {/* ✅ YENİ: Teslim sütunu eklendi */}
           <div className="duzenle-urun-header">
             <span>Ürün Kodu</span><span>Ürün Adı</span><span>Adet</span><span>Alış (TL)</span><span>BİP (TL)</span>
             <span style={{ textAlign: 'center' }}>Teslim Edildi</span>
@@ -854,7 +1046,6 @@ const SatisDuzenlePage: React.FC = () => {
               <input type="number" value={urun.adet} onChange={e => handleUrunChange(index, 'adet', e.target.value)} className="duzenle-input" min="1" disabled={alanlarKilitli} />
               <input type="number" value={urun.alisFiyati || ''} onChange={e => handleUrunChange(index, 'alisFiyati', e.target.value)} placeholder="0" className="duzenle-input mono" disabled={alanlarKilitli} />
               <input type="number" value={urun.bip || ''} onChange={e => handleUrunChange(index, 'bip', e.target.value)} placeholder="0" className="duzenle-input mono" disabled={alanlarKilitli} />
-              {/* ✅ YENİ: Ürün bazlı teslim checkbox */}
               <label style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                 gap: 4, fontSize: 11, color: '#374151',
@@ -916,6 +1107,7 @@ const SatisDuzenlePage: React.FC = () => {
               <div key={p.id} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                 <input type="number" min="0" placeholder="Tutar" value={p.tutar || ''} onChange={e => handlePesinatChange(p.id, 'tutar', e.target.value)} className="duzenle-input mono" style={{ flex: 1 }} disabled={alanlarKilitli} />
                 <input type="text" placeholder="Açıklama" value={p.aciklama} onChange={e => handlePesinatChange(p.id, 'aciklama', e.target.value)} className="duzenle-input" style={{ flex: 2 }} disabled={alanlarKilitli} />
+                {/* gun bilgisi kullanıcıya gösterilmez, arka planda tutulur */}
                 {!alanlarKilitli && <button type="button" onClick={() => pesinatSil(p.id)} className="duzenle-btn-remove">Sil</button>}
               </div>
             ))}
@@ -996,14 +1188,7 @@ const SatisDuzenlePage: React.FC = () => {
             </div>
             <div>
               <label className="duzenle-label">Mağaza Teslimat</label>
-              <input
-                type="text"
-                value={magaza}
-                onChange={e => setMagaza(e.target.value)}
-                placeholder="Mağaza adı"
-                className="duzenle-input"
-                disabled={alanlarKilitli}
-              />
+              <input type="text" value={magaza} onChange={e => setMagaza(e.target.value)} placeholder="Mağaza adı" className="duzenle-input" disabled={alanlarKilitli} />
             </div>
             <div>
               <label className="duzenle-label">Servis Notu</label>
