@@ -22,7 +22,17 @@ interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: bool
 
 const STORAGE_KEY = 'satisTeklif_draft';
 
-const bugunStr = (): string => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
+// ✅ Local tarih string (YYYY-MM-DD) — UTC offset sorunu olmaz
+const bugunStr = (): string => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+};
+
+// ✅ Local Date objesi — Firestore'a yazarken gün kayması olmaz
+const localNow = (): Date => {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate(), n.getHours(), n.getMinutes(), n.getSeconds());
+};
 
 const FATURA_NO_REGEX = /^(\d{1,4}|Kesilmedi)$/;
 const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === 'kesilmedi') return 'Kesilmedi'; return val; };
@@ -66,7 +76,7 @@ const SatisTeklifPage: React.FC = () => {
   const [urunler, setUrunler] = useState<Urun[]>(() =>
     getInitial('urunler', [{ id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }])
   );
-  const [tarih, setTarih] = useState<string>(() => getInitial('tarih', new Date().toISOString().split('T')[0]));
+  const [tarih, setTarih] = useState<string>(() => getInitial('tarih', bugunStr()));
   const [teslimatTarihi, setTeslimatTarihi] = useState<string>(() => getInitial('teslimatTarihi', ''));
   const [marsNo, setMarsNo] = useState<string>(() => getInitial('marsNo', ''));
   const [marsNoHata, setMarsNoHata] = useState(false);
@@ -264,7 +274,6 @@ const SatisTeklifPage: React.FC = () => {
     if (field === 'alisFiyati' || field === 'adet') setManuelSatisTutari(null);
   };
 
-  // ✅ YENİ: Ürün bazlı teslim checkbox handler
   const handleUrunDeliveredChange = (index: number, checked: boolean) => {
     const yeniUrunler = [...urunler];
     yeniUrunler[index] = { ...yeniUrunler[index], delivered: checked } as any;
@@ -340,7 +349,7 @@ const SatisTeklifPage: React.FC = () => {
     setMusteriTemsilcisiId(currentUser?.uid || '');
     setMusteriTemsilcisiTel('');
     setUrunler([{ id: '1', kod: '', ad: '', adet: 1, alisFiyati: 0, bip: 0 }]);
-    setTarih(new Date().toISOString().split('T')[0]);
+    setTarih(bugunStr());
     setTeslimatTarihi(''); setMarsNo(''); setMagaza(''); setFaturaNo('');
     setServisNotu(''); setTeslimEdildiMi(false); setCevap(''); setFatura(false);
     setIleriTeslim(false); setIleriTeslimTarihi(''); setServis(false); setNotlar('');
@@ -393,6 +402,13 @@ const SatisTeklifPage: React.FC = () => {
       const seciliTemsilci = kullanicilar.find(k => k.id === musteriTemsilcisiId);
       const etiketler = eslesenYesilEtiketler();
 
+      // ✅ Timezone fix: olusturmaTarihi için localNow() kullan
+      // new Date() UTC timestamp üretir — Türkiye UTC+3 olduğu için
+      // gece 00:00-02:59 arası oluşturulan satışlar bir önceki güne düşüyordu.
+      // localNow() local saatle Date objesi üretir, bu sorunu önler.
+      const simdi = localNow();
+      const gun = bugunStr();
+
       const satisTeklifi: any = {
         satisKodu: yeniSatisKodu,
         subeKodu: subeKoduKullan,
@@ -401,13 +417,12 @@ const SatisTeklifPage: React.FC = () => {
         musteriTemsilcisiAd: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
         musteriTemsilcisiTel,
         musteriTemsilcisi: seciliTemsilci ? `${seciliTemsilci.ad} ${seciliTemsilci.soyad}` : '',
-        // ✅ YENİ: delivered field'ı ...u spread ile otomatik kaydedilir
         urunler: urunler.map(u => ({
           ...u,
           alisFiyatSnapshot: u.alisFiyati,
           bipSnapshot: u.bip || 0,
           greenPriceSnapshot: (() => { const ye = yesilEtiketAdminList.find(y => y.urunKodu.trim().toLowerCase() === u.kod.trim().toLowerCase()); return ye ? ye.maliyet : null; })(),
-          snapshotTarihi: new Date().toISOString(),
+          snapshotTarihi: simdi.toISOString(),
         })),
         toplamTutar: manuelSatisTutari,
         kampanyaToplami: kampanyaToplamiHesapla(),
@@ -418,7 +433,7 @@ const SatisTeklifPage: React.FC = () => {
         kampanyalar: seciliKampanyalar.map(k => ({ id: k.id!, ad: k.ad, tutar: k.tutar || 0 })),
         yesilEtiketler: etiketler.map(e => ({ id: Date.now().toString(), urunKodu: e.urunKodu, ad: e.urunAdi, alisFiyati: e.maliyet, tutar: e.maliyet * e.adet })),
         pesinatlar, havaleler,
-        kartOdemeler: kartOdemeler.map(k => ({ ...k, commissionRateSnapshot: k.kesintiOrani || 0, commissionAmountSnapshot: (k.tutar * (k.kesintiOrani || 0)) / 100, netAmountSnapshot: k.tutar - (k.tutar * (k.kesintiOrani || 0)) / 100, snapshotTarihi: new Date().toISOString() })),
+        kartOdemeler: kartOdemeler.map(k => ({ ...k, commissionRateSnapshot: k.kesintiOrani || 0, commissionAmountSnapshot: (k.tutar * (k.kesintiOrani || 0)) / 100, netAmountSnapshot: k.tutar - (k.tutar * (k.kesintiOrani || 0)) / 100, snapshotTarihi: simdi.toISOString() })),
         pesinatToplam: pesinatToplamHesapla(), havaleToplam: havaleToplamHesapla(),
         kartBrutToplam: kartBrutToplamHesapla(), kartKesintiToplam: kartKesintiToplamHesapla(),
         kartNetToplam: kartNetToplamHesapla(), toplamOdenen: toplamOdenenHesapla(),
@@ -432,7 +447,9 @@ const SatisTeklifPage: React.FC = () => {
         onayDurumu,
         zarar: karZararHesapla(),
         olusturanKullanici: `${currentUser!.ad} ${currentUser!.soyad}`,
-        olusturmaTarihi: new Date(), guncellemeTarihi: new Date(),
+        // ✅ localNow() — UTC yerine local saat, gün kayması yok
+        olusturmaTarihi: simdi,
+        guncellemeTarihi: simdi,
         assignedUserId: musteriTemsilcisiId, assignedUserRole: seciliTemsilci?.role || ''
       };
 
@@ -445,13 +462,25 @@ const SatisTeklifPage: React.FC = () => {
       if (sube.tip === 'magaza' && (nakitTutar > 0 || havaleTutar > 0 || kartTutar > 0)) {
         const ilkKart   = kartOdemeler.find(k => k.tutar > 0);
         const ilkHavale = havaleler.find(h => h.tutar > 0);
-        const gun = bugunStr();
-        await kasaTahsilatEkle({ subeKodu: subeKoduKullan, gun, satisId: satisDocRef.id, satisKodu: yeniSatisKodu, musteriIsim: musteriBilgileri.isim || '—', nakitTutar, kartTutar, havaleTutar, yapan: `${currentUser!.ad} ${currentUser!.soyad}`, yapanId: currentUser!.uid || '', aciklama: `Yeni satış — ${yeniSatisKodu}`, satisTarihi: gun, kartBanka: ilkKart?.banka ?? undefined, havaleBanka: ilkHavale?.banka ?? undefined });
+        await kasaTahsilatEkle({
+          subeKodu: subeKoduKullan,
+          gun, // ✅ bugunStr() — local tarih
+          satisId: satisDocRef.id,
+          satisKodu: yeniSatisKodu,
+          musteriIsim: musteriBilgileri.isim || '—',
+          nakitTutar, kartTutar, havaleTutar,
+          yapan: `${currentUser!.ad} ${currentUser!.soyad}`,
+          yapanId: currentUser!.uid || '',
+          aciklama: `Yeni satış — ${yeniSatisKodu}`,
+          satisTarihi: gun,
+          kartBanka: ilkKart?.banka ?? undefined,
+          havaleBanka: ilkHavale?.banka ?? undefined,
+        });
       }
 
       if (!onayDurumu) {
         for (const urun of urunler) {
-          await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), { satisKodu: yeniSatisKodu, subeKodu: subeKoduKullan, urunKodu: urun.kod, urunAdi: urun.ad, adet: urun.adet, musteriIsmi: musteriBilgileri.isim, siparisTarihi: new Date(), beklenenTeslimTarihi: teslimatTarihi ? new Date(teslimatTarihi) : new Date(), durum: 'BEKLEMEDE', notlar: servisNotu || '', guncellemeTarihi: new Date() });
+          await addDoc(collection(db, `subeler/${sube.dbPath}/bekleyenUrunler`), { satisKodu: yeniSatisKodu, subeKodu: subeKoduKullan, urunKodu: urun.kod, urunAdi: urun.ad, adet: urun.adet, musteriIsmi: musteriBilgileri.isim, siparisTarihi: simdi, beklenenTeslimTarihi: teslimatTarihi ? new Date(teslimatTarihi) : simdi, durum: 'BEKLEMEDE', notlar: servisNotu || '', guncellemeTarihi: simdi });
         }
       }
 
@@ -628,7 +657,6 @@ const SatisTeklifPage: React.FC = () => {
             <h3 className="section-title">Ürünler</h3>
             <button type="button" onClick={urunEkle} className="btn-add">+ Ürün Ekle</button>
           </div>
-          {/* ✅ YENİ: Teslim Edildi sütunu eklendi */}
           <div className="urun-table-header">
             <span>Ürün Kodu</span><span>Ürün Adı</span><span>Adet</span><span>Alış (TL)</span><span>BİP (TL)</span>
             <span style={{ textAlign: 'center' }}>Teslim Edildi</span>
@@ -649,17 +677,8 @@ const SatisTeklifPage: React.FC = () => {
               <input type="number" min="1" value={urun.adet} onChange={e => handleUrunChange(index, 'adet', e.target.value)} required />
               <input type="number" min="0" value={urun.alisFiyati || ''} onChange={e => handleUrunChange(index, 'alisFiyati', e.target.value)} required />
               <input type="number" min="0" value={urun.bip || ''} onChange={e => handleUrunChange(index, 'bip', e.target.value)} />
-              {/* ✅ YENİ: Ürün bazlı teslim checkbox */}
-              <label style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center',
-                gap: 4, fontSize: 11, color: '#374151', cursor: 'pointer', minWidth: 64,
-              }}>
-                <input
-                  type="checkbox"
-                  checked={(urun as any).delivered === true}
-                  onChange={e => handleUrunDeliveredChange(index, e.target.checked)}
-                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#16a34a' }}
-                />
+              <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, fontSize: 11, color: '#374151', cursor: 'pointer', minWidth: 64 }}>
+                <input type="checkbox" checked={(urun as any).delivered === true} onChange={e => handleUrunDeliveredChange(index, e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#16a34a' }} />
                 ✓
               </label>
               {urunler.length > 1 && <button type="button" onClick={() => urunSil(index)} className="btn-remove">Sil</button>}
