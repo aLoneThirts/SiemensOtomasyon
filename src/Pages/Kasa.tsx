@@ -1,14 +1,10 @@
 // ===================================================
-//  KASA.TSX — v3 (TÜM İSTEKLER)
-//  0) Her şey şube bazlı
-//  1) Gün içi hareketlerde Çıkış kaldırıldı
-//  2) Kasa çıktısı → print preview (stok dahil)
-//  3) Geçmiş kayıtlar: tarih aralığı + pagination
-//  4) Font sadeleşti
-//  5) Gelen/Çıkan Ürün + Mağaza Stoğu paneli (devir daim)
-//  6) Tahsilatlar → created_at = today
-//  7) Satış iptali → negatif tahsilat
-//  8) Admin → tüm şubeleri görebilir (şube seçici)
+//  KASA.TSX — v4 (v3 base)
+//  v3'ten farklar:
+//  1) useEffect: !tahsilatOzet koşulu kaldırıldı
+//     → Tahsilatlar sekmesine her gelindiğinde taze veri çekilir
+//     → Satış düzenlendikten sonra kasaya dönünce güncel görünür
+//  2) Tahsilatlar tab başlığı: <span className="tarih-badge"> → 🔄 Yenile butonu
 // ===================================================
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -56,7 +52,6 @@ interface StokHareket {
   subeKodu: string;
 }
 
-// Kalıcı stok kaydı (devir daim)
 interface MagazaStokKaydi {
   urunKodu: string;
   urunAdi: string;
@@ -92,7 +87,6 @@ const formatGun = (gun: string) => {
 };
 
 const formatSaat = (tarih: Date | any): string => {
-  // Firestore Timestamp veya Date objesi olabilir
   const d = tarih && typeof tarih.toDate === 'function' ? tarih.toDate() : tarih;
   if (!d || typeof d.getHours !== 'function') return '—';
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -134,7 +128,6 @@ const kasaPrintPreviewYap = (params: {
   const { kasaGun, satislar, tahsilatlar, magazaStok, stokHareketler: stokLog, magazaAdi, subeAdi } = params;
   const tarih = formatGun(kasaGun.gun);
 
-  // S11 FIX: XSS onlemi — kullanicidan gelen verileri HTML'e guvenli eklemek icin
   const esc = (str: any): string => {
     if (str == null) return '';
     return String(str)
@@ -155,11 +148,9 @@ const kasaPrintPreviewYap = (params: {
   const toplamHavale = satislar.reduce((t, s) => t + (s.havaleTutar || 0), 0)
     + tahsilatlar.reduce((t, s) => t + (s.havaleTutar || 0), 0);
 
-  // Kart ve havale ödeme detayı metni oluştur
   const odemeDetayi = (s: any): string => {
     const parcalar: string[] = [];
     if (s.nakitTutar > 0) parcalar.push(`Nakit: ${fTL(s.nakitTutar)}`);
-    // Kart — önce kartOdemeler array'i dene, yoksa kartBanka field'ına bak
     if (s.kartOdemeler?.length > 0) {
       s.kartOdemeler.forEach((k: any) => {
         const taksit = k.taksitSayisi === 1 ? 'Tek Çekim' : `${k.taksitSayisi} Taksit`;
@@ -169,7 +160,6 @@ const kasaPrintPreviewYap = (params: {
       const bankaAdi = s.kartBanka ? ` — ${s.kartBanka}` : '';
       parcalar.push(`Kart${bankaAdi}: ${fTL(Math.abs(s.kartTutar))}`);
     }
-    // Havale — önce havaleler array'i dene, yoksa havaleBanka field'ına bak
     if (s.havaleler?.length > 0) {
       s.havaleler.forEach((h: any) => {
         parcalar.push(`Havale (${h.banka || '?'}): ${fTL(h.tutar)}`);
@@ -195,7 +185,6 @@ const kasaPrintPreviewYap = (params: {
     const rowBg  = isIade ? 'background:#fff5f5' : '';
     const tutar  = (s.nakitTutar || 0) + (s.kartTutar || 0) + (s.havaleTutar || 0);
 
-    // İade ise detayı elle oluştur (banka bilgisiyle)
     let detay = '';
     if (isIade) {
       const parcalar: string[] = ['🔴 İPTAL / İADE'];
@@ -326,8 +315,6 @@ const kasaPrintPreviewYap = (params: {
   <h2>📦 Bugünkü Stok Hareketleri</h2>
   ${stokLog.length > 0 ? `<table><thead><tr><th>Saat</th><th>Tip</th><th>Ürün Kodu</th><th>Ürün Adı</th><th>Adet</th><th>Müşteri/Satış</th><th>Not</th></tr></thead><tbody>${stokLogRows}</tbody></table>` : '<p style="color:#aaa;padding:8px 0">Bugün stok hareketi yapılmadı.</p>'}
 
-  <!-- Mağaza stoğu çıktıda gösterilmiyor -->
-
   <div style="margin-top:32px;padding:18px 24px;background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;page-break-inside:avoid">
     <div style="font-size:13px;font-weight:700;color:#15803d;letter-spacing:.05em;margin-bottom:10px">📊 GÜN SONU ÖZET — ${tarih}</div>
     <table style="width:100%;border:none">
@@ -382,18 +369,14 @@ const Kasa: React.FC = () => {
   const navigate = useNavigate();
   const isAdmin = currentUser?.role?.toString().trim().toUpperCase() === 'ADMIN';
 
-  // 8️⃣ Admin şube seçici — admin ise istediği şubeyi görebilir
   const [seciliSubeKodu, setSeciliSubeKodu] = useState<string>(currentUser?.subeKodu || '');
 
-  // Aktif şube (admin seçtiyse o, yoksa kendi şubesi)
   const aktifSubeKodu = isAdmin ? seciliSubeKodu : (currentUser?.subeKodu || '');
   const aktifSube = getSubeByKod(aktifSubeKodu as any);
 
-  // ── Ana kasa ──────────────────────────────────────────────────
   const [kasaGun, setKasaGun] = useState<KasaGun | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ── Geçmiş ───────────────────────────────────────────────────
   const [gecmis, setGecmis]                   = useState<KasaGun[]>([]);
   const [gecmisGorunuyor, setGecmisGorunuyor] = useState(false);
   const [gecmisDetay, setGecmisDetay]         = useState<GecmisDetay | null>(null);
@@ -410,16 +393,13 @@ const Kasa: React.FC = () => {
   const [tarihFiltreHata, setTarihFiltreHata] = useState('');
   const [gecmisSayfa, setGecmisSayfa]         = useState(1);
 
-  // ── Bugünkü tablar ────────────────────────────────────────────
   const [aktifTab, setAktifTab] = useState<AktifTab>('hareketler');
 
-  // ── Satışlar & Tahsilatlar ────────────────────────────────────
   const [satisOzet, setSatisOzet]               = useState<KasaSatisOzet | null>(null);
   const [satisYukleniyor, setSatisYukleniyor]   = useState(false);
   const [tahsilatOzet, setTahsilatOzet]             = useState<KasaTahsilatOzet | null>(null);
   const [tahsilatYukleniyor, setTahsilatYukleniyor] = useState(false);
 
-  // ── Hareket ekleme formu ──────────────────────────────────────
   const [eklemeModu, setEklemeModu] = useState(false);
   const [hTip, setHTip]             = useState<KasaHareketTipi>(KasaHareketTipi.GIDER);
   const [hAciklama, setHAciklama]   = useState('');
@@ -428,14 +408,12 @@ const Kasa: React.FC = () => {
   const [hNot, setHNot]             = useState('');
   const [formHata, setFormHata]     = useState('');
 
-  // ── Admin çıkış formu ─────────────────────────────────────────
   const [adminModu, setAdminModu]   = useState(false);
   const [adminId, setAdminId]       = useState(ADMIN_LISTESI[0]?.id || '');
   const [adminTutar, setAdminTutar] = useState<number>(0);
   const [adminNot, setAdminNot]     = useState('');
   const [adminHata, setAdminHata]   = useState('');
 
-  // 5️⃣ Stok Hareketleri (günlük log)
   const [stokHareketler, setStokHareketler] = useState<StokHareket[]>([]);
   const [stokYukleniyor, setStokYukleniyor] = useState(false);
   const [stokEklemeModu, setStokEklemeModu] = useState(false);
@@ -447,12 +425,11 @@ const Kasa: React.FC = () => {
   const [stokNot, setStokNot]               = useState('');
   const [stokHata, setStokHata]             = useState('');
 
-  // 5️⃣ Mağaza Stoğu (kalıcı, devir daim)
   const [magazaStok, setMagazaStok]           = useState<MagazaStokKaydi[]>([]);
   const [magazaStokYukleniyor, setMagazaStokYukleniyor] = useState(false);
 
   // ─────────────────────────────────────────────────────────────
-  //  DATA LOAD — tümü aktifSubeKodu'na bağlı
+  //  DATA LOAD
   // ─────────────────────────────────────────────────────────────
 
   const loadKasa = useCallback(async () => {
@@ -464,7 +441,7 @@ const Kasa: React.FC = () => {
         `${currentUser.ad} ${currentUser.soyad}`,
       );
       setKasaGun(gun);
-      const gecmisData = await getKasaGecmisi(aktifSubeKodu, 90); // Batch 2-3: 365 → 90 gün
+      const gecmisData = await getKasaGecmisi(aktifSubeKodu, 90);
       setGecmis(gecmisData.filter(g => g.gun !== gun?.gun));
     } catch (err) {
       console.error('Kasa yüklenemedi:', err);
@@ -493,7 +470,6 @@ const Kasa: React.FC = () => {
     finally { setTahsilatYukleniyor(false); }
   }, [currentUser, kasaGun, aktifSubeKodu]);
 
-  // Günlük stok log (stokHareketler koleksiyonu)
   const loadStokHareketler = useCallback(async () => {
     if (!aktifSubeKodu) return;
     setStokYukleniyor(true);
@@ -516,7 +492,6 @@ const Kasa: React.FC = () => {
     finally { setStokYukleniyor(false); }
   }, [aktifSubeKodu]);
 
-  // 5️⃣ Kalıcı mağaza stoğu (devir daim)
   const loadMagazaStok = useCallback(async () => {
     if (!aktifSubeKodu) return;
     setMagazaStokYukleniyor(true);
@@ -535,7 +510,6 @@ const Kasa: React.FC = () => {
     finally { setMagazaStokYukleniyor(false); }
   }, [aktifSubeKodu]);
 
-  // Şube değişince tüm verileri sıfırla ve yeniden yükle
   useEffect(() => {
     if (!currentUser) { navigate('/login'); return; }
     setSatisOzet(null);
@@ -547,9 +521,12 @@ const Kasa: React.FC = () => {
     loadKasa();
   }, [aktifSubeKodu, currentUser]);
 
+  // ✅ v4 DEĞİŞİKLİK 1:
+  // Tahsilatlar sekmesinde !tahsilatOzet koşulu kaldırıldı.
+  // Sekmeye her gelindiğinde taze veri çekilir.
   useEffect(() => {
-    if (aktifTab === 'satislar' && !satisOzet)       loadSatislar();
-    if (aktifTab === 'tahsilatlar' && !tahsilatOzet) loadTahsilatlar();
+    if (aktifTab === 'satislar' && !satisOzet) loadSatislar();
+    if (aktifTab === 'tahsilatlar')            loadTahsilatlar(); // ← !tahsilatOzet koşulu kaldırıldı
     if (aktifTab === 'urun') {
       loadStokHareketler();
       loadMagazaStok();
@@ -716,7 +693,7 @@ const Kasa: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────
-  //  5️⃣ STOK HAREKETİ EKLE + MAĞAZA STOĞU GÜNCELLE
+  //  STOK HAREKETİ EKLE
   // ─────────────────────────────────────────────────────────────
 
   const handleStokEkle = async (e: React.FormEvent) => {
@@ -729,10 +706,6 @@ const Kasa: React.FC = () => {
 
     const subeKoduAnlik = aktifSubeKodu;
     const sube = getSubeByKod(subeKoduAnlik as any);
-
-    // ✅ P0-6: Debug log kaldırıldı
-
-
 
     if (!sube) {
       setStokHata(`Şube bulunamadı! (kod: ${subeKoduAnlik})`);
@@ -750,7 +723,6 @@ const Kasa: React.FC = () => {
     try {
       const stokRef = doc(db, `subeler/${sube.dbPath}/magazaStok`, kod);
 
-      // 1. Günlük stok hareketi log
       await addDoc(collection(db, `subeler/${sube.dbPath}/stokHareketler`), {
         tip: tipAnlik,
         urunKodu: kod,
@@ -764,16 +736,11 @@ const Kasa: React.FC = () => {
         subeKodu: subeKoduAnlik,
       });
 
-      // 2. Kalıcı stok — runTransaction ile atomic güncelleme
-      const magazaStokPath = `subeler/${sube.dbPath}/magazaStok`;
-      // ✅ P0-6: Debug log kaldırıldı
-
       await runTransaction(db, async (transaction) => {
         const mevcut = await transaction.get(stokRef);
         const mevcutAdet = mevcut.exists() ? (mevcut.data().adet ?? 0) : 0;
         const mevcutAd   = mevcut.exists() ? (mevcut.data().urunAdi ?? '') : '';
         const yeniAdet = tipAnlik === 'GELEN' ? mevcutAdet + adetAnlik : mevcutAdet - adetAnlik;
-        // ✅ P0-6: Debug log kaldırıldı
         transaction.set(stokRef, {
           urunKodu: kod,
           urunAdi: adAnlik || mevcutAd,
@@ -783,11 +750,9 @@ const Kasa: React.FC = () => {
         });
       });
 
-      // 3. State sıfırla
       setStokKod(''); setStokAd(''); setStokAdet(1); setStokMustieri(''); setStokNot('');
       setStokEklemeModu(false);
 
-      // 4. Firestore'dan taze veri çek (sırayla, race condition yok)
       await loadStokHareketler();
       await loadMagazaStok();
 
@@ -847,7 +812,6 @@ const Kasa: React.FC = () => {
         <div className="kasa-header-left">
           <button onClick={() => navigate('/dashboard')} className="btn-back">← Geri</button>
           <h1>Kasa Yönetimi</h1>
-          {/* 8️⃣ Admin şube seçici */}
           {isAdmin && (
             <select
               value={seciliSubeKodu}
@@ -883,7 +847,6 @@ const Kasa: React.FC = () => {
       {/* ═══════════════════════════════════════════════════════ */}
       {!gecmisGorunuyor ? (
 
-        /* ─────────── GÜNLÜK KASA ─────────── */
         <div className="kasa-gunluk">
           {!kasaGun ? (
             <div className="empty-hareket">
@@ -1116,9 +1079,10 @@ const Kasa: React.FC = () => {
               {/* ══ TAB: TAHSİLATLAR ══ */}
               {aktifTab === 'tahsilatlar' && (
                 <div className="kasa-hareketler">
+                  {/* ✅ v4 DEĞİŞİKLİK 2: tarih-badge → 🔄 Yenile butonu */}
                   <div className="hareketler-header">
                     <h2>💰 Tahsilatlar — {formatGun(kasaGun.gun)}</h2>
-                    <span className="tarih-badge">{formatGun(kasaGun.gun)}</span>
+                    <button onClick={loadTahsilatlar} className="btn-filtre aktif">🔄 Yenile</button>
                   </div>
                   <div className="kasa-bilgi-notu">
                     📅 <strong>Bugün</strong> alınan ödemeler (ödeme kayıt tarihi = bugün).
@@ -1262,11 +1226,10 @@ const Kasa: React.FC = () => {
                 </div>
               )}
 
-              {/* ══ TAB: 5️⃣ GELEN / ÇIKAN ÜRÜN + MAĞAZA STOĞU ══ */}
+              {/* ══ TAB: GELEN / ÇIKAN ÜRÜN ══ */}
               {aktifTab === 'urun' && (
                 <div className="urun-tab-grid">
 
-                  {/* Sol: Gelen/Çıkan Ürün */}
                   <div className="kasa-hareketler">
                     <div className="hareketler-header">
                       <h2>📦 Gelen / Çıkan Ürün — Bugünkü Hareketler</h2>
@@ -1359,7 +1322,6 @@ const Kasa: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Sağ: 5️⃣ Mağaza Stoğu Paneli (devir daim) */}
                   <div className="magaza-stok-panel">
                     <div className="magaza-stok-header">
                       <h3>🏪 Mağaza Stoğu</h3>
@@ -1404,7 +1366,6 @@ const Kasa: React.FC = () => {
             <h2>Geçmiş Kasa Kayıtları {aktifSube ? `— ${aktifSube.ad}` : ''}</h2>
           </div>
 
-          {/* Tarih Filtresi */}
           <div style={{
             display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap',
             padding: '16px 20px', background: 'var(--gray-50)',

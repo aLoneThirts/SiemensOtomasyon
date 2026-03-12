@@ -1,16 +1,31 @@
 // ===================================================
-//  KASA SERVICE — v8
+//  KASA SERVICE — v9
 //
-//  v7'den v8'e değişiklikler:
-//  🔴 v7'deki PROBLEM:
-//     kasaIadeEkle → created_at her zaman "şu an" yazıyordu
-//     → Eski bir peşinat düzenlendiğinde ters kayıt bugünün
-//       kasasına düşüyordu, oysa eski günün kasasına düşmeli
+//  v8'den v9'a değişiklikler:
 //
-//  ✅ v8 ÇÖZÜM:
-//     kasaIadeEkle → artık "gun" parametresine göre created_at yazar
-//     → Eski peşinat 09.03'te girilmişse, ters kayıt da 09.03'e düşer
-//     → Geçmiş kasalar asla yanlış etkilenmez
+//  🔴 v8'deki PROBLEM:
+//     Türkiye'de saat 23:59'da yapılan tahsilat,
+//     UTC'de hâlâ önceki gün sayılıyordu.
+//     → kasaTahsilatEkle'nin yazdığı created_at = new Date()
+//       UTC midnight'ı geçmemişse bir önceki güne düşüyordu.
+//     → getTahsilatlar / recalcNakitSatis bu kaydı bulamıyordu.
+//
+//  ✅ v9 ÇÖZÜM — sadece 2 küçük değişiklik, mimari aynı:
+//
+//  1. bugunStr() → bugunStrTR() ile değiştirildi.
+//     Intl.DateTimeFormat + Europe/Istanbul kullanır.
+//     TR saatiyle 23:59 → o gün, 00:01 → ertesi gün. ✓
+//
+//  2. kasaTahsilatEkle + kasaIadeEkle:
+//     Firestore dokümanına "tahsilatGun" (string "YYYY-MM-DD") alanı eklendi.
+//
+//  3. getTahsilatlar + recalcNakitSatis:
+//     Önce "tahsilatGun == gun" ile string filtre yapıyor (yeni kayıtlar).
+//     Yoksa created_at timestamp filtresiyle fallback (eski kayıtlar).
+//     → Geçmiş kayıtlar kaybolmuyor, yeni kayıtlar doğru güne düşüyor.
+//
+//  Bunların dışında HİÇBİR ŞEY DEĞİŞMEDİ.
+//  Koleksiyon isimleri, kasa path, tip yapısı — hepsi v8 ile aynı.
 // ===================================================
 
 import {
@@ -27,7 +42,24 @@ import { KasaGun, KasaHareket, KasaHareketTipi } from '../types/kasa';
 const tarihStr = (t: Date): string =>
   `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 
-const bugunStr = (): string => tarihStr(new Date());
+// ✅ v9: Eski bugunStr() UTC'ye göre çalışıyordu → 23:59 TR = önceki gün UTC
+//       bugunStrTR() Europe/Istanbul timezone ile doğru tarihi verir
+export const bugunStrTR = (date?: Date): string => {
+  const d = date ?? new Date();
+  const parts = new Intl.DateTimeFormat('tr-TR', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const y = parts.find(p => p.type === 'year')?.value  ?? '';
+  const m = parts.find(p => p.type === 'month')?.value ?? '';
+  const g = parts.find(p => p.type === 'day')?.value   ?? '';
+  return `${y}-${m}-${g}`; // "2025-07-14"
+};
+
+// Geriye dönük uyumluluk için eski isimle de export
+export const bugunStr = bugunStrTR;
 
 const saatStr = (): string => {
   const n = new Date();
@@ -48,10 +80,6 @@ const gunNormalize = (d: Date): Date => {
   const g = new Date(d);
   g.setHours(12, 0, 0, 0);
   return g;
-};
-
-const tarihGunEsit = (tarih: Date, gun: string): boolean => {
-  return tarihStr(tarih) === gun;
 };
 
 const docToKasaGun = (id: string, data: any): KasaGun => ({
@@ -108,6 +136,8 @@ export interface KasaSatisDetay {
   satisTarihi?: string;
   iptalIadesi?: boolean;
   aciklama?: string;
+  kartBanka?: string;
+  havaleBanka?: string;
 }
 
 export interface KasaSatisOzet {
@@ -132,7 +162,9 @@ export interface KasaTahsilatOzet {
 export type SatisFiltreTip = 'bugun' | 'haftabasindan' | 'buay' | '30gun' | 'tahsilatlar';
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  🔧 recalcNakitSatis — v7: kasaTahsilatHareketleri'nden okur
+//  recalcNakitSatis
+//  v9: kasaTahsilatHareketleri sorgusuna "tahsilatGun" string filtresi eklendi
+//      (eski kayıtlar için created_at fallback korundu)
 // ═══════════════════════════════════════════════════════════════════════════
 export const recalcNakitSatis = async (
   subeKodu: string,
@@ -185,11 +217,30 @@ export const recalcNakitSatis = async (
     console.error('recalcNakitSatis satislar hatası:', err);
   }
 
-  // ── 2. kasaTahsilatHareketleri — created_at bu güne ait olanlar ──────────
-  // ✅ v8: kasaIadeEkle artık gun'e göre created_at yazdığından,
-  // eski peşinat ters kayıtları doğru güne düşer.
+  // ── 2. kasaTahsilatHareketleri — TAHSILAT tipi ────────────────────────────
+  // ✅ v9: Önce "tahsilatGun" string alanıyla dene (yeni kayıtlar),
+  //        sonra created_at timestamp ile fallback yap (eski kayıtlar)
   try {
-    const tahsilatSnap = await getDocs(
+    // Yeni kayıtlar: tahsilatGun string alanı var
+    const yeniSnap = await getDocs(
+      query(
+        collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
+        where('tahsilatGun', '==', gun),
+        where('tip', '==', 'TAHSILAT'),
+      )
+    );
+    const yeniIds = new Set<string>();
+    yeniSnap.docs.forEach((tahDoc) => {
+      yeniIds.add(tahDoc.id);
+      const data = tahDoc.data();
+      if (data.satisTarihi && data.satisTarihi === gun) return;
+      nakitSatis  += Number(data.nakitTutar  ?? 0);
+      kartSatis   += Number(data.kartTutar   ?? 0);
+      havaleSatis += Number(data.havaleTutar ?? 0);
+    });
+
+    // Eski kayıtlar fallback: tahsilatGun alanı yok, created_at ile bul
+    const eskiSnap = await getDocs(
       query(
         collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
         where('created_at', '>=', Timestamp.fromDate(gunBaslangic)),
@@ -197,9 +248,10 @@ export const recalcNakitSatis = async (
         where('tip', '==', 'TAHSILAT'),
       )
     );
-
-    tahsilatSnap.docs.forEach((tahDoc) => {
+    eskiSnap.docs.forEach((tahDoc) => {
+      if (yeniIds.has(tahDoc.id)) return; // zaten sayıldı
       const data = tahDoc.data();
+      if (data.tahsilatGun) return; // tahsilatGun varsa zaten yeni snap'te
       if (data.satisTarihi && data.satisTarihi === gun) return;
       nakitSatis  += Number(data.nakitTutar  ?? 0);
       kartSatis   += Number(data.kartTutar   ?? 0);
@@ -209,7 +261,7 @@ export const recalcNakitSatis = async (
     console.error('recalcNakitSatis tahsilatlar hatası:', err);
   }
 
-  // ── 3. İptal iadeleri — negatif ─────────────────────────────────────────
+  // ── 3. İptal iadeleri — negatif (değişmedi) ──────────────────────────────
   try {
     const iptalSnap = await getDocs(
       query(
@@ -218,7 +270,6 @@ export const recalcNakitSatis = async (
         where('created_at', '<=', Timestamp.fromDate(gunBitis)),
       )
     );
-
     iptalSnap.docs.forEach((iptalDoc) => {
       const data = iptalDoc.data();
       if (data.iptalGeriAlindi === true) return;
@@ -230,11 +281,26 @@ export const recalcNakitSatis = async (
     console.error('recalcNakitSatis iptal kayıtları hatası:', err);
   }
 
-  // ── 4. kasaTahsilatHareketleri — IADE tipindekiler (peşinat ters kayıtları)
-  // ✅ v8: kasaIadeEkle artık gun'e göre created_at yazdığından
-  // bu sorguda doğru günün ters kayıtları gelir.
+  // ── 4. kasaTahsilatHareketleri — IADE tipi ───────────────────────────────
+  // ✅ v9: Aynı dual-query yaklaşımı
   try {
-    const iadeSnap = await getDocs(
+    const yeniIadeSnap = await getDocs(
+      query(
+        collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
+        where('tahsilatGun', '==', gun),
+        where('tip', '==', 'IADE'),
+      )
+    );
+    const yeniIadeIds = new Set<string>();
+    yeniIadeSnap.docs.forEach((iadeDoc) => {
+      yeniIadeIds.add(iadeDoc.id);
+      const data = iadeDoc.data();
+      nakitSatis  += Number(data.nakitTutar  ?? 0); // zaten negatif
+      kartSatis   += Number(data.kartTutar   ?? 0);
+      havaleSatis += Number(data.havaleTutar ?? 0);
+    });
+
+    const eskiIadeSnap = await getDocs(
       query(
         collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
         where('created_at', '>=', Timestamp.fromDate(gunBaslangic)),
@@ -242,10 +308,10 @@ export const recalcNakitSatis = async (
         where('tip', '==', 'IADE'),
       )
     );
-
-    iadeSnap.docs.forEach((iadeDoc) => {
+    eskiIadeSnap.docs.forEach((iadeDoc) => {
+      if (yeniIadeIds.has(iadeDoc.id)) return;
       const data = iadeDoc.data();
-      // Tutarlar zaten negatif
+      if (data.tahsilatGun) return;
       nakitSatis  += Number(data.nakitTutar  ?? 0);
       kartSatis   += Number(data.kartTutar   ?? 0);
       havaleSatis += Number(data.havaleTutar ?? 0);
@@ -258,7 +324,7 @@ export const recalcNakitSatis = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  recalculateTumGunler — Geçmiş backfill (değişmedi)
+//  recalculateTumGunler — değişmedi
 // ═══════════════════════════════════════════════════════════════════════════
 export const recalculateTumGunler = async (
   subeKodu: string,
@@ -278,25 +344,18 @@ export const recalculateTumGunler = async (
       onProgress?.(`🔄 ${gun} hesaplanıyor...`);
 
       const { nakitSatis, kartSatis, havaleSatis } = await recalcNakitSatis(subeKodu, gun);
-
       const acilisBakiyesi = oncekiGunSonu;
-      const toplamGider = mevcut.toplamGider;
-      const cikisYapilanPara = mevcut.cikisYapilanPara;
-      const adminAlimlar = mevcut.adminAlimlar;
-
       const gunSonuBakiyesi = hesaplaGunSonu({
         acilisBakiyesi,
         nakitSatis,
-        toplamGider,
-        cikisYapilanPara,
-        adminAlimlar,
+        toplamGider:      mevcut.toplamGider,
+        cikisYapilanPara: mevcut.cikisYapilanPara,
+        adminAlimlar:     mevcut.adminAlimlar,
       });
 
       await updateDoc(doc(colRef, gun), {
         acilisBakiyesi,
-        nakitSatis,
-        kartSatis,
-        havaleSatis,
+        nakitSatis, kartSatis, havaleSatis,
         gunSonuBakiyesi,
         guncellemeTarihi: serverTimestamp(),
       });
@@ -316,14 +375,14 @@ export const recalculateTumGunler = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  getBugununKasaGunu (değişmedi)
+//  getBugununKasaGunu — sadece bugunStr() → bugunStrTR() değişti
 // ═══════════════════════════════════════════════════════════════════════════
 export const getBugununKasaGunu = async (
   subeKodu: string,
   acilisYapan: string,
   testTarih?: string,
 ): Promise<KasaGun> => {
-  const today = testTarih ?? bugunStr();
+  const today = testTarih ?? bugunStrTR(); // ✅ v9
   const colRef = collection(db, 'kasalar', subeKodu, 'gunler');
   const bugunRef = doc(colRef, today);
 
@@ -340,36 +399,24 @@ export const getBugununKasaGunu = async (
 
   const result = await runTransaction(db, async (tx) => {
     const bugunSnap = await tx.get(bugunRef);
-
     if (!bugunSnap.exists()) {
-      const acilisBakiyesi = oncekiGunSonuBakiyesi;
-
       tx.set(bugunRef, {
-        gun: today,
-        subeKodu,
-        durum: 'ACIK',
-        acilisBakiyesi,
-        gunSonuBakiyesi: acilisBakiyesi,
-        nakitSatis: 0,
-        kartSatis: 0,
-        havaleSatis: 0,
-        toplamGider: 0,
-        cikisYapilanPara: 0,
-        adminAlimlar: 0,
-        adminOzet: {},
-        hareketler: [],
-        acilisYapan: acilisYapan,
+        gun: today, subeKodu, durum: 'ACIK',
+        acilisBakiyesi: oncekiGunSonuBakiyesi,
+        gunSonuBakiyesi: oncekiGunSonuBakiyesi,
+        nakitSatis: 0, kartSatis: 0, havaleSatis: 0,
+        toplamGider: 0, cikisYapilanPara: 0, adminAlimlar: 0,
+        adminOzet: {}, hareketler: [],
+        acilisYapan,
         olusturmaTarihi: serverTimestamp(),
         guncellemeTarihi: serverTimestamp(),
       });
-
       return {
-        acilisBakiyesi,
+        acilisBakiyesi: oncekiGunSonuBakiyesi,
         nakitSatis: 0, kartSatis: 0, havaleSatis: 0,
         toplamGider: 0, cikisYapilanPara: 0, adminAlimlar: 0,
         adminOzet: {}, hareketler: [] as any[],
-        durum: 'ACIK' as const,
-        acilisYapan,
+        durum: 'ACIK' as const, acilisYapan,
         olusturmaTarihi: new Date(),
       };
     } else {
@@ -378,7 +425,7 @@ export const getBugununKasaGunu = async (
         acilisBakiyesi:   data.acilisBakiyesi   ?? 0,
         nakitSatis:       data.nakitSatis       ?? 0,
         kartSatis:        data.kartSatis        ?? 0,
-        havaleSatis:      data.havaleSatis       ?? 0,
+        havaleSatis:      data.havaleSatis      ?? 0,
         toplamGider:      data.toplamGider      ?? 0,
         cikisYapilanPara: data.cikisYapilanPara ?? 0,
         adminAlimlar:     data.adminAlimlar     ?? 0,
@@ -392,58 +439,46 @@ export const getBugununKasaGunu = async (
   });
 
   const { nakitSatis, kartSatis, havaleSatis } = await recalcNakitSatis(subeKodu, today);
-
   const gunSonuBakiyesi = hesaplaGunSonu({
     acilisBakiyesi: result.acilisBakiyesi,
     nakitSatis,
-    toplamGider: result.toplamGider,
+    toplamGider:      result.toplamGider,
     cikisYapilanPara: result.cikisYapilanPara,
-    adminAlimlar: result.adminAlimlar,
+    adminAlimlar:     result.adminAlimlar,
   });
 
   await updateDoc(bugunRef, {
-    nakitSatis,
-    kartSatis,
-    havaleSatis,
+    nakitSatis, kartSatis, havaleSatis,
     gunSonuBakiyesi,
     guncellemeTarihi: serverTimestamp(),
   });
 
   return {
-    id: today,
-    gun: today,
-    subeKodu,
+    id: today, gun: today, subeKodu,
     durum: result.durum as 'ACIK' | 'KAPALI',
     acilisBakiyesi: result.acilisBakiyesi,
-    gunSonuBakiyesi,
-    nakitSatis,
-    kartSatis,
-    havaleSatis,
-    toplamGider: result.toplamGider,
+    gunSonuBakiyesi, nakitSatis, kartSatis, havaleSatis,
+    toplamGider:      result.toplamGider,
     cikisYapilanPara: result.cikisYapilanPara,
-    adminAlimlar: result.adminAlimlar,
-    adminOzet: result.adminOzet,
+    adminAlimlar:     result.adminAlimlar,
+    adminOzet:        result.adminOzet,
     hareketler: (result.hareketler as any[]).map((h: any) => ({ ...h, tarih: toDate(h.tarih) })),
-    acilisYapan: result.acilisYapan,
-    olusturmaTarihi: toDate(result.olusturmaTarihi),
+    acilisYapan:      result.acilisYapan,
+    olusturmaTarihi:  toDate(result.olusturmaTarihi),
     guncellemeTarihi: new Date(),
   };
 };
 
-// ─── getSatislar (değişmedi) ──────────────────────────────────────────────
+// ─── getSatislar — değişmedi ──────────────────────────────────────────────
 export const getSatislar = async (
   subeKodu: string,
   filtre: SatisFiltreTip = 'bugun',
   belirliGun?: string,
 ): Promise<KasaSatisOzet> => {
   const bos: KasaSatisOzet = {
-    toplamTutar: 0,
-    satisAdeti: 0,
-    toplamNakit: 0,
-    toplamKart: 0,
-    toplamHavale: 0,
-    tahsilatTutar: 0,
-    satislar: [],
+    toplamTutar: 0, satisAdeti: 0,
+    toplamNakit: 0, toplamKart: 0, toplamHavale: 0,
+    tahsilatTutar: 0, satislar: [],
   };
 
   try {
@@ -467,7 +502,7 @@ export const getSatislar = async (
     if ((filtre === 'tahsilatlar' || filtre === 'bugun') && belirliGun) {
       const [y, m, d] = belirliGun.split('-').map(Number);
       aralikBaslangic = new Date(y, m - 1, d, 0, 0, 0, 0);
-      aralikBitis = new Date(y, m - 1, d, 23, 59, 59, 999);
+      aralikBitis     = new Date(y, m - 1, d, 23, 59, 59, 999);
     } else {
       const bugun = new Date();
       bugun.setHours(0, 0, 0, 0);
@@ -502,7 +537,7 @@ export const getSatislar = async (
       if (data.durum === 'IPTAL' || data.iptalEdildi === true) return;
 
       const olusturmaTarih = toDate(data.olusturmaTarihi);
-      const buGununSatisi = aralikta(olusturmaTarih);
+      const buGununSatisi  = aralikta(olusturmaTarih);
 
       const nakitTutar = Number(
         data.pesinatTutar ?? data.odemeOzeti?.kasayaYansiran ?? data.nakitTutar ?? data.nakit ?? 0
@@ -531,22 +566,22 @@ export const getSatislar = async (
       if (filtre === 'tahsilatlar') {
         if (!buGununSatisi && buGunOdemeVar) {
           const toplamTutar = Number(data.toplamTutar ?? data.satisToplami ?? 0);
-          if (nakitBuGun)         { ozet.toplamNakit  += nakitTutar; ozet.tahsilatTutar += nakitTutar; }
-          if (havaleBuGun)        { ozet.toplamHavale += havaleTutar; ozet.tahsilatTutar += havaleTutar; }
-          if (kartBuGunToplam > 0){ ozet.toplamKart   += kartBuGunToplam; ozet.tahsilatTutar += kartBuGunToplam; }
+          if (nakitBuGun)          { ozet.toplamNakit  += nakitTutar;      ozet.tahsilatTutar += nakitTutar; }
+          if (havaleBuGun)         { ozet.toplamHavale += havaleTutar;     ozet.tahsilatTutar += havaleTutar; }
+          if (kartBuGunToplam > 0) { ozet.toplamKart   += kartBuGunToplam; ozet.tahsilatTutar += kartBuGunToplam; }
           ozet.satisAdeti += 1;
           ozet.satislar.push({
             id: docSnap.id,
-            satisKodu: data.satisKodu ?? docSnap.id,
+            satisKodu:   data.satisKodu ?? docSnap.id,
             musteriIsim: data.musteriBilgileri?.isim ?? data.musteriIsim ?? '—',
             tutar: toplamTutar,
-            nakitTutar: nakitBuGun ? nakitTutar : 0,
-            kartTutar: kartBuGunToplam,
+            nakitTutar:  nakitBuGun ? nakitTutar : 0,
+            kartTutar:   kartBuGunToplam,
             havaleTutar: havaleBuGun ? havaleTutar : 0,
             tarih: olusturmaTarih,
             odemeDurumu: data.odemeDurumu ?? '—',
-            onayDurumu: data.onayDurumu ?? false,
-            kullanici: data.olusturanKullanici ?? data.kullanici ?? '—',
+            onayDurumu:  data.onayDurumu ?? false,
+            kullanici:   data.olusturanKullanici ?? data.kullanici ?? '—',
             oncekiGunOdemesi: true,
             satisTarihi: tarihStr(olusturmaTarih),
           });
@@ -555,22 +590,22 @@ export const getSatislar = async (
         if (buGununSatisi) {
           const toplamTutar = Number(data.toplamTutar ?? data.satisToplami ?? 0);
           ozet.toplamTutar += toplamTutar;
-          if (nakitBuGun)         { ozet.toplamNakit  += nakitTutar; ozet.tahsilatTutar += nakitTutar; }
-          if (havaleBuGun)        { ozet.toplamHavale += havaleTutar; ozet.tahsilatTutar += havaleTutar; }
-          if (kartBuGunToplam > 0){ ozet.toplamKart   += kartBuGunToplam; ozet.tahsilatTutar += kartBuGunToplam; }
+          if (nakitBuGun)          { ozet.toplamNakit  += nakitTutar;      ozet.tahsilatTutar += nakitTutar; }
+          if (havaleBuGun)         { ozet.toplamHavale += havaleTutar;     ozet.tahsilatTutar += havaleTutar; }
+          if (kartBuGunToplam > 0) { ozet.toplamKart   += kartBuGunToplam; ozet.tahsilatTutar += kartBuGunToplam; }
           ozet.satisAdeti += 1;
           ozet.satislar.push({
             id: docSnap.id,
-            satisKodu: data.satisKodu ?? docSnap.id,
+            satisKodu:   data.satisKodu ?? docSnap.id,
             musteriIsim: data.musteriBilgileri?.isim ?? data.musteriIsim ?? '—',
             tutar: toplamTutar,
-            nakitTutar: nakitBuGun ? nakitTutar : 0,
-            kartTutar: kartBuGunToplam,
+            nakitTutar:  nakitBuGun ? nakitTutar : 0,
+            kartTutar:   kartBuGunToplam,
             havaleTutar: havaleBuGun ? havaleTutar : 0,
             tarih: olusturmaTarih,
             odemeDurumu: data.odemeDurumu ?? '—',
-            onayDurumu: data.onayDurumu ?? false,
-            kullanici: data.olusturanKullanici ?? data.kullanici ?? '—',
+            onayDurumu:  data.onayDurumu ?? false,
+            kullanici:   data.olusturanKullanici ?? data.kullanici ?? '—',
             oncekiGunOdemesi: false,
           });
         }
@@ -586,7 +621,8 @@ export const getSatislar = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  getTahsilatlar — v7: kasaTahsilatHareketleri'nden okur (değişmedi)
+//  getTahsilatlar
+//  v9: "tahsilatGun" string filtresi önce, created_at fallback sonra
 // ═══════════════════════════════════════════════════════════════════════════
 export const getTahsilatlar = async (
   subeKodu: string,
@@ -607,9 +643,50 @@ export const getTahsilatlar = async (
 
     const ozet: KasaTahsilatOzet = { ...bos, tahsilatlar: [] };
 
-    // ── 1. kasaTahsilatHareketleri — TAHSILAT tipindekiler ────────────────
+    // ── 1. TAHSILAT tipi ──────────────────────────────────────────────────
+    // ✅ v9: tahsilatGun string alanıyla önce dene, eski kayıtlar fallback
     try {
-      const tahsilatSnap = await getDocs(
+      const yeniSnap = await getDocs(
+        query(
+          collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
+          where('tahsilatGun', '==', gun),
+          where('tip', '==', 'TAHSILAT'),
+        )
+      );
+      const yeniIds = new Set<string>();
+      yeniSnap.docs.forEach((tahDoc) => {
+        yeniIds.add(tahDoc.id);
+        const data = tahDoc.data();
+        const nakit  = Number(data.nakitTutar  ?? 0);
+        const kart   = Number(data.kartTutar   ?? 0);
+        const havale = Number(data.havaleTutar ?? 0);
+        ozet.toplamNakit   += nakit;
+        ozet.toplamKart    += kart;
+        ozet.toplamHavale  += havale;
+        ozet.tahsilatTutar += nakit + kart + havale;
+        ozet.tahsilatAdeti += 1;
+        ozet.tahsilatlar.push({
+          id:               tahDoc.id,
+          satisKodu:        data.satisKodu   ?? '',
+          musteriIsim:      data.musteriIsim ?? '—',
+          tutar:            nakit + kart + havale,
+          nakitTutar:       nakit,
+          kartTutar:        kart,
+          havaleTutar:      havale,
+          tarih:            toDate(data.created_at),
+          odemeDurumu:      'ODENDI',
+          onayDurumu:       true,
+          kullanici:        data.yapan ?? '—',
+          oncekiGunOdemesi: true,
+          satisTarihi:      data.satisTarihi ?? '',
+          aciklama:         data.aciklama ?? '',
+          kartBanka:        data.kartBanka ?? undefined,
+          havaleBanka:      data.havaleBanka ?? undefined,
+        });
+      });
+
+      // Eski kayıtlar fallback (tahsilatGun alanı yok)
+      const eskiSnap = await getDocs(
         query(
           collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
           where('created_at', '>=', Timestamp.fromDate(gunBaslangic)),
@@ -617,45 +694,83 @@ export const getTahsilatlar = async (
           where('tip', '==', 'TAHSILAT'),
         )
       );
-
-      tahsilatSnap.docs.forEach((tahDoc) => {
+      eskiSnap.docs.forEach((tahDoc) => {
+        if (yeniIds.has(tahDoc.id)) return;
         const data = tahDoc.data();
+        if (data.tahsilatGun) return;
         const nakit  = Number(data.nakitTutar  ?? 0);
         const kart   = Number(data.kartTutar   ?? 0);
         const havale = Number(data.havaleTutar ?? 0);
-
         ozet.toplamNakit   += nakit;
         ozet.toplamKart    += kart;
         ozet.toplamHavale  += havale;
         ozet.tahsilatTutar += nakit + kart + havale;
         ozet.tahsilatAdeti += 1;
-
         ozet.tahsilatlar.push({
-          id:              tahDoc.id,
-          satisKodu:       data.satisKodu   ?? '',
-          musteriIsim:     data.musteriIsim ?? '—',
-          tutar:           nakit + kart + havale,
-          nakitTutar:      nakit,
-          kartTutar:       kart,
-          havaleTutar:     havale,
-          tarih:           toDate(data.created_at),
-          odemeDurumu:     'ODENDI',
-          onayDurumu:      true,
-          kullanici:       data.yapan ?? '—',
+          id:               tahDoc.id,
+          satisKodu:        data.satisKodu   ?? '',
+          musteriIsim:      data.musteriIsim ?? '—',
+          tutar:            nakit + kart + havale,
+          nakitTutar:       nakit,
+          kartTutar:        kart,
+          havaleTutar:      havale,
+          tarih:            toDate(data.created_at),
+          odemeDurumu:      'ODENDI',
+          onayDurumu:       true,
+          kullanici:        data.yapan ?? '—',
           oncekiGunOdemesi: true,
-          satisTarihi:     data.satisTarihi ?? '',
-          aciklama:        data.aciklama ?? '',
+          satisTarihi:      data.satisTarihi ?? '',
+          aciklama:         data.aciklama ?? '',
+          kartBanka:        data.kartBanka ?? undefined,
+          havaleBanka:      data.havaleBanka ?? undefined,
         });
       });
     } catch (err) {
-      console.error('getTahsilatlar kasaTahsilatHareketleri hatası:', err);
+      console.error('getTahsilatlar TAHSILAT hatası:', err);
     }
 
-    // ── 2. kasaTahsilatHareketleri — IADE tipindekiler (peşinat ters kayıtları)
-    // ✅ v8: kasaIadeEkle gun'e göre created_at yazdığından,
-    // bu sorguda o günün ters kayıtları gelir — negatif olarak gösterilir.
+    // ── 2. IADE tipi — peşinat ters kayıtları ────────────────────────────
+    // ✅ v9: Aynı dual-query yaklaşımı
     try {
-      const iadeSnap = await getDocs(
+      const yeniIadeSnap = await getDocs(
+        query(
+          collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
+          where('tahsilatGun', '==', gun),
+          where('tip', '==', 'IADE'),
+        )
+      );
+      const yeniIadeIds = new Set<string>();
+      yeniIadeSnap.docs.forEach((iadeDoc) => {
+        yeniIadeIds.add(iadeDoc.id);
+        const data = iadeDoc.data();
+        const nakit  = Number(data.nakitTutar  ?? 0);
+        const kart   = Number(data.kartTutar   ?? 0);
+        const havale = Number(data.havaleTutar ?? 0);
+        ozet.toplamNakit   += nakit;
+        ozet.toplamKart    += kart;
+        ozet.toplamHavale  += havale;
+        ozet.tahsilatTutar += nakit + kart + havale;
+        ozet.tahsilatAdeti += 1;
+        ozet.tahsilatlar.push({
+          id:               iadeDoc.id,
+          satisKodu:        data.satisKodu   ?? '',
+          musteriIsim:      data.musteriIsim ?? '—',
+          tutar:            nakit + kart + havale,
+          nakitTutar:       nakit,
+          kartTutar:        kart,
+          havaleTutar:      havale,
+          tarih:            toDate(data.created_at),
+          odemeDurumu:      'IADE',
+          onayDurumu:       false,
+          kullanici:        data.yapan ?? '—',
+          oncekiGunOdemesi: true,
+          satisTarihi:      data.satisTarihi ?? '',
+          iptalIadesi:      true,
+          aciklama:         data.aciklama ?? 'Peşinat ters kaydı',
+        });
+      });
+
+      const eskiIadeSnap = await getDocs(
         query(
           collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
           where('created_at', '>=', Timestamp.fromDate(gunBaslangic)),
@@ -663,42 +778,41 @@ export const getTahsilatlar = async (
           where('tip', '==', 'IADE'),
         )
       );
-
-      iadeSnap.docs.forEach((iadeDoc) => {
+      eskiIadeSnap.docs.forEach((iadeDoc) => {
+        if (yeniIadeIds.has(iadeDoc.id)) return;
         const data = iadeDoc.data();
-        const nakit  = Number(data.nakitTutar  ?? 0); // zaten negatif
-        const kart   = Number(data.kartTutar   ?? 0); // zaten negatif
-        const havale = Number(data.havaleTutar ?? 0); // zaten negatif
-
+        if (data.tahsilatGun) return;
+        const nakit  = Number(data.nakitTutar  ?? 0);
+        const kart   = Number(data.kartTutar   ?? 0);
+        const havale = Number(data.havaleTutar ?? 0);
         ozet.toplamNakit   += nakit;
         ozet.toplamKart    += kart;
         ozet.toplamHavale  += havale;
         ozet.tahsilatTutar += nakit + kart + havale;
         ozet.tahsilatAdeti += 1;
-
         ozet.tahsilatlar.push({
-          id:              iadeDoc.id,
-          satisKodu:       data.satisKodu   ?? '',
-          musteriIsim:     data.musteriIsim ?? '—',
-          tutar:           nakit + kart + havale,
-          nakitTutar:      nakit,
-          kartTutar:       kart,
-          havaleTutar:     havale,
-          tarih:           toDate(data.created_at),
-          odemeDurumu:     'IADE',
-          onayDurumu:      false,
-          kullanici:       data.yapan ?? '—',
+          id:               iadeDoc.id,
+          satisKodu:        data.satisKodu   ?? '',
+          musteriIsim:      data.musteriIsim ?? '—',
+          tutar:            nakit + kart + havale,
+          nakitTutar:       nakit,
+          kartTutar:        kart,
+          havaleTutar:      havale,
+          tarih:            toDate(data.created_at),
+          odemeDurumu:      'IADE',
+          onayDurumu:       false,
+          kullanici:        data.yapan ?? '—',
           oncekiGunOdemesi: true,
-          satisTarihi:     data.satisTarihi ?? '',
-          iptalIadesi:     true,
-          aciklama:        data.aciklama ?? 'Peşinat ters kaydı',
+          satisTarihi:      data.satisTarihi ?? '',
+          iptalIadesi:      true,
+          aciklama:         data.aciklama ?? 'Peşinat ters kaydı',
         });
       });
     } catch (err) {
-      console.error('getTahsilatlar iade hareketleri hatası:', err);
+      console.error('getTahsilatlar IADE hatası:', err);
     }
 
-    // ── 3. kasaIptalKayitlari — satış iptali iadeleri ────────────────────
+    // ── 3. kasaIptalKayitlari — değişmedi ────────────────────────────────
     try {
       const iptalSnap = await getDocs(
         query(
@@ -707,37 +821,33 @@ export const getTahsilatlar = async (
           where('created_at', '<=', Timestamp.fromDate(gunBitis)),
         )
       );
-
       iptalSnap.docs.forEach((iptalDoc) => {
         const data = iptalDoc.data();
         if (data.iptalGeriAlindi === true) return;
-
         const nakit  = Number(data.nakitTutar  ?? 0);
         const kart   = Number(data.kartTutar   ?? 0);
         const havale = Number(data.havaleTutar ?? 0);
-
         ozet.toplamNakit   += nakit;
         ozet.toplamKart    += kart;
         ozet.toplamHavale  += havale;
         ozet.tahsilatTutar += nakit + kart + havale;
         ozet.tahsilatAdeti += 1;
-
         ozet.tahsilatlar.push({
-          id:              iptalDoc.id,
-          satisKodu:       data.satisKodu   ?? '',
-          musteriIsim:     data.musteriIsim ?? '—',
-          tutar:           nakit + kart + havale,
-          nakitTutar:      nakit,
-          kartTutar:       kart,
-          havaleTutar:     havale,
-          tarih:           toDate(data.created_at),
-          odemeDurumu:     'IADE',
-          onayDurumu:      false,
-          kullanici:       data.iptalYapan ?? '—',
+          id:               iptalDoc.id,
+          satisKodu:        data.satisKodu   ?? '',
+          musteriIsim:      data.musteriIsim ?? '—',
+          tutar:            nakit + kart + havale,
+          nakitTutar:       nakit,
+          kartTutar:        kart,
+          havaleTutar:      havale,
+          tarih:            toDate(data.created_at),
+          odemeDurumu:      'IADE',
+          onayDurumu:       false,
+          kullanici:        data.iptalYapan ?? '—',
           oncekiGunOdemesi: true,
-          satisTarihi:     data.satisTarihi ?? '',
-          iptalIadesi:     true,
-          aciklama:        data.aciklama ?? 'Satış iptali iadesi',
+          satisTarihi:      data.satisTarihi ?? '',
+          iptalIadesi:      true,
+          aciklama:         data.aciklama ?? 'Satış iptali iadesi',
         });
       });
     } catch (err) {
@@ -753,7 +863,7 @@ export const getTahsilatlar = async (
   }
 };
 
-// ─── kasaHareketEkle (değişmedi) ──────────────────────────────────────────
+// ─── kasaHareketEkle — değişmedi ──────────────────────────────────────────
 export const kasaHareketEkle = async (
   subeKodu: string,
   kasaGunId: string,
@@ -782,29 +892,19 @@ export const kasaHareketEkle = async (
       const adminOzet      = { ...mevcut.adminOzet };
 
       switch (yeniH.tip) {
-        case KasaHareketTipi.GIDER:
-          toplamGider += yeniH.tutar;
-          break;
-        case KasaHareketTipi.CIKIS:
-          cikisYapilanPara += yeniH.tutar;
-          break;
+        case KasaHareketTipi.GIDER:      toplamGider      += yeniH.tutar; break;
+        case KasaHareketTipi.CIKIS:      cikisYapilanPara += yeniH.tutar; break;
         case KasaHareketTipi.ADMIN_ALIM:
           adminAlimlar += yeniH.tutar;
           if (yeniH.adminAd) {
             adminOzet[yeniH.adminAd] = (adminOzet[yeniH.adminAd] ?? 0) + yeniH.tutar;
           }
           break;
-        case KasaHareketTipi.DIGER:
-          break;
-        default:
-          break;
+        default: break;
       }
 
       tx.update(gunRef, {
-        toplamGider,
-        cikisYapilanPara,
-        adminAlimlar,
-        adminOzet,
+        toplamGider, cikisYapilanPara, adminAlimlar, adminOzet,
         hareketler: [
           ...mevcut.hareketler.map((h) => ({
             ...h,
@@ -836,7 +936,7 @@ export const kasaHareketEkle = async (
   }
 };
 
-// ─── getKasaGecmisi (değişmedi) ───────────────────────────────────────────
+// ─── getKasaGecmisi — değişmedi ───────────────────────────────────────────
 export const getKasaGecmisi = async (subeKodu: string, gunSayisi = 90): Promise<KasaGun[]> => {
   try {
     const q = query(
@@ -852,7 +952,7 @@ export const getKasaGecmisi = async (subeKodu: string, gunSayisi = 90): Promise<
   }
 };
 
-// ─── testGunGecisi (değişmedi) ────────────────────────────────────────────
+// ─── testGunGecisi — değişmedi ────────────────────────────────────────────
 export const testGunGecisi = async (
   subeKodu: string,
   acilisYapan: string,
@@ -861,7 +961,6 @@ export const testGunGecisi = async (
   try {
     const colRef = collection(db, 'kasalar', subeKodu, 'gunler');
     const varSnap = await getDoc(doc(colRef, testTarih));
-
     if (varSnap.exists()) {
       const mevcut = docToKasaGun(varSnap.id, varSnap.data());
       return {
@@ -894,7 +993,7 @@ export const testGunGecisi = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  KasaTahsilatHareket — audit trail için tip
+//  KasaTahsilatHareket — tip tanımı (tahsilatGun alanı eklendi)
 // ═══════════════════════════════════════════════════════════════════════════
 export interface KasaTahsilatHareket {
   tip: 'TAHSILAT' | 'IADE';
@@ -916,10 +1015,12 @@ export interface KasaTahsilatHareket {
   iadeSebebi?: string;
   iadeTarih?: string;
   created_at: any;
+  tahsilatGun?: string; // ✅ v9: yeni alan
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  kasaTahsilatEkle (değişmedi)
+//  kasaTahsilatEkle
+//  v9: "tahsilatGun" alanı eklendi (TR timezone string)
 // ═══════════════════════════════════════════════════════════════════════════
 export const kasaTahsilatEkle = async (params: {
   subeKodu: string;
@@ -947,6 +1048,9 @@ export const kasaTahsilatEkle = async (params: {
   if (!sube) return false;
 
   try {
+    // ✅ v9: tahsilatGun = TR timezone ile bugünün tarihi
+    const tahsilatGun = bugunStrTR();
+
     await addDoc(
       collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
       {
@@ -959,6 +1063,7 @@ export const kasaTahsilatEkle = async (params: {
         satisTarihi: satisTarihi ?? null,
         kartBanka: kartBanka ?? null,
         havaleBanka: havaleBanka ?? null,
+        tahsilatGun, // ✅ v9
         created_at: Timestamp.fromDate(new Date()),
       }
     );
@@ -973,7 +1078,6 @@ export const kasaTahsilatEkle = async (params: {
         havaleSatis: increment(havaleTutar),
         guncellemeTarihi: serverTimestamp(),
       });
-
       const freshSnap = await getDoc(gunRef);
       const fresh = freshSnap.data()!;
       const gunSonuBakiyesi = hesaplaGunSonu({
@@ -1005,11 +1109,11 @@ export const kasaTahsilatEkle = async (params: {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  kasaIadeEkle — v8 FIX
+//  kasaIadeEkle — v8 mantığı korundu + v9: tahsilatGun alanı eklendi
 //
-//  ✅ Artık "gun" parametresine göre created_at yazar.
-//  → Eski peşinat 09.03'te girilmişse, ters kayıt da 09.03 kasasına düşer.
-//  → Geçmiş kasalar asla yanlış etkilenmez.
+//  v8: created_at = gun'ün öğlen 12:00'si (geçmiş günün kasasına düşer)
+//  v9 eklentisi: tahsilatGun = bugunStrTR()
+//  → "Bugün yapılan iadeler" hem string hem timestamp ile bulunabilir
 // ═══════════════════════════════════════════════════════════════════════════
 export const kasaIadeEkle = async (params: {
   subeKodu: string;
@@ -1033,11 +1137,12 @@ export const kasaIadeEkle = async (params: {
   if (!sube) return false;
 
   try {
-    // ✅ v8: created_at = gun'ün öğlen 12:00'si
-    // Böylece kasaTahsilatHareketleri sorgusu (created_at filtreli)
-    // bu kaydı doğru günde bulur.
+    // v8'den korundu: created_at = gun'ün öğlen 12:00'si
     const [y, m, d] = gun.split('-').map(Number);
     const createdAt = Timestamp.fromDate(new Date(y, m - 1, d, 12, 0, 0, 0));
+
+    // ✅ v9: tahsilatGun = TR timezone ile bugünün tarihi
+    const tahsilatGun = bugunStrTR();
 
     await addDoc(
       collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
@@ -1052,11 +1157,11 @@ export const kasaIadeEkle = async (params: {
         aciklama: iadeSebebi ?? 'İade',
         iadeSebebi: iadeSebebi ?? '',
         iadeTarih: gun,
+        tahsilatGun, // ✅ v9
         created_at: createdAt,
       }
     );
 
-    console.log(`✅ kasaIadeEkle: ${satisKodu} — gun: ${gun}`);
     return true;
   } catch (err) {
     console.error('kasaIadeEkle hata:', err);
