@@ -1,10 +1,16 @@
 // ===================================================
-//  KASA.TSX — v4 (v3 base)
-//  v3'ten farklar:
-//  1) useEffect: !tahsilatOzet koşulu kaldırıldı
-//     → Tahsilatlar sekmesine her gelindiğinde taze veri çekilir
-//     → Satış düzenlendikten sonra kasaya dönünce güncel görünür
-//  2) Tahsilatlar tab başlığı: <span className="tarih-badge"> → 🔄 Yenile butonu
+//  KASA.TSX — v5
+//
+//  v4'ten tek fark:
+//  Tahsilatlar sekmesinde DUZELTME tipi satırlar
+//  turuncu arka plan + 🔶 DÜZELTMEbadge ile gösteriliyor.
+//
+//  Renk kuralı:
+//  - TAHSILAT (yeni ödeme)  → yeşil tint, 'önceki günden' badge
+//  - IADE / iptalIadesi     → kırmızı tint, '🔴 iptal iadesi' badge
+//  - DUZELTME               → turuncu tint, '🔶 düzeltme' badge
+//
+//  Bunun dışında hiçbir şey değişmedi.
 // ===================================================
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -114,6 +120,44 @@ const getTipClass = (tip: KasaHareketTipi): string =>
     [KasaHareketTipi.DIGER]:       'diger',
   }[tip] ?? '');
 
+// ─── Tahsilat Satır Tipi Yardımcıları ────────────────────────────────────────
+
+const getTahsilatSatirTipi = (s: KasaSatisDetay): 'tahsilat' | 'iptal' | 'duzeltme' => {
+  if ((s as any).isDuzeltme === true || s.odemeDurumu === 'DUZELTME') return 'duzeltme';
+  if ((s as any).iptalIadesi === true || s.odemeDurumu === 'IADE') return 'iptal';
+  return 'tahsilat';
+};
+
+const TAHSILAT_SATIR_STYLE = {
+  tahsilat: {
+    rowStyle: {},
+    kodRenk: 'var(--teal)',
+    badgeBg: 'rgba(0,153,153,.1)',
+    badgeRenk: 'var(--teal)',
+    badgeLabel: 'önceki günden',
+    tipBadgeClass: 'nakit',
+    tutarClass: 'giris',
+  },
+  iptal: {
+    rowStyle: { background: '#fef2f2', borderLeft: '3px solid #dc2626' },
+    kodRenk: 'var(--red)',
+    badgeBg: 'rgba(220,38,38,.1)',
+    badgeRenk: 'var(--red)',
+    badgeLabel: '🔴 iptal iadesi',
+    tipBadgeClass: 'gider',
+    tutarClass: 'cikis',
+  },
+  duzeltme: {
+    rowStyle: { background: '#fffbeb', borderLeft: '3px solid #d97706' },
+    kodRenk: '#d97706',
+    badgeBg: 'rgba(217,119,6,.1)',
+    badgeRenk: '#d97706',
+    badgeLabel: '🔶 düzeltme',
+    tipBadgeClass: 'havale',
+    tutarClass: '', // signed, ayrıca hesaplanır
+  },
+} as const;
+
 // ─── Print Preview ────────────────────────────────────────────────────────────
 
 const kasaPrintPreviewYap = (params: {
@@ -181,8 +225,10 @@ const kasaPrintPreviewYap = (params: {
     </tr>`).join('');
 
   const tahsilatRows = (tahsilatlar as any[]).map(s => {
-    const isIade = s.iptalIadesi === true || s.odemeDurumu === 'IADE';
-    const rowBg  = isIade ? 'background:#fff5f5' : '';
+    const tip = getTahsilatSatirTipi(s);
+    const isIade = tip === 'iptal';
+    const isDuz  = tip === 'duzeltme';
+    const rowBg  = isIade ? 'background:#fff5f5' : isDuz ? 'background:#fffbeb' : '';
     const tutar  = (s.nakitTutar || 0) + (s.kartTutar || 0) + (s.havaleTutar || 0);
 
     let detay = '';
@@ -199,17 +245,21 @@ const kasaPrintPreviewYap = (params: {
       }
       if (s.aciklama) parcalar.push(s.aciklama);
       detay = parcalar.join(' · ');
+    } else if (isDuz) {
+      detay = `🔶 Düzeltme: ${s.aciklama || '—'}`;
     } else {
       detay = odemeDetayi(s);
     }
 
+    const renk = isIade ? '#dc2626' : isDuz ? '#d97706' : '#202124';
+
     return `
     <tr style="${rowBg}">
-      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;${isIade ? 'color:#dc2626' : ''}">${s.satisTarihi ? formatGun(s.satisTarihi) : '—'}</td>
-      <td style="font-weight:600;${isIade ? 'color:#dc2626' : ''}">${esc(s.satisKodu)}${isIade ? ' <span style="font-size:9px;background:#dc2626;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">İPTAL</span>' : ''}</td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:${renk}">${s.satisTarihi ? formatGun(s.satisTarihi) : '—'}</td>
+      <td style="font-weight:600;color:${renk}">${esc(s.satisKodu)}${isIade ? ' <span style="font-size:9px;background:#dc2626;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">İPTAL</span>' : ''}${isDuz ? ' <span style="font-size:9px;background:#d97706;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">DÜZ</span>' : ''}</td>
       <td>${esc(s.musteriIsim)}</td>
-      <td style="font-family:'IBM Plex Mono',monospace;font-weight:700;${isIade ? 'color:#dc2626' : ''}">${fTL(tutar)}</td>
-      <td style="font-size:10px;max-width:240px;${isIade ? 'color:#dc2626;font-weight:600' : 'color:#5f6368'}">${detay}</td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:${renk}">${fTL(tutar)}</td>
+      <td style="font-size:10px;max-width:240px;color:${renk}">${detay}</td>
     </tr>`;
   }).join('');
 
@@ -336,11 +386,11 @@ const kasaPrintPreviewYap = (params: {
           <td style="padding:4px 0;color:#374151;font-size:12px">↳ Havale</td>
           <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#374151">${fTL(satislar.reduce((t, s) => t + (s.havaleTutar || 0), 0))}</td>
         </tr>
-        ${tahsilatlar.length > 0 ? `
+        ${tahsilatlar.filter(s => !(s as any).iptalIadesi && !(s as any).isDuzeltme).length > 0 ? `
         <tr><td colspan="2" style="border-top:1px solid #d1fae5;padding:0;height:8px"></td></tr>
         <tr>
           <td style="padding:4px 0;color:#374151;font-size:13px">Tahsilatlar (Geçmiş Günler)</td>
-          <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:14px;color:#0369a1">${fTL(tahsilatlar.filter(s => !s.iptalIadesi).reduce((t, s) => t + (s.nakitTutar || 0) + (s.kartTutar || 0) + (s.havaleTutar || 0), 0))}</td>
+          <td style="text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:14px;color:#0369a1">${fTL(tahsilatlar.filter(s => !s.iptalIadesi && !(s as any).isDuzeltme).reduce((t, s) => t + (s.nakitTutar || 0) + (s.kartTutar || 0) + (s.havaleTutar || 0), 0))}</td>
         </tr>` : ''}
         <tr><td colspan="2" style="border-top:2px solid #16a34a;padding:0;height:8px"></td></tr>
         <tr>
@@ -436,10 +486,7 @@ const Kasa: React.FC = () => {
     if (!currentUser || !aktifSubeKodu) return;
     setLoading(true);
     try {
-      const gun = await getBugununKasaGunu(
-        aktifSubeKodu,
-        `${currentUser.ad} ${currentUser.soyad}`,
-      );
+      const gun = await getBugununKasaGunu(aktifSubeKodu, `${currentUser.ad} ${currentUser.soyad}`);
       setKasaGun(gun);
       const gecmisData = await getKasaGecmisi(aktifSubeKodu, 90);
       setGecmis(gecmisData.filter(g => g.gun !== gun?.gun));
@@ -477,14 +524,10 @@ const Kasa: React.FC = () => {
       const sube = getSubeByKod(aktifSubeKodu as any);
       if (!sube) return;
       const snap = await getDocs(
-        query(
-          collection(db, `subeler/${sube.dbPath}/stokHareketler`),
-          where('gun', '==', bugunStrLocal()),
-        )
+        query(collection(db, `subeler/${sube.dbPath}/stokHareketler`), where('gun', '==', bugunStrLocal()))
       );
       const liste: StokHareket[] = snap.docs.map(d => ({
-        id: d.id, ...d.data(),
-        tarih: d.data().tarih?.toDate?.() ?? new Date(),
+        id: d.id, ...d.data(), tarih: d.data().tarih?.toDate?.() ?? new Date(),
       } as StokHareket));
       liste.sort((a, b) => b.tarih.getTime() - a.tarih.getTime());
       setStokHareketler(liste);
@@ -500,9 +543,7 @@ const Kasa: React.FC = () => {
       if (!sube) return;
       const snap = await getDocs(collection(db, `subeler/${sube.dbPath}/magazaStok`));
       const liste: MagazaStokKaydi[] = snap.docs.map(d => ({
-        urunKodu: d.id,
-        ...d.data(),
-        sonGuncelleme: d.data().sonGuncelleme?.toDate?.() ?? new Date(),
+        urunKodu: d.id, ...d.data(), sonGuncelleme: d.data().sonGuncelleme?.toDate?.() ?? new Date(),
       } as MagazaStokKaydi));
       liste.sort((a, b) => a.urunKodu.localeCompare(b.urunKodu));
       setMagazaStok(liste);
@@ -521,20 +562,14 @@ const Kasa: React.FC = () => {
     loadKasa();
   }, [aktifSubeKodu, currentUser]);
 
-  // ✅ v4 DEĞİŞİKLİK 1:
-  // Tahsilatlar sekmesinde !tahsilatOzet koşulu kaldırıldı.
-  // Sekmeye her gelindiğinde taze veri çekilir.
   useEffect(() => {
     if (aktifTab === 'satislar' && !satisOzet) loadSatislar();
-    if (aktifTab === 'tahsilatlar')            loadTahsilatlar(); // ← !tahsilatOzet koşulu kaldırıldı
-    if (aktifTab === 'urun') {
-      loadStokHareketler();
-      loadMagazaStok();
-    }
+    if (aktifTab === 'tahsilatlar')            loadTahsilatlar();
+    if (aktifTab === 'urun') { loadStokHareketler(); loadMagazaStok(); }
   }, [aktifTab, kasaGun]);
 
   // ─────────────────────────────────────────────────────────────
-  //  GEÇMİŞ DETAY MODAL
+  //  GEÇMİŞ DETAY
   // ─────────────────────────────────────────────────────────────
 
   const acGecmisDetay = async (gun: KasaGun) => {
@@ -552,7 +587,7 @@ const Kasa: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────
-  //  PRINT PREVIEW
+  //  PRINT
   // ─────────────────────────────────────────────────────────────
 
   const handlePrintPreview = async (gun: KasaGun) => {
@@ -578,17 +613,15 @@ const Kasa: React.FC = () => {
         if (d.exists()) satisDetayMap[id] = d.data();
       }));
 
-      const satislarDetayli = sat.satislar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) }));
-      const tahsilatlarDetayli = tah.tahsilatlar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) }));
-
       kasaPrintPreviewYap({
-        kasaGun: gun, satislar: satislarDetayli, tahsilatlar: tahsilatlarDetayli,
+        kasaGun: gun,
+        satislar: sat.satislar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) })),
+        tahsilatlar: tah.tahsilatlar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) })),
         magazaStok: stokListe, stokHareketler: stokHareketListe,
         magazaAdi: 'Tüfekçi Home', subeAdi: sube?.ad || aktifSubeKodu,
       });
-    } catch (err) {
-      alert('❌ Çıktı hazırlanamadı: ' + (err as Error).message);
-    } finally { setPrintYukleniyor(null); }
+    } catch (err) { alert('❌ Çıktı hazırlanamadı: ' + (err as Error).message); }
+    finally { setPrintYukleniyor(null); }
   };
 
   const handleBugunkuPrint = async () => {
@@ -602,20 +635,17 @@ const Kasa: React.FC = () => {
         tahsilatOzet ?? getTahsilatlar(aktifSubeKodu, kasaGun.gun),
       ]);
       const stokListe: MagazaStokKaydi[] = stokSnap.docs.map(d => ({ urunKodu: d.id, ...d.data() } as MagazaStokKaydi));
-
       const tumSatisIds = [...sat.satislar, ...tah.tahsilatlar].map((s: any) => s.id).filter(Boolean);
       const satisDetayMap: Record<string, any> = {};
       await Promise.all(tumSatisIds.map(async (id: string) => {
         const d = await getDoc(doc(db, `subeler/${sube?.dbPath}/satislar`, id));
         if (d.exists()) satisDetayMap[id] = d.data();
       }));
-
-      const satislarDetayli = sat.satislar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) }));
-      const tahsilatlarDetayli = tah.tahsilatlar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) }));
-
       kasaPrintPreviewYap({
-        kasaGun, satislar: satislarDetayli, tahsilatlar: tahsilatlarDetayli,
-        magazaStok: stokListe, stokHareketler: stokHareketler,
+        kasaGun, stokHareketler,
+        satislar: sat.satislar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) })),
+        tahsilatlar: tah.tahsilatlar.map((s: any) => ({ ...s, ...(satisDetayMap[s.id] || {}) })),
+        magazaStok: stokListe,
         magazaAdi: 'Tüfekçi Home', subeAdi: sube?.ad || aktifSubeKodu,
       });
     } catch (err) { alert('❌ Hata: ' + (err as Error).message); }
@@ -623,7 +653,7 @@ const Kasa: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────
-  //  HAREKET EKLE
+  //  HAREKET / ADMIN / STOK EKLE
   // ─────────────────────────────────────────────────────────────
 
   const handleHareketEkle = async (e: React.FormEvent) => {
@@ -636,65 +666,35 @@ const Kasa: React.FC = () => {
     try {
       const ok = await kasaHareketEkle(
         aktifSubeKodu, kasaGun.id,
-        {
-          aciklama: hAciklama, tutar: hTutar, tip: hTip,
-          belgeNo: hBelgeNo || undefined, not: hNot || undefined,
-          tarih: new Date(),
-          kullanici: `${currentUser.ad} ${currentUser.soyad}`,
-          kullaniciId: currentUser.uid || '',
-          subeKodu: aktifSubeKodu,
-        },
-        `${currentUser.ad} ${currentUser.soyad}`,
-        currentUser.uid || '',
+        { aciklama: hAciklama, tutar: hTutar, tip: hTip, belgeNo: hBelgeNo || undefined, not: hNot || undefined,
+          tarih: new Date(), kullanici: `${currentUser.ad} ${currentUser.soyad}`, kullaniciId: currentUser.uid || '', subeKodu: aktifSubeKodu },
+        `${currentUser.ad} ${currentUser.soyad}`, currentUser.uid || '',
       );
-      if (ok) {
-        setHAciklama(''); setHTutar(0); setHBelgeNo(''); setHNot('');
-        setHTip(KasaHareketTipi.GIDER); setEklemeModu(false);
-        await loadKasa();
-      } else { setFormHata('İşlem başarısız!'); }
+      if (ok) { setHAciklama(''); setHTutar(0); setHBelgeNo(''); setHNot(''); setHTip(KasaHareketTipi.GIDER); setEklemeModu(false); await loadKasa(); }
+      else setFormHata('İşlem başarısız!');
     } catch (err) { setFormHata('Hata: ' + (err as Error).message); }
   };
-
-  // ─────────────────────────────────────────────────────────────
-  //  ADMİN ALIM
-  // ─────────────────────────────────────────────────────────────
 
   const handleAdminAlim = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !kasaGun?.id) { setAdminHata('Kasa günü bulunamadı!'); return; }
     if (adminTutar <= 0)               { setAdminHata("Tutar 0'dan büyük olmalı!"); return; }
-    if (adminTutar > (kasaGun.gunSonuBakiyesi ?? 0)) {
-      setAdminHata(`⚠️ Bakiye yetersiz! Mevcut: ${formatPrice(kasaGun.gunSonuBakiyesi ?? 0)}`); return;
-    }
+    if (adminTutar > (kasaGun.gunSonuBakiyesi ?? 0)) { setAdminHata(`⚠️ Bakiye yetersiz! Mevcut: ${formatPrice(kasaGun.gunSonuBakiyesi ?? 0)}`); return; }
     setAdminHata('');
     const admin = ADMIN_LISTESI.find(a => a.id === adminId);
     if (!admin) return;
     try {
       const ok = await kasaHareketEkle(
         aktifSubeKodu, kasaGun.id,
-        {
-          aciklama: `${admin.ad} kasadan para aldı`, tutar: adminTutar,
-          tip: KasaHareketTipi.ADMIN_ALIM, not: adminNot || undefined,
-          tarih: new Date(),
-          kullanici: `${currentUser.ad} ${currentUser.soyad}`,
-          kullaniciId: currentUser.uid || '',
-          subeKodu: aktifSubeKodu,
-          adminId: admin.id, adminAd: admin.ad,
-        },
-        `${currentUser.ad} ${currentUser.soyad}`,
-        currentUser.uid || '',
+        { aciklama: `${admin.ad} kasadan para aldı`, tutar: adminTutar, tip: KasaHareketTipi.ADMIN_ALIM, not: adminNot || undefined,
+          tarih: new Date(), kullanici: `${currentUser.ad} ${currentUser.soyad}`, kullaniciId: currentUser.uid || '', subeKodu: aktifSubeKodu,
+          adminId: admin.id, adminAd: admin.ad },
+        `${currentUser.ad} ${currentUser.soyad}`, currentUser.uid || '',
       );
-      if (ok) {
-        setAdminTutar(0); setAdminNot(''); setAdminModu(false);
-        await loadKasa();
-        alert(`✅ ${admin.ad} ${formatPrice(adminTutar)} aldı.`);
-      } else { setAdminHata('İşlem başarısız!'); }
+      if (ok) { setAdminTutar(0); setAdminNot(''); setAdminModu(false); await loadKasa(); alert(`✅ ${admin.ad} ${formatPrice(adminTutar)} aldı.`); }
+      else setAdminHata('İşlem başarısız!');
     } catch (err) { setAdminHata('Hata: ' + (err as Error).message); }
   };
-
-  // ─────────────────────────────────────────────────────────────
-  //  STOK HAREKETİ EKLE
-  // ─────────────────────────────────────────────────────────────
 
   const handleStokEkle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -703,64 +703,31 @@ const Kasa: React.FC = () => {
     if (stokAdet <= 0)    { setStokHata("Adet 0'dan büyük olmalı!"); return; }
     if (stokTip === 'CIKAN' && !stokMustaeri.trim()) { setStokHata('Çıkan ürün için müşteri/satış kodu giriniz!'); return; }
     setStokHata('');
-
-    const subeKoduAnlik = aktifSubeKodu;
-    const sube = getSubeByKod(subeKoduAnlik as any);
-
-    if (!sube) {
-      setStokHata(`Şube bulunamadı! (kod: ${subeKoduAnlik})`);
-      return;
-    }
-
+    const sube = getSubeByKod(aktifSubeKodu as any);
+    if (!sube) { setStokHata(`Şube bulunamadı!`); return; }
     const kod = stokKod.trim().toUpperCase();
-    const adAnlik = stokAd.trim();
-    const adetAnlik = stokAdet;
-    const tipAnlik = stokTip;
-    const musteriAnlik = stokMustaeri.trim();
-    const notAnlik = stokNot.trim();
-    const kullaniciAnlik = `${currentUser.ad} ${currentUser.soyad}`;
-
     try {
       const stokRef = doc(db, `subeler/${sube.dbPath}/magazaStok`, kod);
-
       await addDoc(collection(db, `subeler/${sube.dbPath}/stokHareketler`), {
-        tip: tipAnlik,
-        urunKodu: kod,
-        urunAdi: adAnlik || null,
-        adet: adetAnlik,
-        musteriVeyaSatisKodu: musteriAnlik || null,
-        not: notAnlik || null,
-        tarih: Timestamp.fromDate(new Date()),
-        gun: bugunStrLocal(),
-        kullanici: kullaniciAnlik,
-        subeKodu: subeKoduAnlik,
+        tip: stokTip, urunKodu: kod, urunAdi: stokAd.trim() || null, adet: stokAdet,
+        musteriVeyaSatisKodu: stokMustaeri.trim() || null, not: stokNot.trim() || null,
+        tarih: Timestamp.fromDate(new Date()), gun: bugunStrLocal(),
+        kullanici: `${currentUser.ad} ${currentUser.soyad}`, subeKodu: aktifSubeKodu,
       });
-
       await runTransaction(db, async (transaction) => {
         const mevcut = await transaction.get(stokRef);
         const mevcutAdet = mevcut.exists() ? (mevcut.data().adet ?? 0) : 0;
         const mevcutAd   = mevcut.exists() ? (mevcut.data().urunAdi ?? '') : '';
-        const yeniAdet = tipAnlik === 'GELEN' ? mevcutAdet + adetAnlik : mevcutAdet - adetAnlik;
         transaction.set(stokRef, {
-          urunKodu: kod,
-          urunAdi: adAnlik || mevcutAd,
-          adet: yeniAdet,
-          sonGuncelleme: Timestamp.fromDate(new Date()),
-          subeKodu: subeKoduAnlik,
+          urunKodu: kod, urunAdi: stokAd.trim() || mevcutAd,
+          adet: stokTip === 'GELEN' ? mevcutAdet + stokAdet : mevcutAdet - stokAdet,
+          sonGuncelleme: Timestamp.fromDate(new Date()), subeKodu: aktifSubeKodu,
         });
       });
-
-      setStokKod(''); setStokAd(''); setStokAdet(1); setStokMustieri(''); setStokNot('');
-      setStokEklemeModu(false);
-
-      await loadStokHareketler();
-      await loadMagazaStok();
-
-      alert(`✅ ${tipAnlik === 'GELEN' ? 'Gelen' : 'Çıkan'} ürün kaydedildi. Mağaza stoğu güncellendi.`);
-    } catch (err) {
-      console.error('Stok ekle hatası:', err);
-      setStokHata('Hata: ' + (err as Error).message);
-    }
+      setStokKod(''); setStokAd(''); setStokAdet(1); setStokMustieri(''); setStokNot(''); setStokEklemeModu(false);
+      await loadStokHareketler(); await loadMagazaStok();
+      alert(`✅ ${stokTip === 'GELEN' ? 'Gelen' : 'Çıkan'} ürün kaydedildi.`);
+    } catch (err) { setStokHata('Hata: ' + (err as Error).message); }
   };
 
   // ─────────────────────────────────────────────────────────────
@@ -788,17 +755,64 @@ const Kasa: React.FC = () => {
     return liste.slice((gecmisSayfa - 1) * SAYFA_BOYUTU, gecmisSayfa * SAYFA_BOYUTU);
   };
 
-  // ─────────────────────────────────────────────────────────────
-  //  LOADING
-  // ─────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="kasa-container">
+      <div className="loading">Kasa yükleniyor...</div>
+    </div>
+  );
 
-  if (loading) {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  //  TAHSİLAT SATIRI RENDER — merkezi fonksiyon
+  //  ✅ v5: DUZELTME tipi için turuncu satır
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const renderTahsilatSatiri = (s: KasaSatisDetay) => {
+    const tip    = getTahsilatSatirTipi(s);
+    const style  = TAHSILAT_SATIR_STYLE[tip];
+    const tutar  = s.nakitTutar + s.kartTutar + s.havaleTutar;
+    const tutarPositive = tutar >= 0;
+
     return (
-      <div className="kasa-container">
-        <div className="loading">Kasa yükleniyor...</div>
-      </div>
+      <tr key={s.id} className={`hareket-satir ${tip !== 'tahsilat' ? '' : 'onceki-gun-odeme'}`}
+        style={style.rowStyle}>
+        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+          <span style={{ fontWeight: 600, color: style.kodRenk }}>
+            {s.satisTarihi ? formatGun(s.satisTarihi) : '—'}
+          </span>
+          <br />
+          <span style={{
+            fontSize: 10, background: style.badgeBg, color: style.badgeRenk,
+            padding: '2px 6px', borderRadius: 4, display: 'inline-block', marginTop: 2,
+          }}>
+            {style.badgeLabel}
+          </span>
+        </td>
+        <td>
+          <span className={`tip-badge ${style.tipBadgeClass}`}>{s.satisKodu}</span>
+        </td>
+        <td>{s.musteriIsim}</td>
+        <td className={`tutar ${tip === 'duzeltme' ? (tutarPositive ? 'giris' : 'cikis') : (tip === 'iptal' ? 'cikis' : 'giris')}`}>
+          {s.nakitTutar !== 0 ? formatPrice(s.nakitTutar) : '—'}
+        </td>
+        <td style={{ color: tip === 'iptal' ? 'var(--red)' : tip === 'duzeltme' ? '#d97706' : '#0066cc', fontFamily: 'var(--font-mono)' }}>
+          {s.kartTutar !== 0 ? (
+            <>{formatPrice(s.kartTutar)}{(s as any).kartBanka && <><br/><span style={{ fontSize: 10, color: '#6b7280' }}>{(s as any).kartBanka}</span></>}</>
+          ) : '—'}
+        </td>
+        <td style={{ color: tip === 'iptal' ? 'var(--red)' : tip === 'duzeltme' ? '#d97706' : '#666', fontFamily: 'var(--font-mono)' }}>
+          {s.havaleTutar !== 0 ? (
+            <>{formatPrice(s.havaleTutar)}{(s as any).havaleBanka && <><br/><span style={{ fontSize: 10, color: '#6b7280' }}>{(s as any).havaleBanka}</span></>}</>
+          ) : '—'}
+        </td>
+        <td className={`tutar ${tutarPositive ? 'giris' : 'cikis'}`} style={{ fontWeight: 700 }}>
+          {formatPrice(tutar)}
+        </td>
+        <td style={{ fontSize: 11, color: style.kodRenk }}>
+          {(s as any).aciklama || (tip === 'iptal' ? 'Satış iptali iadesi' : tip === 'duzeltme' ? 'Ödeme düzenlemesi' : '—')}
+        </td>
+      </tr>
     );
-  }
+  };
 
   // ═══════════════════════════════════════════════════════════════════════════════
   //  RENDER
@@ -807,32 +821,21 @@ const Kasa: React.FC = () => {
   return (
     <div className="kasa-container">
 
-      {/* ─────────────────────── HEADER ─────────────────────── */}
+      {/* HEADER */}
       <div className="kasa-header">
         <div className="kasa-header-left">
           <button onClick={() => navigate('/dashboard')} className="btn-back">← Geri</button>
           <h1>Kasa Yönetimi</h1>
           {isAdmin && (
-            <select
-              value={seciliSubeKodu}
-              onChange={e => {
-                setSeciliSubeKodu(e.target.value);
-                setAktifTab('hareketler');
-                setGecmisGorunuyor(false);
-              }}
+            <select value={seciliSubeKodu}
+              onChange={e => { setSeciliSubeKodu(e.target.value); setAktifTab('hareketler'); setGecmisGorunuyor(false); }}
               className="form-select"
-              style={{ padding: '7px 14px', fontSize: 13, fontWeight: 600, minWidth: 160, borderRadius: 8 }}
-            >
-              {SUBELER.map((s: any) => (
-                <option key={s.kod} value={s.kod}>🏪 {s.ad}</option>
-              ))}
+              style={{ padding: '7px 14px', fontSize: 13, fontWeight: 600, minWidth: 160, borderRadius: 8 }}>
+              {SUBELER.map((s: any) => <option key={s.kod} value={s.kod}>🏪 {s.ad}</option>)}
             </select>
           )}
           {isAdmin && aktifSube && (
-            <span style={{
-              fontSize: 12, color: 'var(--teal)', fontWeight: 700,
-              background: 'var(--teal-light)', padding: '4px 12px', borderRadius: 999,
-            }}>
+            <span style={{ fontSize: 12, color: 'var(--teal)', fontWeight: 700, background: 'var(--teal-light)', padding: '4px 12px', borderRadius: 999 }}>
               📍 {aktifSube.ad}
             </span>
           )}
@@ -844,9 +847,7 @@ const Kasa: React.FC = () => {
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════ */}
       {!gecmisGorunuyor ? (
-
         <div className="kasa-gunluk">
           {!kasaGun ? (
             <div className="empty-hareket">
@@ -855,25 +856,17 @@ const Kasa: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* ── ÖZET KART ── */}
+              {/* ÖZET KART */}
               <div className="kasa-bilgi-karti">
                 <div className="kasa-tarih">
                   <span className="tarih-label">Tarih:</span>
                   <span className="tarih-value">{formatGun(kasaGun.gun)}</span>
                   <span className="tarih-label" style={{ marginLeft: 20 }}>Açılış Yapan:</span>
-                  <span className="tarih-value" style={{ fontSize: 13, color: 'var(--gray-600)' }}>
-                    {kasaGun.acilisYapan}
-                  </span>
-                  <button
-                    className="btn-pdf"
-                    onClick={handleBugunkuPrint}
-                    disabled={printYukleniyor === kasaGun.gun}
-                    style={{ marginLeft: 'auto' }}
-                  >
+                  <span className="tarih-value" style={{ fontSize: 13, color: 'var(--gray-600)' }}>{kasaGun.acilisYapan}</span>
+                  <button className="btn-pdf" onClick={handleBugunkuPrint} disabled={printYukleniyor === kasaGun.gun} style={{ marginLeft: 'auto' }}>
                     {printYukleniyor === kasaGun.gun ? '⏳ Hazırlanıyor...' : '🖨️ Kasa Çıktısı Al'}
                   </button>
                 </div>
-
                 <div className="kasa-akis">
                   <div className="akis-kart acilis">
                     <span className="akis-kart-label">Açılış Bakiyesi</span>
@@ -891,9 +884,7 @@ const Kasa: React.FC = () => {
                   </div>
                   <div className="akis-kart cikis">
                     <span className="akis-kart-label">📤 Çıkış</span>
-                    <span className="akis-kart-tutar">
-                      {formatPrice((kasaGun.cikisYapilanPara || 0) + (kasaGun.adminAlimlar || 0))}
-                    </span>
+                    <span className="akis-kart-tutar">{formatPrice((kasaGun.cikisYapilanPara || 0) + (kasaGun.adminAlimlar || 0))}</span>
                     <span className="akis-kart-alt">kasadan çıkar</span>
                   </div>
                   <div className="akis-kart gunsonu">
@@ -904,7 +895,7 @@ const Kasa: React.FC = () => {
                 </div>
               </div>
 
-              {/* ── TAB BAR ── */}
+              {/* TAB BAR */}
               <div className="kasa-tab-bar">
                 {([
                   { key: 'hareketler',  label: '📋 Gün İçi Hareketler', badge: kasaGun.hareketler?.filter(h => h.tip !== KasaHareketTipi.ADMIN_ALIM).length || 0 },
@@ -913,18 +904,14 @@ const Kasa: React.FC = () => {
                   { key: 'cikis',       label: '📤 Çıkış',              badge: kasaGun.hareketler?.filter(h => h.tip === KasaHareketTipi.ADMIN_ALIM).length || 0, adminBadge: true },
                   { key: 'urun',        label: '📦 Gelen / Çıkan Ürün', badge: stokHareketler.length },
                 ] as any[]).map(t => (
-                  <button
-                    key={t.key}
-                    className={`tab-btn ${aktifTab === t.key ? 'aktif' : ''}`}
-                    onClick={() => setAktifTab(t.key)}
-                  >
+                  <button key={t.key} className={`tab-btn ${aktifTab === t.key ? 'aktif' : ''}`} onClick={() => setAktifTab(t.key)}>
                     {t.label}
                     <span className={`tab-badge ${t.adminBadge ? 'admin' : ''}`}>{t.badge}</span>
                   </button>
                 ))}
               </div>
 
-              {/* ══ TAB: HAREKETLER ══ */}
+              {/* TAB: HAREKETLER */}
               {aktifTab === 'hareketler' && (
                 <div className="kasa-hareketler">
                   <div className="hareketler-header">
@@ -1011,7 +998,7 @@ const Kasa: React.FC = () => {
                 </div>
               )}
 
-              {/* ══ TAB: SATIŞLAR ══ */}
+              {/* TAB: SATIŞLAR */}
               {aktifTab === 'satislar' && (
                 <div className="kasa-hareketler">
                   <div className="hareketler-header">
@@ -1048,11 +1035,9 @@ const Kasa: React.FC = () => {
                                   <td>
                                     <span className={`tip-badge ${s.onayDurumu ? 'nakit' : 'gider'}`}>{s.onayDurumu ? '✅ Onaylı' : '⏳ Bekliyor'}</span>
                                     {(s as any).iadeDurumu && (
-                                      <span style={{
-                                        marginLeft: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                                      <span style={{ marginLeft: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
                                         background: (s as any).iadeDurumu === 'IADE_ODENDI' ? '#dcfce7' : '#fef9c3',
-                                        color: (s as any).iadeDurumu === 'IADE_ODENDI' ? '#16a34a' : '#92400e',
-                                      }}>
+                                        color: (s as any).iadeDurumu === 'IADE_ODENDI' ? '#16a34a' : '#92400e' }}>
                                         {(s as any).iadeDurumu === 'IADE_GEREKIYOR' ? '⚠️ İade Gerekiyor' :
                                          (s as any).iadeDurumu === 'IADE_BEKLIYOR'  ? '🔄 İade Bekliyor'  :
                                          (s as any).iadeDurumu === 'IADE_ONAYLANDI' ? '✅ İade Onaylandı' :
@@ -1076,75 +1061,57 @@ const Kasa: React.FC = () => {
                 </div>
               )}
 
-              {/* ══ TAB: TAHSİLATLAR ══ */}
+              {/* ══ TAB: TAHSİLATLAR ══ ✅ v5: renderTahsilatSatiri kullanıyor */}
               {aktifTab === 'tahsilatlar' && (
                 <div className="kasa-hareketler">
-                  {/* ✅ v4 DEĞİŞİKLİK 2: tarih-badge → 🔄 Yenile butonu */}
                   <div className="hareketler-header">
                     <h2>💰 Tahsilatlar — {formatGun(kasaGun.gun)}</h2>
                     <button onClick={loadTahsilatlar} className="btn-filtre aktif">🔄 Yenile</button>
                   </div>
                   <div className="kasa-bilgi-notu">
-                    📅 <strong>Bugün</strong> alınan ödemeler (ödeme kayıt tarihi = bugün).
-                    <br />🔴 Kırmızı satırlar iptal iadelerini gösterir.
+                    📅 <strong>Bugün</strong> işlem gören geçmiş satış ödemeleri.
+                    <br />🟢 Yeşil = yeni tahsilat &nbsp;|&nbsp; 🔶 Turuncu = ödeme düzenlemesi &nbsp;|&nbsp; 🔴 Kırmızı = iptal iadesi
                   </div>
                   {tahsilatYukleniyor ? (
                     <div className="loading" style={{ padding: '40px 0' }}>Tahsilatlar yükleniyor...</div>
                   ) : tahsilatOzet && tahsilatOzet.tahsilatlar.length > 0 ? (
                     <>
                       <div className="satis-ozet-grid">
-                        <div className="satis-ozet-kart toplam"><span className="satis-ozet-label">💰 Bugün Tahsil</span><span className="satis-ozet-tutar">{formatPrice(tahsilatOzet.tahsilatTutar)}</span><span className="satis-ozet-alt">{tahsilatOzet.tahsilatAdeti} kayıt</span></div>
+                        <div className="satis-ozet-kart toplam"><span className="satis-ozet-label">💰 Net Tahsilat</span><span className="satis-ozet-tutar">{formatPrice(tahsilatOzet.tahsilatTutar)}</span><span className="satis-ozet-alt">{tahsilatOzet.tahsilatAdeti} kayıt</span></div>
                         <div className="satis-ozet-kart nakit"><span className="satis-ozet-label">💵 Nakit</span><span className="satis-ozet-tutar">{formatPrice(tahsilatOzet.toplamNakit)}</span></div>
                         <div className="satis-ozet-kart kart"><span className="satis-ozet-label">💳 Kart</span><span className="satis-ozet-tutar">{formatPrice(tahsilatOzet.toplamKart)}</span></div>
                         <div className="satis-ozet-kart havale"><span className="satis-ozet-label">🏦 Havale</span><span className="satis-ozet-tutar">{formatPrice(tahsilatOzet.toplamHavale)}</span></div>
                       </div>
                       <div className="hareket-listesi" style={{ marginTop: 16 }}>
                         <table className="hareket-tablosu">
-                          <thead><tr><th>Satış Tarihi</th><th>Satış Kodu</th><th>Müşteri</th><th>Nakit</th><th>Kart</th><th>Havale</th><th>Tutar</th><th>Açıklama</th></tr></thead>
+                          <thead>
+                            <tr>
+                              <th>Satış Tarihi</th>
+                              <th>Satış Kodu</th>
+                              <th>Müşteri</th>
+                              <th>Nakit</th>
+                              <th>Kart</th>
+                              <th>Havale</th>
+                              <th>Tutar</th>
+                              <th>Açıklama</th>
+                            </tr>
+                          </thead>
                           <tbody>
-                            {tahsilatOzet.tahsilatlar.map(s => {
-                              const isIptal = (s as any).iptalIadesi === true;
-                              return (
-                                <tr key={s.id} className={`hareket-satir ${isIptal ? '' : 'onceki-gun-odeme'}`}
-                                  style={isIptal ? { background: '#fef2f2', borderLeft: '3px solid #dc2626' } : {}}>
-                                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                                    <span style={{ fontWeight: 600, color: isIptal ? 'var(--red)' : 'var(--teal)' }}>{s.satisTarihi ? formatGun(s.satisTarihi) : '—'}</span>
-                                    <br /><span style={{ fontSize: 10, background: isIptal ? 'rgba(220,38,38,.1)' : 'rgba(0,153,153,.1)', color: isIptal ? 'var(--red)' : 'var(--teal)', padding: '2px 6px', borderRadius: 4, display: 'inline-block', marginTop: 2 }}>
-                                      {isIptal ? '🔴 iptal iadesi' : 'önceki günden'}
-                                    </span>
-                                  </td>
-                                  <td><span className={`tip-badge ${isIptal ? 'gider' : 'nakit'}`}>{s.satisKodu}</span></td>
-                                  <td>{s.musteriIsim}</td>
-                                  <td className={`tutar ${s.nakitTutar < 0 ? 'cikis' : s.nakitTutar > 0 ? 'giris' : ''}`}>{s.nakitTutar !== 0 ? formatPrice(s.nakitTutar) : '—'}</td>
-                                  <td style={{ color: s.kartTutar < 0 ? 'var(--red)' : '#0066cc', fontFamily: 'var(--font-mono)' }}>
-                                    {s.kartTutar !== 0 ? (
-                                      <>{formatPrice(s.kartTutar)}{(s as any).kartBanka && <><br/><span style={{fontSize:10,color:'#6b7280'}}>{(s as any).kartBanka}</span></>}</>
-                                    ) : '—'}
-                                  </td>
-                                  <td style={{ color: '#666', fontFamily: 'var(--font-mono)' }}>
-                                    {s.havaleTutar !== 0 ? (
-                                      <>{formatPrice(s.havaleTutar)}{(s as any).havaleBanka && <><br/><span style={{fontSize:10,color:'#6b7280'}}>{(s as any).havaleBanka}</span></>}</>
-                                    ) : '—'}
-                                  </td>
-                                  <td className={`tutar ${(s.nakitTutar + s.kartTutar + s.havaleTutar) < 0 ? 'cikis' : 'giris'}`} style={{ fontWeight: 700 }}>{formatPrice(s.nakitTutar + s.kartTutar + s.havaleTutar)}</td>
-                                  <td style={{ fontSize: 11, color: isIptal ? 'var(--red)' : 'var(--gray-500)' }}>{(s as any).aciklama || (isIptal ? 'Satış iptali iadesi' : '—')}</td>
-                                </tr>
-                              );
-                            })}
+                            {tahsilatOzet.tahsilatlar.map(renderTahsilatSatiri)}
                           </tbody>
                         </table>
                       </div>
                     </>
                   ) : (
                     <div className="empty-hareket">
-                      <p>Bugün tahsilat veya iade yok.</p>
+                      <p>Bugün tahsilat, düzeltme veya iade yok.</p>
                       <small>Tüm ödemeler satış gününde yapılmış ya da henüz kayıt yok.</small>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* ══ TAB: ÇIKIŞ ══ */}
+              {/* TAB: ÇIKIŞ */}
               {aktifTab === 'cikis' && (
                 <div className="kasa-hareketler">
                   <div className="hareketler-header">
@@ -1226,10 +1193,9 @@ const Kasa: React.FC = () => {
                 </div>
               )}
 
-              {/* ══ TAB: GELEN / ÇIKAN ÜRÜN ══ */}
+              {/* TAB: GELEN / ÇIKAN ÜRÜN */}
               {aktifTab === 'urun' && (
                 <div className="urun-tab-grid">
-
                   <div className="kasa-hareketler">
                     <div className="hareketler-header">
                       <h2>📦 Gelen / Çıkan Ürün — Bugünkü Hareketler</h2>
@@ -1240,7 +1206,6 @@ const Kasa: React.FC = () => {
                     <div className="kasa-bilgi-notu">
                       📦 Stok hareketleri kasayı etkilemez. Kayıt girince <strong>Mağaza Stoğu</strong> otomatik güncellenir.
                     </div>
-
                     {stokEklemeModu && (
                       <div className="hareket-ekle-form">
                         <h3>Yeni Stok Hareketi</h3>
@@ -1267,8 +1232,7 @@ const Kasa: React.FC = () => {
                             )}
                             <div className="form-group">
                               <label>Adet *</label>
-                              <input type="number" min="1" value={stokAdet || ''}
-                                onChange={e => setStokAdet(parseInt(e.target.value) || 1)} placeholder="1" required />
+                              <input type="number" min="1" value={stokAdet || ''} onChange={e => setStokAdet(parseInt(e.target.value) || 1)} placeholder="1" required />
                             </div>
                           </div>
                           {stokTip === 'CIKAN' && (
@@ -1289,7 +1253,6 @@ const Kasa: React.FC = () => {
                         </form>
                       </div>
                     )}
-
                     {stokYukleniyor ? (
                       <div className="loading" style={{ padding: '40px 0' }}>Yükleniyor...</div>
                     ) : stokHareketler.length > 0 ? (
@@ -1321,15 +1284,12 @@ const Kasa: React.FC = () => {
                       </div>
                     )}
                   </div>
-
                   <div className="magaza-stok-panel">
                     <div className="magaza-stok-header">
                       <h3>🏪 Mağaza Stoğu</h3>
                       <button onClick={loadMagazaStok} className="btn-pdf-mini" title="Yenile">🔄</button>
                     </div>
-                    <p className="magaza-stok-aciklama">
-                      Kalıcı stok — günler arası devir eder.
-                    </p>
+                    <p className="magaza-stok-aciklama">Kalıcı stok — günler arası devir eder.</p>
                     {magazaStokYukleniyor ? (
                       <div style={{ textAlign: 'center', padding: 24, fontSize: 12, color: 'var(--gray-400)' }}>Yükleniyor...</div>
                     ) : magazaStok.length > 0 ? (
@@ -1347,8 +1307,7 @@ const Kasa: React.FC = () => {
                     ) : (
                       <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--gray-400)', fontSize: 13 }}>
                         <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>
-                        Henüz stok kaydı yok.<br />
-                        <small>Ürün girişi yapınca burası dolar.</small>
+                        Henüz stok kaydı yok.<br /><small>Ürün girişi yapınca burası dolar.</small>
                       </div>
                     )}
                   </div>
@@ -1357,19 +1316,16 @@ const Kasa: React.FC = () => {
             </>
           )}
         </div>
-
       ) : (
-
-        /* ═══════════════ GEÇMİŞ KAYITLAR ═══════════════ */
+        /* GEÇMİŞ KAYITLAR */
         <div className="kasa-gecmis">
           <div className="gecmis-header-row">
             <h2>Geçmiş Kasa Kayıtları {aktifSube ? `— ${aktifSube.ad}` : ''}</h2>
           </div>
-
           <div style={{
             display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap',
             padding: '16px 20px', background: 'var(--gray-50)',
-            border: '1.5px solid var(--gray-200)', borderRadius: 'var(--r-sm)', marginBottom: 16
+            border: '1.5px solid var(--gray-200)', borderRadius: 'var(--r-sm)', marginBottom: 16,
           }}>
             {[
               { label: 'Başlangıç Tarihi', field: 'baslangic' as const, max: tarihFiltre.bitis },
@@ -1382,16 +1338,13 @@ const Kasa: React.FC = () => {
                   style={{ padding: '8px 12px', border: '1.5px solid var(--gray-300)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 13 }} />
               </div>
             ))}
-            {!tarihFiltreHata && (
-              <div style={{ fontSize: 12, color: 'var(--gray-500)', paddingBottom: 8 }}>{filtreliGecmis().length} kayıt bulundu</div>
-            )}
+            {!tarihFiltreHata && <div style={{ fontSize: 12, color: 'var(--gray-500)', paddingBottom: 8 }}>{filtreliGecmis().length} kayıt bulundu</div>}
             {tarihFiltreHata && (
               <div style={{ background: 'var(--red-light)', color: 'var(--red)', padding: '8px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, border: '1px solid var(--red-border)', width: '100%' }}>
                 {tarihFiltreHata}
               </div>
             )}
           </div>
-
           {!tarihFiltreHata && filtreliGecmis().length > 0 ? (
             <>
               <div className="gecmis-listesi">
@@ -1400,8 +1353,7 @@ const Kasa: React.FC = () => {
                     <div className="gecmis-kart-header">
                       <h3>{formatGun(gun.gun)}</h3>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <button className="btn-pdf-mini" onClick={() => handlePrintPreview(gun)}
-                          disabled={printYukleniyor === gun.gun}>
+                        <button className="btn-pdf-mini" onClick={() => handlePrintPreview(gun)} disabled={printYukleniyor === gun.gun}>
                           {printYukleniyor === gun.gun ? '⏳' : '🖨️ Çıktı Al'}
                         </button>
                         <button className="btn-gecmis-satis" onClick={() => acGecmisDetay(gun)}>🔍 Detay</button>
@@ -1430,7 +1382,6 @@ const Kasa: React.FC = () => {
                   </div>
                 ))}
               </div>
-
               {toplamSayfa() > 1 && (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24, flexWrap: 'wrap' }}>
                   <button className="btn-filtre" onClick={() => setGecmisSayfa(p => Math.max(1, p - 1))} disabled={gecmisSayfa === 1} style={{ opacity: gecmisSayfa === 1 ? 0.4 : 1 }}>← Önceki</button>
@@ -1450,7 +1401,7 @@ const Kasa: React.FC = () => {
         </div>
       )}
 
-      {/* ══════════════ GEÇMİŞ DETAY MODALİ ══════════════ */}
+      {/* GEÇMİŞ DETAY MODALİ */}
       {gecmisDetay && (
         <div className="modal-overlay" onClick={() => setGecmisDetay(null)}>
           <div className="modal-kart gecmis-modal" onClick={e => e.stopPropagation()}>
@@ -1484,7 +1435,6 @@ const Kasa: React.FC = () => {
               ))}
             </div>
             {detayYukleniyor && <div className="loading" style={{ padding: '32px 0' }}>Yükleniyor...</div>}
-
             {!detayYukleniyor && gecmisDetay.aktifTab === 'satislar' && (
               gecmisDetay.satisOzet?.satislar.length ? (
                 <div className="hareket-listesi" style={{ marginTop: 12 }}>
@@ -1500,19 +1450,7 @@ const Kasa: React.FC = () => {
                           <td style={{ color: '#0066cc', fontFamily: 'var(--font-mono)' }}>{s.kartTutar > 0 ? formatPrice(s.kartTutar) : '—'}</td>
                           <td style={{ color: '#666', fontFamily: 'var(--font-mono)' }}>{s.havaleTutar > 0 ? formatPrice(s.havaleTutar) : '—'}</td>
                           <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{formatPrice(s.tutar)}</td>
-                          <td>
-                            <span className={`tip-badge ${s.onayDurumu ? 'nakit' : 'gider'}`}>{s.onayDurumu ? '✅ Onaylı' : '⏳ Bekliyor'}</span>
-                            {(s as any).iadeDurumu && (
-                              <span style={{ marginLeft: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
-                                background: (s as any).iadeDurumu === 'IADE_ODENDI' ? '#dcfce7' : '#fef9c3',
-                                color: (s as any).iadeDurumu === 'IADE_ODENDI' ? '#16a34a' : '#92400e' }}>
-                                {(s as any).iadeDurumu === 'IADE_GEREKIYOR' ? '⚠️ İade Gerekiyor' :
-                                 (s as any).iadeDurumu === 'IADE_BEKLIYOR'  ? '🔄 İade Bekliyor'  :
-                                 (s as any).iadeDurumu === 'IADE_ONAYLANDI' ? '✅ İade Onaylandı' :
-                                 (s as any).iadeDurumu === 'IADE_ODENDI'    ? '💚 İade Ödendi'    : ''}
-                              </span>
-                            )}
-                          </td>
+                          <td><span className={`tip-badge ${s.onayDurumu ? 'nakit' : 'gider'}`}>{s.onayDurumu ? '✅ Onaylı' : '⏳ Bekliyor'}</span></td>
                           <td>{s.kullanici}</td>
                         </tr>
                       ))}
@@ -1521,24 +1459,19 @@ const Kasa: React.FC = () => {
                 </div>
               ) : <div className="empty-hareket"><p>Bu gün için satış bulunamadı.</p></div>
             )}
+            {/* ✅ v5: Geçmiş detay modali tahsilatlar da renderTahsilatSatiri kullanıyor */}
             {!detayYukleniyor && gecmisDetay.aktifTab === 'tahsilatlar' && (
               gecmisDetay.tahsilatOzet?.tahsilatlar.length ? (
                 <div className="hareket-listesi" style={{ marginTop: 12 }}>
                   <table className="hareket-tablosu">
-                    <thead><tr><th>Satış Tarihi</th><th>Satış Kodu</th><th>Müşteri</th><th>Nakit</th><th>Kart</th><th>Havale</th><th>Toplam</th><th>Satıcı</th></tr></thead>
+                    <thead>
+                      <tr>
+                        <th>Satış Tarihi</th><th>Satış Kodu</th><th>Müşteri</th>
+                        <th>Nakit</th><th>Kart</th><th>Havale</th><th>Toplam</th><th>Açıklama</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      {gecmisDetay.tahsilatOzet.tahsilatlar.map(s => (
-                        <tr key={s.id} className="hareket-satir onceki-gun-odeme">
-                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--teal)' }}>{s.satisTarihi ? formatGun(s.satisTarihi) : '—'}</td>
-                          <td><span className="tip-badge nakit">{s.satisKodu}</span></td>
-                          <td>{s.musteriIsim}</td>
-                          <td className="tutar giris">{s.nakitTutar > 0 ? formatPrice(s.nakitTutar) : '—'}</td>
-                          <td style={{ color: '#0066cc', fontFamily: 'var(--font-mono)' }}>{s.kartTutar > 0 ? formatPrice(s.kartTutar) : '—'}</td>
-                          <td style={{ color: '#666', fontFamily: 'var(--font-mono)' }}>{s.havaleTutar > 0 ? formatPrice(s.havaleTutar) : '—'}</td>
-                          <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{formatPrice(s.nakitTutar + s.kartTutar + s.havaleTutar)}</td>
-                          <td>{s.kullanici}</td>
-                        </tr>
-                      ))}
+                      {gecmisDetay.tahsilatOzet.tahsilatlar.map(renderTahsilatSatiri)}
                     </tbody>
                   </table>
                 </div>
