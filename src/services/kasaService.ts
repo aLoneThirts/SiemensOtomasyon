@@ -657,7 +657,7 @@ export const getTahsilatlar = async (
       yeniSnap.docs.forEach((tahDoc) => {
         yeniIds.add(tahDoc.id);
         const data = tahDoc.data();
-        if (data.satisTarihi === gun) return; // bugünkü satış, tahsilata girmesin
+        if (data.tahsilatGun === gun) return; // bugün ödendi, tahsilata girmesin
         const nakit  = Number(data.nakitTutar  ?? 0);
         const kart   = Number(data.kartTutar   ?? 0);
         const havale = Number(data.havaleTutar ?? 0);
@@ -699,7 +699,7 @@ export const getTahsilatlar = async (
         if (yeniIds.has(tahDoc.id)) return;
         const data = tahDoc.data();
         if (data.tahsilatGun) return;
-        if (data.satisTarihi === gun) return; // bugünkü satış, tahsilata girmesin
+        if (data.gun === gun) return; // bugün ödendi (eski kayıt), tahsilata girmesin
         const nakit  = Number(data.nakitTutar  ?? 0);
         const kart   = Number(data.kartTutar   ?? 0);
         const havale = Number(data.havaleTutar ?? 0);
@@ -745,7 +745,7 @@ export const getTahsilatlar = async (
       yeniIadeSnap.docs.forEach((iadeDoc) => {
         yeniIadeIds.add(iadeDoc.id);
         const data = iadeDoc.data();
-        if (data.satisTarihi === gun) return; // bugünkü satış, tahsilata girmesin
+        if (data.tahsilatGun === gun) return; // bugün ödendi, tahsilata girmesin
         const nakit  = Number(data.nakitTutar  ?? 0);
         const kart   = Number(data.kartTutar   ?? 0);
         const havale = Number(data.havaleTutar ?? 0);
@@ -785,7 +785,7 @@ export const getTahsilatlar = async (
         if (yeniIadeIds.has(iadeDoc.id)) return;
         const data = iadeDoc.data();
         if (data.tahsilatGun) return;
-        if (data.satisTarihi === gun) return; // bugünkü satış, tahsilata girmesin
+        if (data.gun === gun) return; // bugün ödendi (eski kayıt), tahsilata girmesin
         const nakit  = Number(data.nakitTutar  ?? 0);
         const kart   = Number(data.kartTutar   ?? 0);
         const havale = Number(data.havaleTutar ?? 0);
