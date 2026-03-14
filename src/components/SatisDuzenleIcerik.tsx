@@ -25,9 +25,9 @@ import { SatisTeklifFormu, Urun, KartOdeme, BANKALAR, TAKSIT_SECENEKLERI } from 
 import { getSubeByKod } from '../types/sube';
 import { useAuth } from '../context/AuthContext';
 import { writeSatisAuditLog } from '../services/satisLogService';
-import { kasaTahsilatEkle, kasaIadeEkle } from '../services/kasaService';
+import { kasaTahsilatEkle, kasaIadeEkle } from '../services/kasaService'; // iptal/iade akışları için hâlâ gerekli
 import { kasaIptalKaydiOlustur } from '../services/kasaIptalService';
-// ✅ v2: kasaOdemeDiffService entegrasyonu
+// ✅ v3: farklı gün düzenlemeler için DUZELTME tipi
 import { kasaOdemeDiffYaz, satistenOdemeSnapshot } from '../services/kasaOdemeDiffService';
 
 interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: boolean; subeKodu: string; tutar?: number; }
@@ -335,9 +335,7 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
   const acikHesap = () => { const a=toplamTutar()-toplamOdenen(); return a>0?a:0; };
   const karZarar = () => hesabaGecenToplam()-toplamMaliyet();
 
-  // ── KASA — v2: SatisDuzenlePage.tsx ile senkronize ───────────────────────
-  // Aynı gün: ID bazlı TAHSILAT/IADE
-  // Farklı gün: kasaOdemeDiffYaz (DUZELTME tipi)
+  // ── KASA — v3: Aynı gün → hiçbir şey yazma, farklı gün → DUZELTME ────────
   const odemeDeğisiklikleriniKasayaYansit = async () => {
     if (!satis || !subeKodu || !currentUser) return;
 
@@ -353,76 +351,9 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
       ? (() => { try { const d = typeof satisTarihiRaw.toDate==='function' ? satisTarihiRaw.toDate() : new Date(satisTarihiRaw); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; } catch { return bugun; } })()
       : bugun;
 
-    // ── AYNI GÜN: ID bazlı TAHSILAT/IADE ─────────────────────────────────
+    // ── AYNI GÜN: kasaya hiçbir şey yazma ────────────────────────────────
+    // Satış dokümanı güncelleniyor, recalcNakitSatis zaten doğru hesaplıyor.
     if (satisTarihiStr === bugun) {
-      const orijinalPesinatObj: Record<string,PesinatItem> = {};
-      orijinalPesinatlar.forEach(p => { orijinalPesinatObj[p.id]=p; });
-      const yeniPesinatObj: Record<string,PesinatItem> = {};
-      pesinatlar.forEach(p => { yeniPesinatObj[p.id]=p; });
-
-      for (const pid of Object.keys(orijinalPesinatObj)) {
-        const eski = orijinalPesinatObj[pid];
-        if (!yeniPesinatObj[pid]) {
-          if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:eski.tutar,kartTutar:0,havaleTutar:0,yapan,yapanId,iadeSebebi:'Peşinat silindi'});
-        } else {
-          const yeni = yeniPesinatObj[pid];
-          if (yeni.tutar !== eski.tutar) {
-            if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:eski.tutar,kartTutar:0,havaleTutar:0,yapan,yapanId,iadeSebebi:'Peşinat güncellendi (eski tutar geri alındı)'});
-            if (yeni.tutar>0) await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:yeni.tutar,kartTutar:0,havaleTutar:0,yapan,yapanId,aciklama:'Peşinat güncellendi (yeni tutar)',satisTarihi:satisTarihiStr});
-          }
-        }
-      }
-      for (const pid of Object.keys(yeniPesinatObj)) {
-        if (!orijinalPesinatObj[pid] && yeniPesinatObj[pid].tutar>0) {
-          await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:yeniPesinatObj[pid].tutar,kartTutar:0,havaleTutar:0,yapan,yapanId,aciklama:'Yeni peşinat eklendi',satisTarihi:satisTarihiStr});
-        }
-      }
-
-      const orijinalHavaleObj: Record<string,HavaleItem> = {};
-      orijinalHavaleler.forEach(h => { orijinalHavaleObj[h.id]=h; });
-      const yeniHavaleObj: Record<string,HavaleItem> = {};
-      havaleler.forEach(h => { yeniHavaleObj[h.id]=h; });
-
-      for (const hid of Object.keys(orijinalHavaleObj)) {
-        const eski = orijinalHavaleObj[hid];
-        if (!yeniHavaleObj[hid]) {
-          if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:0,havaleTutar:eski.tutar,yapan,yapanId,iadeSebebi:'Havale silindi'});
-        } else {
-          const yeni = yeniHavaleObj[hid];
-          if (yeni.tutar !== eski.tutar) {
-            if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:0,havaleTutar:eski.tutar,yapan,yapanId,iadeSebebi:'Havale güncellendi (eski tutar geri alındı)'});
-            if (yeni.tutar>0) await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:0,havaleTutar:yeni.tutar,yapan,yapanId,aciklama:'Havale güncellendi (yeni tutar)',satisTarihi:satisTarihiStr,havaleBanka:yeni.banka});
-          }
-        }
-      }
-      for (const hid of Object.keys(yeniHavaleObj)) {
-        if (!orijinalHavaleObj[hid] && yeniHavaleObj[hid].tutar>0) {
-          await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:0,havaleTutar:yeniHavaleObj[hid].tutar,yapan,yapanId,aciklama:'Yeni havale eklendi',satisTarihi:satisTarihiStr,havaleBanka:yeniHavaleObj[hid].banka});
-        }
-      }
-
-      const orijinalKartObj: Record<string,KartItem> = {};
-      orijinalKartOdemeler.forEach(k => { orijinalKartObj[k.id]=k; });
-      const yeniKartObj: Record<string,KartItem> = {};
-      kartOdemeler.forEach(k => { yeniKartObj[k.id]=k; });
-
-      for (const kid of Object.keys(orijinalKartObj)) {
-        const eski = orijinalKartObj[kid];
-        if (!yeniKartObj[kid]) {
-          if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:eski.tutar,havaleTutar:0,yapan,yapanId,iadeSebebi:'Kart ödemesi silindi'});
-        } else {
-          const yeni = yeniKartObj[kid];
-          if (yeni.tutar !== eski.tutar) {
-            if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:eski.tutar,havaleTutar:0,yapan,yapanId,iadeSebebi:'Kart ödemesi güncellendi (eski tutar geri alındı)'});
-            if (yeni.tutar>0) await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:yeni.tutar,havaleTutar:0,yapan,yapanId,aciklama:'Kart ödemesi güncellendi (yeni tutar)',satisTarihi:satisTarihiStr,kartBanka:yeni.banka});
-          }
-        }
-      }
-      for (const kid of Object.keys(yeniKartObj)) {
-        if (!orijinalKartObj[kid] && yeniKartObj[kid].tutar>0) {
-          await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:yeniKartObj[kid].tutar,havaleTutar:0,yapan,yapanId,aciklama:'Yeni kart ödemesi eklendi',satisTarihi:satisTarihiStr,kartBanka:yeniKartObj[kid].banka});
-        }
-      }
       return;
     }
 
