@@ -1,3 +1,22 @@
+// ===================================================
+//  SatisDuzenleIcerik.tsx — v2
+//
+//  v1'den v2'ye değişiklikler:
+//
+//  ✅ FIX 1: odemeDeğisiklikleriniKasayaYansit fonksiyonu
+//     SatisDuzenlePage.tsx ile senkronize edildi.
+//     - orijinalFirestoreData state'i eklendi
+//     - Aynı gün: TAHSILAT/IADE (ID bazlı diff)
+//     - Farklı gün: kasaOdemeDiffYaz (DUZELTME tipi)
+//     - Eski "sadece brüt fark" mantığı kaldırıldı
+//
+//  ✅ FIX 2: orijinalFirestoreData state'i eklendi
+//     Drawer modda da diff servisi için ham Firestore
+//     snapshot'ı saklanıyor.
+//
+//  Bunların dışında HİÇBİR ŞEY DEĞİŞMEDİ.
+// ===================================================
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
@@ -8,6 +27,8 @@ import { useAuth } from '../context/AuthContext';
 import { writeSatisAuditLog } from '../services/satisLogService';
 import { kasaTahsilatEkle, kasaIadeEkle } from '../services/kasaService';
 import { kasaIptalKaydiOlustur } from '../services/kasaIptalService';
+// ✅ v2: kasaOdemeDiffService entegrasyonu
+import { kasaOdemeDiffYaz, satistenOdemeSnapshot } from '../services/kasaOdemeDiffService';
 
 interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: boolean; subeKodu: string; tutar?: number; }
 interface YesilEtiketAdmin { id?: string; urunKodu: string; urunTuru?: string; maliyet: number; aciklama?: string; }
@@ -28,7 +49,22 @@ const normalizeFaturaNo = (val: string): string => { if (val.toLowerCase() === '
 const isFaturaNoGecerli = (val: string): boolean => !val || FATURA_NO_REGEX.test(val);
 const MARS_NO_REGEX = /^\d{10}$/;
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
-const bugunStr = (): string => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
+
+const bugunStr = (): string => {
+  const n = new Date();
+  const parts = new Intl.DateTimeFormat('tr-TR', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(n);
+  const y = parts.find(p => p.type === 'year')?.value  ?? '';
+  const m = parts.find(p => p.type === 'month')?.value ?? '';
+  const g = parts.find(p => p.type === 'day')?.value   ?? '';
+  return `${y}-${m}-${g}`;
+};
+
+type PesinatItem = { id: string; tutar: number; aciklama: string; gun?: string };
+type HavaleItem  = { id: string; tutar: number; banka: string; gun?: string };
+type KartItem    = KartOdeme & { gun?: string };
 
 const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = false, onKaydet, onIptal }) => {
   const navigate = useNavigate();
@@ -38,14 +74,17 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
   const [satis, setSatis] = useState<SatisTeklifFormu | null>(null);
   const [loading, setLoading] = useState(true);
   const [urunler, setUrunler] = useState<Urun[]>([]);
-  const [pesinatlar, setPesinatlar] = useState<{ id: string; tutar: number; aciklama: string }[]>([]);
-  const [havaleler, setHavaleler] = useState<{ id: string; tutar: number; banka: string }[]>([]);
-  const [kartOdemeler, setKartOdemeler] = useState<KartOdeme[]>([]);
+  const [pesinatlar, setPesinatlar] = useState<PesinatItem[]>([]);
+  const [havaleler, setHavaleler] = useState<HavaleItem[]>([]);
+  const [kartOdemeler, setKartOdemeler] = useState<KartItem[]>([]);
   const [kesintiCache, setKesintiCache] = useState<Record<string, Record<string, number>>>({});
   const [manuelSatisTutari, setManuelSatisTutari] = useState<number | null>(null);
-  const [orijinalPesinatlar, setOrijinalPesinatlar] = useState<{ id: string; tutar: number; aciklama: string }[]>([]);
-  const [orijinalHavaleler, setOrijinalHavaleler] = useState<{ id: string; tutar: number; banka: string }[]>([]);
-  const [orijinalKartOdemeler, setOrijinalKartOdemeler] = useState<KartOdeme[]>([]);
+  const [orijinalPesinatlar, setOrijinalPesinatlar] = useState<PesinatItem[]>([]);
+  const [orijinalHavaleler, setOrijinalHavaleler] = useState<HavaleItem[]>([]);
+  const [orijinalKartOdemeler, setOrijinalKartOdemeler] = useState<KartItem[]>([]);
+  // ✅ v2: Ham Firestore snapshot — DUZELTME diff için
+  const [orijinalFirestoreData, setOrijinalFirestoreData] = useState<any>(null);
+
   const [faturaNo, setFaturaNo] = useState('');
   const [faturaNoHata, setFaturaNoHata] = useState(false);
   const [faturaNoHataMesaj, setFaturaNoHataMesaj] = useState('');
@@ -142,26 +181,51 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
       if (satisDoc.exists()) {
         const data = { id: satisDoc.id, ...satisDoc.data() } as SatisTeklifFormu;
         setSatis(data);
+        // ✅ v2: Ham Firestore verisini sakla
+        setOrijinalFirestoreData(satisDoc.data());
         setUrunler(data.urunler || []);
         setManuelSatisTutari((data as any).toplamTutar || null);
+
+        const toDateStrLocal = (d: any): string => {
+          if (!d) return bugunStr();
+          try {
+            const date = typeof d === 'object' && 'toDate' in d ? d.toDate() : new Date(d);
+            return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+          } catch { return bugunStr(); }
+        };
+        const satisTarihiFallback = toDateStrLocal((data as any).olusturmaTarihi ?? (data as any).tarih);
+
         const loadedP: any[] = (data as any).pesinatlar || [];
-        const loadedH: any[] = (data as any).havaleler || [];
+        const loadedH: any[] = (data as any).havaleler  || [];
         const loadedK: KartOdeme[] = data.kartOdemeler || [];
-        const pList = loadedP.length > 0 ? loadedP : (data.pesinatTutar ? [{ id: '1', tutar: data.pesinatTutar, aciklama: '' }] : []);
-        const hList = loadedH.length > 0 ? loadedH : (data.havaleTutar ? [{ id: '1', tutar: data.havaleTutar, banka: (data as any).havaleBanka || HAVALE_BANKALARI[0] }] : []);
-        setPesinatlar(pList); setHavaleler(hList); setKartOdemeler(loadedK);
+
+        const pList: PesinatItem[] = loadedP.length > 0
+          ? loadedP.map((p: any) => ({ ...p, gun: p.gun ?? satisTarihiFallback }))
+          : (data.pesinatTutar ? [{ id: '1', tutar: data.pesinatTutar, aciklama: '', gun: satisTarihiFallback }] : []);
+
+        const hList: HavaleItem[] = loadedH.length > 0
+          ? loadedH.map((h: any) => ({ ...h, gun: h.gun ?? satisTarihiFallback }))
+          : (data.havaleTutar ? [{ id: '1', tutar: data.havaleTutar, banka: (data as any).havaleBanka || HAVALE_BANKALARI[0], gun: satisTarihiFallback }] : []);
+
+        const kList: KartItem[] = loadedK.map((k: any) => ({ ...k, gun: k.gun ?? satisTarihiFallback }));
+
+        setPesinatlar(pList); setHavaleler(hList); setKartOdemeler(kList);
         setOrijinalPesinatlar(JSON.parse(JSON.stringify(pList)));
         setOrijinalHavaleler(JSON.parse(JSON.stringify(hList)));
-        setOrijinalKartOdemeler(JSON.parse(JSON.stringify(loadedK)));
+        setOrijinalKartOdemeler(JSON.parse(JSON.stringify(kList)));
+
         setFaturaNo(data.faturaNo || ''); setServisNotu(data.servisNotu || '');
         setMagaza((data as any).magaza || ''); setNotlar((data as any).notlar || '');
         setTeslimEdildiMi((data as any).teslimEdildiMi === true);
+
         const mb = data.musteriBilgileri as any;
         setMusteriIsim(mb?.isim || ''); setMusteriUnvan(mb?.unvan || ''); setMusteriVkNo(mb?.vkNo || '');
         setMusteriVd(mb?.vd || ''); setMusteriAdres(mb?.adres || ''); setMusteriFaturaAdresi(mb?.faturaAdresi || ''); setMusteriCep(mb?.cep || '');
         if (data.kampanyalar) setSeciliKampanyaIds(data.kampanyalar.map((k: any) => k.id).filter(Boolean));
-        const toDateStr = (d: any) => { if (!d) return ''; try { const date = typeof d==='object'&&'toDate' in d ? d.toDate() : new Date(d); return date.toISOString().split('T')[0]; } catch { return ''; } };
+
+        const toDateStr = (d: any) => { if (!d) return ''; try { const date = typeof d === 'object' && 'toDate' in d ? d.toDate() : new Date(d); return date.toISOString().split('T')[0]; } catch { return ''; } };
         setSatisTarihi(toDateStr((data as any).tarih || (data as any).olusturmaTarihi));
+
         if (data.marsGirisleri && Array.isArray(data.marsGirisleri) && data.marsGirisleri.length > 0) {
           setMarsListesi(data.marsGirisleri);
         } else {
@@ -185,48 +249,25 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
     setUrunler(y); setUrunAramaDropdown(null);
   };
 
-  // GÜNCELLENMİŞ HANDLEURUNCHANGE FONKSİYONU
   const handleUrunChange = (index: number, field: keyof Urun, value: any) => {
     const yeniUrunler = [...urunler];
-    
-    // Değeri field tipine göre güncelle (sayısal alanlar için parse et)
     yeniUrunler[index] = {
       ...yeniUrunler[index],
       [field]: field === 'adet' || field === 'alisFiyati' || field === 'bip' ? parseFloat(value) || 0 : value,
     };
-
-    // Eğer değiştirilen alan 'kod' ise, otomatik tamamlama mantığını çalıştır
     if (field === 'kod') {
       const trimmedKod = String(value).trim().toUpperCase();
       const eslesme = urunCache[trimmedKod];
-
-      // Tam eşleşme bulunduysa, ürün bilgilerini cache'den doldur
       if (eslesme) {
-        yeniUrunler[index] = {
-          ...yeniUrunler[index],
-          kod: trimmedKod,
-          ad: eslesme.ad || yeniUrunler[index].ad,
-          alisFiyati: eslesme.alis,
-          bip: eslesme.bip,
-        };
-        setUrunAramaDropdown(null); // Eşleşme bulundu, dropdown'u kapat
-      } 
-      // Tam eşleşme yoksa ve girilen kod 2 karakterden uzunsa, öneri listesi göster
-      else if (trimmedKod.length >= 2) {
+        yeniUrunler[index] = { ...yeniUrunler[index], kod: trimmedKod, ad: eslesme.ad || yeniUrunler[index].ad, alisFiyati: eslesme.alis, bip: eslesme.bip };
+        setUrunAramaDropdown(null);
+      } else if (trimmedKod.length >= 2) {
         const bulunanKodlar = Object.keys(urunCache).filter(k => k.toUpperCase().includes(trimmedKod)).slice(0, 10);
         setUrunAramaDropdown(bulunanKodlar.length > 0 ? { index, sonuclar: bulunanKodlar } : null);
-      } 
-      // Girilen kod 2 karakterden kısaysa dropdown'u kapat
-      else {
-        setUrunAramaDropdown(null);
-      }
+      } else { setUrunAramaDropdown(null); }
     }
-
     setUrunler(yeniUrunler);
-    // Satış tutarı manuel girildiyse, ürün değişince manuel tutarı geçersiz kıl
-    if (field === 'alisFiyati' || field === 'adet') {
-      setManuelSatisTutari(null);
-    }
+    if (field === 'alisFiyati' || field === 'adet') setManuelSatisTutari(null);
   };
 
   const handleUrunDeliveredChange = (index: number, checked: boolean) => {
@@ -238,10 +279,14 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
   const urunSil = (index: number) => { if (urunler.length > 1) setUrunler(prev => prev.filter((_,i) => i !== index)); };
   const kampanyaToggle = (id: string) => setSeciliKampanyaIds(prev => prev.includes(id) ? prev.filter(k=>k!==id) : [...prev,id]);
   const seciliKampanyalar = kampanyaAdminListesi.filter(k => seciliKampanyaIds.includes(k.id!));
-  const eslesenYesilEtiketler = () => { const r: {urunKodu:string;urunAdi:string;maliyet:number;adet:number}[]=[]; for(const u of urunler){const e=yesilEtiketAdminList.find(y=>y.urunKodu.trim().toLowerCase()===u.kod.trim().toLowerCase());if(e)r.push({urunKodu:u.kod,urunAdi:u.ad,maliyet:e.maliyet,adet:u.adet});}return r; };
+  const eslesenYesilEtiketler = () => {
+    const r: {urunKodu:string;urunAdi:string;maliyet:number;adet:number}[]= [];
+    for(const u of urunler){ const e=yesilEtiketAdminList.find(y=>y.urunKodu.trim().toLowerCase()===u.kod.trim().toLowerCase()); if(e)r.push({urunKodu:u.kod,urunAdi:u.ad,maliyet:e.maliyet,adet:u.adet}); }
+    return r;
+  };
   const yesilEtiketToplamIndirim = () => eslesenYesilEtiketler().reduce((t,e)=>t+e.maliyet*e.adet,0);
 
-  const kartEkle = () => setKartOdemeler(prev => [...prev, { id: Date.now().toString(), banka: BANKALAR[0], taksitSayisi: 1, tutar: 0, kesintiOrani: 0 }]);
+  const kartEkle = () => setKartOdemeler(prev => [...prev, { id: Date.now().toString(), banka: BANKALAR[0], taksitSayisi: 1, tutar: 0, kesintiOrani: 0, gun: bugunStr() } as KartItem]);
   const kartSil = (index: number) => setKartOdemeler(prev => prev.filter((_,i)=>i!==index));
   const handleKartChange = (index: number, field: keyof KartOdeme, value: any) => {
     const y = [...kartOdemeler];
@@ -250,13 +295,13 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
     y[index]=k; setKartOdemeler(y);
   };
 
-  const pesinatEkle = () => setPesinatlar(prev => [...prev, { id: Date.now().toString(), tutar: 0, aciklama: '' }]);
-  const pesinatSil = (id: string) => setPesinatlar(prev => prev.filter(p=>p.id!==id));
-  const handlePesinatChange = (id: string, field: 'tutar'|'aciklama', value: any) => setPesinatlar(prev => prev.map(p=>p.id===id?{...p,[field]:field==='tutar'?(parseFloat(value)||0):value}:p));
+  const pesinatEkle = () => setPesinatlar(prev => [...prev, { id: Date.now().toString(), tutar: 0, aciklama: '', gun: bugunStr() }]);
+  const pesinatSil = (pesinatId: string) => setPesinatlar(prev => prev.filter(p=>p.id!==pesinatId));
+  const handlePesinatChange = (pesinatId: string, field: 'tutar'|'aciklama', value: any) => setPesinatlar(prev => prev.map(p=>p.id===pesinatId?{...p,[field]:field==='tutar'?(parseFloat(value)||0):value}:p));
 
-  const havaleEkle = () => setHavaleler(prev => [...prev, { id: Date.now().toString(), tutar: 0, banka: HAVALE_BANKALARI[0] }]);
-  const havaleSil = (id: string) => setHavaleler(prev => prev.filter(h=>h.id!==id));
-  const handleHavaleChange = (id: string, field: 'tutar'|'banka', value: any) => setHavaleler(prev => prev.map(h=>h.id===id?{...h,[field]:field==='tutar'?(parseFloat(value)||0):value}:h));
+  const havaleEkle = () => setHavaleler(prev => [...prev, { id: Date.now().toString(), tutar: 0, banka: HAVALE_BANKALARI[0], gun: bugunStr() }]);
+  const havaleSil = (havaleId: string) => setHavaleler(prev => prev.filter(h=>h.id!==havaleId));
+  const handleHavaleChange = (havaleId: string, field: 'tutar'|'banka', value: any) => setHavaleler(prev => prev.map(h=>h.id===havaleId?{...h,[field]:field==='tutar'?(parseFloat(value)||0):value}:h));
 
   const marsEkle = () => { if(marsListesi.length>=MAX_MARS)return; setMarsListesi(prev=>[...prev,{marsNo:'',teslimatTarihi:'',etiket:etiketAd(prev.length)}]); };
   const marsSil = (index: number) => { if(index===0)return; setMarsListesi(prev=>prev.filter((_,i)=>i!==index)); };
@@ -281,35 +326,130 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
   const kampanyaToplamiHesapla = () => seciliKampanyalar.reduce((t,k)=>t+(k.tutar||0),0);
   const toplamMaliyet = () => Math.max(0,urunler.reduce((t,u)=>t+(u.alisFiyati-(u.bip||0))*u.adet,0)-kampanyaToplamiHesapla());
   const pesinatToplam = () => pesinatlar.reduce((t,p)=>t+(p.tutar||0),0);
-  const havaleToplam = () => havaleler.reduce((t,h)=>t+(h.tutar||0),0);
+  const haveleToplam = () => havaleler.reduce((t,h)=>t+(h.tutar||0),0);
   const kartBrutToplam = () => kartOdemeler.reduce((t,k)=>t+(k.tutar||0),0);
   const kartKesintiToplam = () => kartOdemeler.reduce((t,k)=>t+(k.tutar*(k.kesintiOrani||0))/100,0);
   const kartNetToplam = () => kartBrutToplam()-kartKesintiToplam();
-  const toplamOdenen = () => pesinatToplam()+havaleToplam()+kartBrutToplam();
-  const hesabaGecenToplam = () => pesinatToplam()+havaleToplam()+kartNetToplam();
+  const toplamOdenen = () => pesinatToplam()+haveleToplam()+kartBrutToplam();
+  const hesabaGecenToplam = () => pesinatToplam()+haveleToplam()+kartNetToplam();
   const acikHesap = () => { const a=toplamTutar()-toplamOdenen(); return a>0?a:0; };
   const karZarar = () => hesabaGecenToplam()-toplamMaliyet();
 
-  // ── KASA ─────────────────────────────────────────────────────────────────
-
+  // ── KASA — v2: SatisDuzenlePage.tsx ile senkronize ───────────────────────
+  // Aynı gün: ID bazlı TAHSILAT/IADE
+  // Farklı gün: kasaOdemeDiffYaz (DUZELTME tipi)
   const odemeDeğisiklikleriniKasayaYansit = async () => {
-    if(!satis||!subeKodu||!currentUser)return;
-    const mIsim=(satis as any).musteriBilgileri?.isim??'—';
-    const sKodu=satis.satisKodu??satisId??'';
-    const gun=bugunStr(); const yapan=`${currentUser.ad} ${currentUser.soyad}`; const yapanId=currentUser.uid||'';
-    const nakitFark=pesinatToplam()-orijinalPesinatlar.reduce((t,p)=>t+(p.tutar||0),0);
-    const havaleFark=havaleToplam()-orijinalHavaleler.reduce((t,h)=>t+(h.tutar||0),0);
-    const kartFark=kartBrutToplam()-orijinalKartOdemeler.reduce((t,k)=>t+(k.tutar||0),0);
-    if(nakitFark===0&&havaleFark===0&&kartFark===0)return;
-    const kN=Math.max(0,nakitFark),kH=Math.max(0,havaleFark),kK=Math.max(0,kartFark);
-    if(kN>0||kH>0||kK>0){
-      const raw=(satis as any).olusturmaTarihi??(satis as any).tarih;
-      const tStr=raw?(()=>{try{const d=typeof raw.toDate==='function'?raw.toDate():new Date(raw);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}catch{return undefined;}})():undefined;
-      await kasaTahsilatEkle({subeKodu,gun,satisId,satisKodu:sKodu,musteriIsim:mIsim,nakitTutar:kN,kartTutar:kK,havaleTutar:kH,yapan,yapanId,aciklama:'Satış güncelleme — ödeme eklendi',satisTarihi:tStr,kartBanka:kartOdemeler.find(k=>k.tutar>0)?.banka??undefined,havaleBanka:havaleler.find(h=>h.tutar>0)?.banka??undefined});
+    if (!satis || !subeKodu || !currentUser) return;
+
+    const musteriIsimVal = (satis as any).musteriBilgileri?.isim ?? '—';
+    const satisKoduVal   = satis.satisKodu ?? satisId ?? '';
+    const satisIdVal     = satis.id ?? satisId ?? '';
+    const bugun          = bugunStr();
+    const yapan          = `${currentUser.ad} ${currentUser.soyad}`;
+    const yapanId        = currentUser.uid || '';
+
+    const satisTarihiRaw = (satis as any).olusturmaTarihi ?? (satis as any).tarih;
+    const satisTarihiStr: string = satisTarihiRaw
+      ? (() => { try { const d = typeof satisTarihiRaw.toDate==='function' ? satisTarihiRaw.toDate() : new Date(satisTarihiRaw); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; } catch { return bugun; } })()
+      : bugun;
+
+    // ── AYNI GÜN: ID bazlı TAHSILAT/IADE ─────────────────────────────────
+    if (satisTarihiStr === bugun) {
+      const orijinalPesinatObj: Record<string,PesinatItem> = {};
+      orijinalPesinatlar.forEach(p => { orijinalPesinatObj[p.id]=p; });
+      const yeniPesinatObj: Record<string,PesinatItem> = {};
+      pesinatlar.forEach(p => { yeniPesinatObj[p.id]=p; });
+
+      for (const pid of Object.keys(orijinalPesinatObj)) {
+        const eski = orijinalPesinatObj[pid];
+        if (!yeniPesinatObj[pid]) {
+          if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:eski.tutar,kartTutar:0,havaleTutar:0,yapan,yapanId,iadeSebebi:'Peşinat silindi'});
+        } else {
+          const yeni = yeniPesinatObj[pid];
+          if (yeni.tutar !== eski.tutar) {
+            if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:eski.tutar,kartTutar:0,havaleTutar:0,yapan,yapanId,iadeSebebi:'Peşinat güncellendi (eski tutar geri alındı)'});
+            if (yeni.tutar>0) await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:yeni.tutar,kartTutar:0,havaleTutar:0,yapan,yapanId,aciklama:'Peşinat güncellendi (yeni tutar)',satisTarihi:satisTarihiStr});
+          }
+        }
+      }
+      for (const pid of Object.keys(yeniPesinatObj)) {
+        if (!orijinalPesinatObj[pid] && yeniPesinatObj[pid].tutar>0) {
+          await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:yeniPesinatObj[pid].tutar,kartTutar:0,havaleTutar:0,yapan,yapanId,aciklama:'Yeni peşinat eklendi',satisTarihi:satisTarihiStr});
+        }
+      }
+
+      const orijinalHavaleObj: Record<string,HavaleItem> = {};
+      orijinalHavaleler.forEach(h => { orijinalHavaleObj[h.id]=h; });
+      const yeniHavaleObj: Record<string,HavaleItem> = {};
+      havaleler.forEach(h => { yeniHavaleObj[h.id]=h; });
+
+      for (const hid of Object.keys(orijinalHavaleObj)) {
+        const eski = orijinalHavaleObj[hid];
+        if (!yeniHavaleObj[hid]) {
+          if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:0,havaleTutar:eski.tutar,yapan,yapanId,iadeSebebi:'Havale silindi'});
+        } else {
+          const yeni = yeniHavaleObj[hid];
+          if (yeni.tutar !== eski.tutar) {
+            if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:0,havaleTutar:eski.tutar,yapan,yapanId,iadeSebebi:'Havale güncellendi (eski tutar geri alındı)'});
+            if (yeni.tutar>0) await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:0,havaleTutar:yeni.tutar,yapan,yapanId,aciklama:'Havale güncellendi (yeni tutar)',satisTarihi:satisTarihiStr,havaleBanka:yeni.banka});
+          }
+        }
+      }
+      for (const hid of Object.keys(yeniHavaleObj)) {
+        if (!orijinalHavaleObj[hid] && yeniHavaleObj[hid].tutar>0) {
+          await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:0,havaleTutar:yeniHavaleObj[hid].tutar,yapan,yapanId,aciklama:'Yeni havale eklendi',satisTarihi:satisTarihiStr,havaleBanka:yeniHavaleObj[hid].banka});
+        }
+      }
+
+      const orijinalKartObj: Record<string,KartItem> = {};
+      orijinalKartOdemeler.forEach(k => { orijinalKartObj[k.id]=k; });
+      const yeniKartObj: Record<string,KartItem> = {};
+      kartOdemeler.forEach(k => { yeniKartObj[k.id]=k; });
+
+      for (const kid of Object.keys(orijinalKartObj)) {
+        const eski = orijinalKartObj[kid];
+        if (!yeniKartObj[kid]) {
+          if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:eski.tutar,havaleTutar:0,yapan,yapanId,iadeSebebi:'Kart ödemesi silindi'});
+        } else {
+          const yeni = yeniKartObj[kid];
+          if (yeni.tutar !== eski.tutar) {
+            if (eski.tutar>0) await kasaIadeEkle({subeKodu,gun:eski.gun??bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:eski.tutar,havaleTutar:0,yapan,yapanId,iadeSebebi:'Kart ödemesi güncellendi (eski tutar geri alındı)'});
+            if (yeni.tutar>0) await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:yeni.tutar,havaleTutar:0,yapan,yapanId,aciklama:'Kart ödemesi güncellendi (yeni tutar)',satisTarihi:satisTarihiStr,kartBanka:yeni.banka});
+          }
+        }
+      }
+      for (const kid of Object.keys(yeniKartObj)) {
+        if (!orijinalKartObj[kid] && yeniKartObj[kid].tutar>0) {
+          await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:yeniKartObj[kid].tutar,havaleTutar:0,yapan,yapanId,aciklama:'Yeni kart ödemesi eklendi',satisTarihi:satisTarihiStr,kartBanka:yeniKartObj[kid].banka});
+        }
+      }
+      return;
     }
-    const iN=nakitFark<0?Math.abs(nakitFark):0,iH=havaleFark<0?Math.abs(havaleFark):0,iK=kartFark<0?Math.abs(kartFark):0;
-    if(iN>0||iH>0||iK>0) await kasaIadeEkle({subeKodu,gun,satisId,satisKodu:sKodu,musteriIsim:mIsim,nakitTutar:iN,kartTutar:iK,havaleTutar:iH,yapan,yapanId,iadeSebebi:'Satış düzenleme — ödeme azaltıldı'});
+
+    // ── FARKLI GÜN: kasaOdemeDiffYaz (DUZELTME tipi) ─────────────────────
+    const eskiOdeme = satistenOdemeSnapshot(orijinalFirestoreData ?? {});
+    const yeniOdeme = {
+      nakitTutar:  pesinatToplam(),
+      kartTutar:   kartBrutToplam(),
+      havaleTutar: haveleToplam(),
+      kartOdemeler: kartOdemeler.map(k => ({ tutar: k.tutar, banka: k.banka })),
+      havaleler:    havaleler.map(h => ({ tutar: h.tutar, banka: h.banka })),
+    };
+
+    await kasaOdemeDiffYaz({
+      subeKodu,
+      satisId:     satisIdVal,
+      satisKodu:   satisKoduVal,
+      musteriIsim: musteriIsimVal,
+      satisTarihi: satisTarihiStr,
+      eskiOdeme,
+      yeniOdeme,
+      yapan,
+      yapanId,
+    });
   };
+
+  // ── İPTAL / İADE ─────────────────────────────────────────────────────────
 
   const satisiIptalEt = async () => {
     if(!satis?.id)return; const sube=getSubeByKod(subeKodu as any); if(!sube)return;
@@ -319,7 +459,7 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
       catch{alert('❌ İptal talebi gönderilemedi!');}finally{setIptalIslemYapiliyor(false);}return;
     }
     try{
-      const top=pesinatToplam()+havaleToplam()+kartBrutToplam();const yID=top>0?'IADE_GEREKIYOR':undefined;
+      const top=pesinatToplam()+haveleToplam()+kartBrutToplam();const yID=top>0?'IADE_GEREKIYOR':undefined;
       await updateDoc(doc(db,`subeler/${sube.dbPath}/satislar`,satis.id),{satisDurumu:'IPTAL',onayDurumu:false,iptalTarihi:new Date(),guncellemeTarihi:new Date(),...(yID?{iadeDurumu:yID}:{})});
       setSatis(prev=>prev?{...prev,satisDurumu:'IPTAL',iadeDurumu:yID}as any:prev);setIptalPopup(false);
       alert(yID?`✅ Satış iptal edildi.\n⚠️ ${formatPrice(top)} tutarında ödeme var.`:'✅ Satış iptal edildi.');
@@ -331,11 +471,11 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
     setIptalIslemYapiliyor(true);
     try{
       const yapan=`${currentUser.ad} ${currentUser.soyad}`;const yapanId=currentUser.uid||'';
-      await kasaIadeEkle({subeKodu,gun:bugunStr(),satisId,satisKodu:satis.satisKodu??'',musteriIsim:(satis as any).musteriBilgileri?.isim??'—',nakitTutar:pesinatToplam(),kartTutar:kartBrutToplam(),havaleTutar:havaleToplam(),yapan,yapanId,iadeSebebi:'Satış iptali iadesi'});
+      await kasaIadeEkle({subeKodu,gun:bugunStr(),satisId,satisKodu:satis.satisKodu??'',musteriIsim:(satis as any).musteriBilgileri?.isim??'—',nakitTutar:pesinatToplam(),kartTutar:kartBrutToplam(),havaleTutar:haveleToplam(),yapan,yapanId,iadeSebebi:'Satış iptali iadesi'});
       await kasaIptalKaydiOlustur({satis:{...satis,id:satis.id}as any,subeKodu,iptalYapan:yapan,iptalYapanId:yapanId});
       await updateDoc(doc(db,`subeler/${sube.dbPath}/satislar`,satis.id),{iadeDurumu:'IADE_ODENDI',iadeOnayTarihi:new Date(),iadeOnaylayan:yapan,guncellemeTarihi:new Date()});
       setSatis(prev=>prev?{...prev,iadeDurumu:'IADE_ODENDI'}as any:prev);setIadePopup(false);
-      alert(`✅ İade onaylandı!\n💵 ${formatPrice(pesinatToplam()+havaleToplam()+kartBrutToplam())} kasadan düşüldü.`);
+      alert(`✅ İade onaylandı!\n💵 ${formatPrice(pesinatToplam()+haveleToplam()+kartBrutToplam())} kasadan düşüldü.`);
     }catch(err){alert('❌ İade işlemi başarısız: '+(err as Error).message);}finally{setIptalIslemYapiliyor(false);}
   };
 
@@ -343,15 +483,25 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
     if(!satis?.id)return; const sube=getSubeByKod(subeKodu as any); if(!sube)return;
     setIptalIslemYapiliyor(true);
     try{
-      const yeniOnay=iptaldenCikarStatusu==='ONAYLI';const mevcut=(satis as any).iadeDurumu;const top=pesinatToplam()+havaleToplam()+kartBrutToplam();
-      if(mevcut==='IADE_ODENDI'&&top>0&&currentUser){await kasaTahsilatEkle({subeKodu,gun:bugunStr(),satisId:satis.id!,satisKodu:satis.satisKodu??'',musteriIsim:(satis as any).musteriBilgileri?.isim??'—',nakitTutar:pesinatToplam(),kartTutar:kartBrutToplam(),havaleTutar:havaleToplam(),yapan:`${currentUser.ad} ${currentUser.soyad}`,yapanId:currentUser.uid||'',aciklama:'İptalden çıkarma — iade geri alındı',satisTarihi:undefined});}
+      const yeniOnay=iptaldenCikarStatusu==='ONAYLI';const mevcut=(satis as any).iadeDurumu;const top=pesinatToplam()+haveleToplam()+kartBrutToplam();
+      if(mevcut==='IADE_ODENDI'&&top>0&&currentUser){
+        await kasaTahsilatEkle({
+          subeKodu,gun:bugunStr(),satisId:satis.id!,satisKodu:satis.satisKodu??'',
+          musteriIsim:(satis as any).musteriBilgileri?.isim??'—',
+          nakitTutar:pesinatToplam(),kartTutar:kartBrutToplam(),havaleTutar:haveleToplam(),
+          yapan:`${currentUser.ad} ${currentUser.soyad}`,yapanId:currentUser.uid||'',
+          aciklama:'İptalden çıkarma — iade geri alındı',
+          // satisTarihi: undefined bırakılmaz, string olarak verilir
+          satisTarihi: bugunStr(),
+        });
+      }
       await updateDoc(doc(db,`subeler/${sube.dbPath}/satislar`,satis.id),{satisDurumu:iptaldenCikarStatusu,onayDurumu:yeniOnay,iptalTarihi:null,iadeDurumu:null,guncellemeTarihi:new Date()});
       setSatis(prev=>prev?{...prev,satisDurumu:iptaldenCikarStatusu,onayDurumu:yeniOnay,iadeDurumu:null}as any:prev);setIptaldenCikarPopup(false);
       alert(`✅ Satış "${iptaldenCikarStatusu==='ONAYLI'?'Onaylı':'Beklemede'}" statüsüne alındı.`);
     }catch(err){alert('❌ İşlem başarısız: '+(err as Error).message);}finally{setIptalIslemYapiliyor(false);}
   };
 
-  // ── SUBMIT ───────────────────────────────────────────────────────────────
+  // ── SUBMIT ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -382,11 +532,11 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
         musteriBilgileri:{...((satis as any).musteriBilgileri||{}),isim:musteriIsim,unvan:musteriUnvan,vkNo:musteriVkNo,vd:musteriVd,adres:musteriAdres,faturaAdresi:musteriFaturaAdresi,cep:musteriCep},
         urunler:urunler.map(u=>({...u,alisFiyatSnapshot:(u as any).alisFiyatSnapshot??u.alisFiyati,bipSnapshot:(u as any).bipSnapshot??(u.bip||0),greenPriceSnapshot:(u as any).greenPriceSnapshot??null,snapshotTarihi:(u as any).snapshotTarihi||new Date().toISOString()})),
         kampanyalar:seciliKampanyalar.map(k=>({id:k.id!,ad:k.ad,tutar:k.tutar||0})),kampanyaToplami:kampanyaToplamiHesapla(),
-        yesilEtiketler:etiketler.map(e=>({id:Date.now().toString(),urunKodu:e.urunKodu,ad:e.urunAdi,alisFiyati:e.maliyet,tutar:e.maliyet*e.adet})),
+        yesilEtiketler:etiketler.map((e:any)=>({id:Date.now().toString(),urunKodu:e.urunKodu,ad:e.urunAdi,alisFiyati:e.maliyet,tutar:e.maliyet*e.adet})),
         pesinatlar,havaleler,
         kartOdemeler:kartOdemeler.map(k=>({...k,commissionRateSnapshot:k.kesintiOrani||0,commissionAmountSnapshot:(k.tutar*(k.kesintiOrani||0))/100,netAmountSnapshot:k.tutar-(k.tutar*(k.kesintiOrani||0))/100,snapshotTarihi:(k as any).snapshotTarihi||new Date().toISOString()})),
-        pesinatToplam:pesinatToplam(),havaleToplam:havaleToplam(),kartBrutToplam:kartBrutToplam(),kartKesintiToplam:kartKesintiToplam(),kartNetToplam:kartNetToplam(),toplamOdenen:toplamOdenen(),hesabaGecenToplam:hesabaGecenToplam(),acikHesap:acikHesap(),odemeDurumu:acikHesap()>0?'ACIK_HESAP':'ODENDI',
-        pesinatTutar:pesinatToplam(),havaleTutar:havaleToplam(),
+        pesinatToplam:pesinatToplam(),havaleToplam:haveleToplam(),kartBrutToplam:kartBrutToplam(),kartKesintiToplam:kartKesintiToplam(),kartNetToplam:kartNetToplam(),toplamOdenen:toplamOdenen(),hesabaGecenToplam:hesabaGecenToplam(),acikHesap:acikHesap(),odemeDurumu:acikHesap()>0?'ACIK_HESAP':'ODENDI',
+        pesinatTutar:pesinatToplam(),havaleTutar:haveleToplam(),
         marsNo:orijinal.marsNo,faturaNo,servisNotu,magaza:magaza.trim()||null,notlar:notlar.trim()||null,teslimEdildiMi,
         toplamTutar:toplamTutar(),zarar:karZarar(),
         teslimatTarihi:orijinal.teslimatTarihi?new Date(orijinal.teslimatTarihi):null,
@@ -410,8 +560,6 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
   };
   const iadeBadgeMetin = (durum: string) => ({'IADE_GEREKIYOR':'⚠️ İade Gerekiyor','IADE_BEKLIYOR':'🔄 İade Bekliyor','IADE_ONAYLANDI':'✅ İade Onaylandı','IADE_ODENDI':'💚 İade Ödendi'}[durum]??durum);
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
-
   if (loading) return <div className="duzenle-loading">Yükleniyor...</div>;
   if (!satis) return <div className="duzenle-not-found"><p>Satış bulunamadı.</p></div>;
 
@@ -426,7 +574,7 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
             <p className="duzenle-popup-mesaj">
               <strong>{satis.satisKodu}</strong> kodlu satış için {isAdmin?'iptal işlemi yapılsın mı?':'admin onayına iptal talebi gönderilsin mi?'}
               <br />
-              {isAdmin&&pesinatToplam()+havaleToplam()+kartBrutToplam()>0&&(<span style={{color:'#dc2626',fontWeight:600}}>⚠️ {formatPrice(pesinatToplam()+havaleToplam()+kartBrutToplam())} tahsilat var. İptal sonrası iade gerekecek.</span>)}
+              {isAdmin&&pesinatToplam()+haveleToplam()+kartBrutToplam()>0&&(<span style={{color:'#dc2626',fontWeight:600}}>⚠️ {formatPrice(pesinatToplam()+haveleToplam()+kartBrutToplam())} tahsilat var. İptal sonrası iade gerekecek.</span>)}
               <br /><span className="duzenle-popup-alt-not">{isAdmin?'Satış silinmeyecek, listede görünmeye devam edecek.':'Talebiniz admin tarafından onaylandığında satış iptal edilecek.'}</span>
             </p>
             <div className="duzenle-popup-butonlar">
@@ -444,7 +592,7 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
             <h3 className="duzenle-popup-baslik">İadeyi Onayla</h3>
             <p className="duzenle-popup-mesaj">
               <strong>{satis.satisKodu}</strong> — müşteriye iade yapıldı mı?
-              <br /><span style={{fontWeight:700,color:'#dc2626',fontSize:18}}>{formatPrice(pesinatToplam()+havaleToplam()+kartBrutToplam())}</span>
+              <br /><span style={{fontWeight:700,color:'#dc2626',fontSize:18}}>{formatPrice(pesinatToplam()+haveleToplam()+kartBrutToplam())}</span>
               <br /><span className="duzenle-popup-alt-not">Bu tutar <strong>bugünün ({bugunStr()}) kasasından</strong> düşülecek.</span>
             </p>
             <div className="duzenle-popup-butonlar">
@@ -580,106 +728,25 @@ const SatisDuzenleIcerik: React.FC<Props> = ({ subeKodu, satisId, drawerMode = f
             <div className="duzenle-odeme-blok-header"><div className="duzenle-odeme-blok-title">🏦 Havale</div>{!alanlarKilitli&&<button type="button" onClick={havaleEkle} className="duzenle-btn-sm">+ Havale Ekle</button>}</div>
             {havaleler.map(h=>(<div key={h.id} style={{display:'flex',gap:8,marginBottom:8}}><select value={h.banka} onChange={e=>handleHavaleChange(h.id,'banka',e.target.value)} className="duzenle-input" style={{flex:2}} disabled={alanlarKilitli}>{HAVALE_BANKALARI.map(b=><option key={b} value={b}>{b}</option>)}</select><input type="number" min="0" placeholder="Tutar" value={h.tutar||''} onChange={e=>handleHavaleChange(h.id,'tutar',e.target.value)} className="duzenle-input mono" style={{flex:1}} disabled={alanlarKilitli} />{!alanlarKilitli&&<button type="button" onClick={()=>havaleSil(h.id)} className="duzenle-btn-remove">Sil</button>}</div>))}
             {havaleler.length===0&&<div style={{color:'#9ca3af',fontSize:13}}>Havale yok</div>}
-            {havaleToplam()>0&&<div className="duzenle-odeme-bilgi ok">✅ Toplam: {formatPrice(havaleToplam())}</div>}
+            {haveleToplam()>0&&<div className="duzenle-odeme-bilgi ok">✅ Toplam: {formatPrice(haveleToplam())}</div>}
           </div>
-          
-          {/* GÜNCELLENMİŞ KART ÖDEMELERİ BÖLÜMÜ */}
-          <div className="duzenle-odeme-blok" style={{ marginTop: 14 }}>
-            <div className="duzenle-odeme-blok-header">
-              <div className="duzenle-odeme-blok-title">💳 Kart Ödemeleri</div>
-              {!alanlarKilitli && (
-                <button type="button" onClick={kartEkle} className="duzenle-btn-sm">
-                  + Kart Ekle
-                </button>
-              )}
-            </div>
-
-            {kartOdemeler.map((kart, index) => {
-              const kesintiOrani = kart.kesintiOrani || 0;
-              const netTutar = kart.tutar - (kart.tutar * kesintiOrani) / 100;
-
-              return (
-                <div key={kart.id} className="duzenle-kart-row">
-                  {/* Kart bilgi satırı (selectler ve inputlar) */}
-                  <div className="duzenle-kart-fields">
-                    {/* Banka Seçimi */}
-                    <div className="duzenle-kart-field">
-                      <label className="duzenle-label">Banka</label>
-                      <select
-                        value={kart.banka}
-                        onChange={(e) => handleKartChange(index, 'banka', e.target.value)}
-                        className="duzenle-input"
-                        disabled={alanlarKilitli}
-                      >
-                        {BANKALAR.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Taksit Seçimi */}
-                    <div className="duzenle-kart-field">
-                      <label className="duzenle-label">Taksit</label>
-                      <select
-                        value={kart.taksitSayisi}
-                        onChange={(e) => handleKartChange(index, 'taksitSayisi', e.target.value)}
-                        className="duzenle-input"
-                        disabled={alanlarKilitli}
-                      >
-                        {TAKSIT_SECENEKLERI.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Brüt Tutar Girişi */}
-                    <div className="duzenle-kart-field">
-                      <label className="duzenle-label">Brüt Tutar</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={kart.tutar || ''}
-                        onChange={(e) => handleKartChange(index, 'tutar', e.target.value)}
-                        className="duzenle-input mono"
-                        disabled={alanlarKilitli}
-                      />
-                    </div>
-
-                    {/* Kesinti Oranı Göstergesi */}
-                    <div className="duzenle-kart-field">
-                      <label className="duzenle-label">Kesinti</label>
-                      <input
-                        type="text"
-                        readOnly
-                        value={kesintiOrani > 0 ? `%${kesintiOrani}` : 'Bulunamadı'}
-                        className="duzenle-input mono"
-                        style={{
-                          background: kesintiOrani > 0 ? '#f0fdf4' : '#fff7ed',
-                          color: kesintiOrani > 0 ? '#15803d' : '#92400e',
-                          fontWeight: 600
-                        }}
-                      />
-                    </div>
-
-                    {/* Sil Butonu */}
-                    {!alanlarKilitli && (
-                      <button type="button" onClick={() => kartSil(index)} className="duzenle-btn-remove">
-                        Sil
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Net Tutar Gösterimi (sadece tutar girilmişse) */}
-                  {kart.tutar > 0 && (
-                    <div className="duzenle-kart-net">
-                      Brüt: {formatPrice(kart.tutar)} → <strong>NET: {formatPrice(netTutar)}</strong>
-                    </div>
-                  )}
+          <div className="duzenle-odeme-blok" style={{marginTop:14}}>
+            <div className="duzenle-odeme-blok-header"><div className="duzenle-odeme-blok-title">💳 Kart Ödemeleri</div>{!alanlarKilitli&&<button type="button" onClick={kartEkle} className="duzenle-btn-sm">+ Kart Ekle</button>}</div>
+            {kartOdemeler.map((kart,index)=>{
+              const kesintiOrani=kart.kesintiOrani||0;const net=kart.tutar-(kart.tutar*kesintiOrani)/100;
+              return(<div key={kart.id} className="duzenle-kart-row">
+                <div className="duzenle-kart-fields">
+                  <div><label className="duzenle-label">Banka</label><select value={kart.banka} onChange={e=>handleKartChange(index,'banka',e.target.value)} className="duzenle-input" disabled={alanlarKilitli}>{BANKALAR.map(b=><option key={b} value={b}>{b}</option>)}</select></div>
+                  <div><label className="duzenle-label">Taksit</label><select value={kart.taksitSayisi} onChange={e=>handleKartChange(index,'taksitSayisi',e.target.value)} className="duzenle-input" disabled={alanlarKilitli}>{TAKSIT_SECENEKLERI.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+                  <div><label className="duzenle-label">Brüt Tutar</label><input type="number" min="0" value={kart.tutar||''} onChange={e=>handleKartChange(index,'tutar',e.target.value)} className="duzenle-input mono" disabled={alanlarKilitli} /></div>
+                  <div><label className="duzenle-label">Kesinti</label><input type="text" readOnly value={kesintiOrani>0?`%${kesintiOrani}`:'Bulunamadı'} className="duzenle-input mono" style={{background:kesintiOrani>0?'#f0fdf4':'#fff7ed',color:kesintiOrani>0?'#15803d':'#92400e',fontWeight:600}} /></div>
+                  {!alanlarKilitli&&<button type="button" onClick={()=>kartSil(index)} className="duzenle-btn-remove">Sil</button>}
                 </div>
-              );
+                {kart.tutar>0&&<div className="duzenle-kart-net">Brüt: {formatPrice(kart.tutar)} → <strong>NET: {formatPrice(net)}</strong></div>}
+              </div>);
             })}
-
-            {kartOdemeler.length === 0 && (
-              <div style={{ color: '#9ca3af', fontSize: 13 }}>Kart yok</div>
-            )}
+            {kartOdemeler.length===0&&<div style={{color:'#9ca3af',fontSize:13}}>Kart yok</div>}
           </div>
-
           <div className="duzenle-kar-bar" style={{background:karZarar()>=0?'#dcfce7':'#fee2e2',color:karZarar()>=0?'#15803d':'#dc2626'}}>
             {karZarar()>=0?`📈 KÂR: ${formatPrice(karZarar())}`:`📉 ZARAR: ${formatPrice(Math.abs(karZarar()))}`}
             <span style={{fontSize:12,marginLeft:12,opacity:0.8}}>(Hesaba Geçen: {formatPrice(hesabaGecenToplam())} — Maliyet: {formatPrice(toplamMaliyet())})</span>

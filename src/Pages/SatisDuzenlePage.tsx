@@ -10,7 +10,7 @@ import { writeSatisAuditLog } from '../services/satisLogService';
 import './SatisDuzenle.css';
 import { kasaTahsilatEkle, kasaIadeEkle } from '../services/kasaService';
 import { kasaIptalKaydiOlustur } from '../services/kasaIptalService';
-// ✅ v9: DUZELTME tipi entegrasyonu
+// ✅ v10: DUZELTME tipi entegrasyonu (v9 ile aynı)
 import { kasaOdemeDiffYaz, satistenOdemeSnapshot } from '../services/kasaOdemeDiffService';
 
 interface KampanyaAdmin { id?: string; ad: string; aciklama: string; aktif: boolean; subeKodu: string; tutar?: number; }
@@ -26,9 +26,17 @@ const isFaturaNoGecerli = (val: string): boolean => !val || FATURA_NO_REGEX.test
 const MARS_NO_REGEX = /^\d{10}$/;
 const isMarsNoGecerli = (val: string): boolean => !val || MARS_NO_REGEX.test(val);
 
+// ✅ v10: bugunStr timezone-safe (Europe/Istanbul)
 const bugunStr = (): string => {
   const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+  const parts = new Intl.DateTimeFormat('tr-TR', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(n);
+  const y = parts.find(p => p.type === 'year')?.value  ?? '';
+  const m = parts.find(p => p.type === 'month')?.value ?? '';
+  const g = parts.find(p => p.type === 'day')?.value   ?? '';
+  return `${y}-${m}-${g}`;
 };
 
 type PesinatItem = { id: string; tutar: number; aciklama: string; gun?: string };
@@ -53,7 +61,6 @@ const SatisDuzenlePage: React.FC = () => {
   const [orijinalPesinatlar, setOrijinalPesinatlar] = useState<PesinatItem[]>([]);
   const [orijinalHavaleler, setOrijinalHavaleler]   = useState<HavaleItem[]>([]);
   const [orijinalKartOdemeler, setOrijinalKartOdemeler] = useState<KartItem[]>([]);
-  // ✅ v9: Firestore'daki ham snapshot'ı kaydet (DUZELTME diff için)
   const [orijinalFirestoreData, setOrijinalFirestoreData] = useState<any>(null);
 
   const [faturaNo, setFaturaNo] = useState('');
@@ -150,7 +157,6 @@ const SatisDuzenlePage: React.FC = () => {
       if (satisDoc.exists()) {
         const data = { id: satisDoc.id, ...satisDoc.data() } as SatisTeklifFormu;
         setSatis(data);
-        // ✅ v9: Ham Firestore verisini sakla (DUZELTME diff için)
         setOrijinalFirestoreData(satisDoc.data());
         setUrunler(data.urunler || []);
         setManuelSatisTutari((data as any).toplamTutar || null);
@@ -290,15 +296,7 @@ const SatisDuzenlePage: React.FC = () => {
   const karZarar = () => hesabaGecenToplam()-toplamMaliyet();
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  ✅ v9: odemeDeğisiklikleriniKasayaYansit
-  //
-  //  KURAL:
-  //  - Aynı gün satış → ID bazlı diff: TAHSILAT/IADE yaz (v8 mantığı)
-  //  - Farklı gün satış → kasaOdemeDiffYaz çağır (DUZELTME tipi)
-  //    → DUZELTME: sadece fark yansır, turuncu badge gösterilir
-  //    → Banka değişimi bile kaydedilir (diff=0 olsa da açıklama yazılır)
-  //
-  //  Geçmiş kasaya asla dokunulmaz.
+  //  odemeDeğisiklikleriniKasayaYansit — v10 (v9 ile aynı, değişmedi)
   // ══════════════════════════════════════════════════════════════════════════
   const odemeDeğisiklikleriniKasayaYansit = async () => {
     if (!satis || !subeKodu || !currentUser) return;
@@ -315,7 +313,6 @@ const SatisDuzenlePage: React.FC = () => {
       ? (() => { try { const d = typeof satisTarihiRaw.toDate==='function' ? satisTarihiRaw.toDate() : new Date(satisTarihiRaw); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; } catch { return bugun; } })()
       : bugun;
 
-    // ── AYNI GÜN: ID bazlı TAHSILAT/IADE (v8 mantığı korunuyor) ──────────
     if (satisTarihiStr === bugun) {
       const orijinalPesinatObj: Record<string,PesinatItem> = {};
       orijinalPesinatlar.forEach(p => { orijinalPesinatObj[p.id]=p; });
@@ -385,14 +382,10 @@ const SatisDuzenlePage: React.FC = () => {
           await kasaTahsilatEkle({subeKodu,gun:bugun,satisId:satisIdVal,satisKodu:satisKoduVal,musteriIsim:musteriIsimVal,nakitTutar:0,kartTutar:yeniKartObj[kid].tutar,havaleTutar:0,yapan,yapanId,aciklama:'Yeni kart ödemesi eklendi',satisTarihi:satisTarihiStr,kartBanka:yeniKartObj[kid].banka});
         }
       }
-      return; // aynı gün → burada bitir
+      return;
     }
 
-    // ── FARKLI GÜN: DUZELTME tipi (kasaOdemeDiffYaz) ─────────────────────
-    // Eski Firestore snapshot'tan eskiOdeme çıkar
     const eskiOdeme = satistenOdemeSnapshot(orijinalFirestoreData ?? {});
-
-    // Yeni snapshot'ı mevcut state'ten oluştur
     const yeniOdeme = {
       nakitTutar:  pesinatToplam(),
       kartTutar:   kartBrutToplam(),
@@ -444,16 +437,47 @@ const SatisDuzenlePage: React.FC = () => {
     }catch(err){alert('❌ İade işlemi başarısız: '+(err as Error).message);}finally{setIptalIslemYapiliyor(false);}
   };
 
+  // ✅ v10 FIX: satisTarihi: undefined → bugunStr()
+  // Eski hali çift sayım yapıyordu (recalcNakitSatis koruması devreye giremiyordu)
   const satisiIptaldenCikar = async () => {
     if(!satis?.id)return; const sube=getSubeByKod(subeKodu as any); if(!sube)return;
     setIptalIslemYapiliyor(true);
     try{
-      const yeniOnay=iptaldenCikarStatusu==='ONAYLI';const mevcut=(satis as any).iadeDurumu;const top=pesinatToplam()+haveleToplam()+kartBrutToplam();
-      if(mevcut==='IADE_ODENDI'&&top>0&&currentUser){await kasaTahsilatEkle({subeKodu,gun:bugunStr(),satisId:satis.id!,satisKodu:satis.satisKodu??'',musteriIsim:(satis as any).musteriBilgileri?.isim??'—',nakitTutar:pesinatToplam(),kartTutar:kartBrutToplam(),havaleTutar:haveleToplam(),yapan:`${currentUser.ad} ${currentUser.soyad}`,yapanId:currentUser.uid||'',aciklama:'İptalden çıkarma — iade geri alındı',satisTarihi:undefined});}
-      await updateDoc(doc(db,`subeler/${sube.dbPath}/satislar`,satis.id),{satisDurumu:iptaldenCikarStatusu,onayDurumu:yeniOnay,iptalTarihi:null,iadeDurumu:null,guncellemeTarihi:new Date()});
-      setSatis(prev=>prev?{...prev,satisDurumu:iptaldenCikarStatusu,onayDurumu:yeniOnay,iadeDurumu:null}as any:prev);setIptaldenCikarPopup(false);
+      const yeniOnay=iptaldenCikarStatusu==='ONAYLI';
+      const mevcut=(satis as any).iadeDurumu;
+      const top=pesinatToplam()+haveleToplam()+kartBrutToplam();
+      if(mevcut==='IADE_ODENDI'&&top>0&&currentUser){
+        await kasaTahsilatEkle({
+          subeKodu,
+          gun: bugunStr(),
+          satisId: satis.id!,
+          satisKodu: satis.satisKodu??'',
+          musteriIsim: (satis as any).musteriBilgileri?.isim??'—',
+          nakitTutar: pesinatToplam(),
+          kartTutar: kartBrutToplam(),
+          havaleTutar: haveleToplam(),
+          yapan: `${currentUser.ad} ${currentUser.soyad}`,
+          yapanId: currentUser.uid||'',
+          aciklama: 'İptalden çıkarma — iade geri alındı',
+          // ✅ FIX: undefined yerine bugunStr() — çift sayım koruması için
+          satisTarihi: bugunStr(),
+        });
+      }
+      await updateDoc(doc(db,`subeler/${sube.dbPath}/satislar`,satis.id),{
+        satisDurumu: iptaldenCikarStatusu,
+        onayDurumu: yeniOnay,
+        iptalTarihi: null,
+        iadeDurumu: null,
+        guncellemeTarihi: new Date(),
+      });
+      setSatis(prev=>prev?{...prev,satisDurumu:iptaldenCikarStatusu,onayDurumu:yeniOnay,iadeDurumu:null}as any:prev);
+      setIptaldenCikarPopup(false);
       alert(`✅ Satış "${iptaldenCikarStatusu==='ONAYLI'?'Onaylı':'Beklemede'}" statüsüne alındı.`);
-    }catch(err){alert('❌ İşlem başarısız: '+(err as Error).message);}finally{setIptalIslemYapiliyor(false);}
+    }catch(err){
+      alert('❌ İşlem başarısız: '+(err as Error).message);
+    }finally{
+      setIptalIslemYapiliyor(false);
+    }
   };
 
   // ── SUBMIT ────────────────────────────────────────────────────────────────
@@ -479,7 +503,6 @@ const SatisDuzenlePage: React.FC = () => {
         if(fresh.exists()&&fresh.data().onayDurumu===true&&fresh.data().satisDurumu!=='IPTAL'){alert('❌ Bu satış az önce admin tarafından onaylandı.');navigate('/dashboard');return;}
       }
 
-      // ✅ v9: Kasa yansıma (aynı gün: TAHSILAT/IADE, farklı gün: DUZELTME)
       await odemeDeğisiklikleriniKasayaYansit();
 
       const orijinal=marsListesi[0];
@@ -530,7 +553,6 @@ const SatisDuzenlePage: React.FC = () => {
   return (
     <Layout pageTitle={`Düzenle: ${satis.satisKodu}`}>
 
-      {/* POPUP'LAR */}
       {iptalPopup && (
         <div className="duzenle-popup-overlay">
           <div className="duzenle-popup">
@@ -588,7 +610,6 @@ const SatisDuzenlePage: React.FC = () => {
         </div>
       )}
 
-      {/* BANNER'LAR */}
       {isIptal && (
         <div className="duzenle-iptal-banner">
           🚫 Bu satış <strong>İPTAL</strong> statüsündedir.{!isAdmin&&' Düzenleme yapılamaz.'}
@@ -603,7 +624,6 @@ const SatisDuzenlePage: React.FC = () => {
         </div>
       )}
 
-      {/* FORM — v8 ile birebir aynı, sadece haveleToplam() adı düzeltildi */}
       <form onSubmit={handleSubmit} className="duzenle-form">
 
         <div className="duzenle-section">

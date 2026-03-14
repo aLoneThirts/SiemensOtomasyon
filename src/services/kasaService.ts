@@ -1,18 +1,19 @@
 // ===================================================
-//  KASA SERVICE — v10
+//  KASA SERVICE — v11
 //
-//  v9'dan v10'a değişiklikler:
+//  v10'dan v11'e değişiklikler:
 //
-//  ✅ DUZELTME tipi eklendi:
-//     Geçmiş tarihli satış düzenlendiğinde kasaOdemeDiffService
-//     tarafından yazılan 'DUZELTME' tipindeki kayıtlar artık
-//     recalcNakitSatis ve getTahsilatlar tarafından okunuyor.
+//  ✅ FIX 1: kasaIadeEkle — created_at artık geçmiş tarihe değil
+//     BUGÜNÜN timestamp'ine set ediliyor. gun parametresi sadece
+//     referans/aciklama amaçlı kullanılıyor.
+//     Eski davranış: recalcNakitSatis fallback sorguları iadeyi
+//     bugünün kasasına dahil etmiyordu.
 //
-//  Kurallar:
-//  - Aynı gün düzenleme → kasaya YANSIMAZ (diff servisi zaten yazmaz)
-//  - Farklı gün düzenleme → FARK bugünün kasasına DUZELTME olarak yansır
-//  - DUZELTME tutarlar signed (+ artış, - azalış)
-//  - Eski gün kasasına ASLA dokunulmaz
+//  ✅ FIX 2: getTahsilatlar DUZELTME bloğu — eski fallback sorgusuna
+//     `data.gun === gun` kontrolü eklendi (TAHSILAT/IADE bloklarıyla tutarlı).
+//
+//  ✅ FIX 3: recalcNakitSatis Blok 2 — satisTarihi undefined gelen
+//     TAHSILAT kayıtları için çift sayım koruması eklendi.
 //
 //  Bunların dışında HİÇBİR ŞEY DEĞİŞMEDİ.
 // ===================================================
@@ -115,13 +116,13 @@ export interface KasaSatisDetay {
   kartTutar: number;
   havaleTutar: number;
   tarih: Date;
-  odemeDurumu: string;   // 'ODENDI' | 'IADE' | 'DUZELTME'
+  odemeDurumu: string;
   onayDurumu: boolean;
   kullanici: string;
   oncekiGunOdemesi: boolean;
   satisTarihi?: string;
   iptalIadesi?: boolean;
-  isDuzeltme?: boolean;   // ✅ v10: DUZELTME tipi için
+  isDuzeltme?: boolean;
   aciklama?: string;
   kartBanka?: string;
   havaleBanka?: string;
@@ -149,8 +150,8 @@ export interface KasaTahsilatOzet {
 export type SatisFiltreTip = 'bugun' | 'haftabasindan' | 'buay' | '30gun' | 'tahsilatlar';
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  recalcNakitSatis — v10
-//  DUZELTME tipi eklendi (blok 5)
+//  recalcNakitSatis — v11
+//  FIX 3: satisTarihi undefined gelen TAHSILAT kayıtları çift sayım koruması
 // ═══════════════════════════════════════════════════════════════════════════
 export const recalcNakitSatis = async (
   subeKodu: string,
@@ -199,6 +200,7 @@ export const recalcNakitSatis = async (
   }
 
   // ── 2. TAHSILAT tipi ──────────────────────────────────────────────────
+  // FIX v11: satisTarihi undefined olan kayıtlar için ek koruma
   try {
     const yeniSnap = await getDocs(
       query(
@@ -211,7 +213,12 @@ export const recalcNakitSatis = async (
     yeniSnap.docs.forEach((tahDoc) => {
       yeniIds.add(tahDoc.id);
       const data = tahDoc.data();
+      // Aynı gün satışı ise (orijinal kayıt Blok 1'de zaten sayıldı) atla
       if (data.satisTarihi && data.satisTarihi === gun) return;
+      // satisTarihi yoksa ve tahsilatGun === gun ise bu kaydın satışının
+      // bugüne ait olup olmadığını bilemeyiz — çift sayım riskine karşı
+      // tahsilatGun === satisTarihi durumu için ek kontrol
+      if (!data.satisTarihi && data.gun && data.gun === gun) return;
       nakitSatis  += Number(data.nakitTutar  ?? 0);
       kartSatis   += Number(data.kartTutar   ?? 0);
       havaleSatis += Number(data.havaleTutar ?? 0);
@@ -230,6 +237,7 @@ export const recalcNakitSatis = async (
       const data = tahDoc.data();
       if (data.tahsilatGun) return;
       if (data.satisTarihi && data.satisTarihi === gun) return;
+      if (!data.satisTarihi && data.gun && data.gun === gun) return;
       nakitSatis  += Number(data.nakitTutar  ?? 0);
       kartSatis   += Number(data.kartTutar   ?? 0);
       havaleSatis += Number(data.havaleTutar ?? 0);
@@ -259,6 +267,8 @@ export const recalcNakitSatis = async (
   }
 
   // ── 4. IADE tipi ─────────────────────────────────────────────────────
+  // v11 FIX: kasaIadeEkle artık created_at = now() yazıyor,
+  // dolayısıyla bu sorgular iadeleri doğru günde buluyor.
   try {
     const yeniIadeSnap = await getDocs(
       query(
@@ -296,9 +306,7 @@ export const recalcNakitSatis = async (
     console.error('recalcNakitSatis iade hareketleri hatası:', err);
   }
 
-  // ── 5. DUZELTME tipi ✅ v10 ───────────────────────────────────────────
-  // Geçmiş satış düzenlemelerinden gelen fark kayıtları
-  // Bu tutarlar signed: +artış, -azalış
+  // ── 5. DUZELTME tipi ─────────────────────────────────────────────────
   try {
     const yeniDuzSnap = await getDocs(
       query(
@@ -316,7 +324,6 @@ export const recalcNakitSatis = async (
       havaleSatis += Number(data.havaleTutar ?? 0);
     });
 
-    // Fallback: eski kayıtlar (tahsilatGun alanı yoksa created_at ile)
     const eskiDuzSnap = await getDocs(
       query(
         collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
@@ -392,7 +399,7 @@ export const recalculateTumGunler = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  getBugununKasaGunu
+//  getBugununKasaGunu — değişmedi
 // ═══════════════════════════════════════════════════════════════════════════
 export const getBugununKasaGunu = async (
   subeKodu: string,
@@ -517,9 +524,9 @@ export const getSatislar = async (
     let aralikBitis: Date;
 
     if ((filtre === 'tahsilatlar' || filtre === 'bugun') && belirliGun) {
-      const [y, m, d] = belirliGun.split('-').map(Number);
-      aralikBaslangic = new Date(y, m - 1, d, 0, 0, 0, 0);
-      aralikBitis     = new Date(y, m - 1, d, 23, 59, 59, 999);
+      const [y2, m2, d2] = belirliGun.split('-').map(Number);
+      aralikBaslangic = new Date(y2, m2 - 1, d2, 0, 0, 0, 0);
+      aralikBitis     = new Date(y2, m2 - 1, d2, 23, 59, 59, 999);
     } else {
       const bugun = new Date();
       bugun.setHours(0, 0, 0, 0);
@@ -638,8 +645,8 @@ export const getSatislar = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  getTahsilatlar — v10
-//  DUZELTME tipi eklendi (blok 4)
+//  getTahsilatlar — v11
+//  FIX 2: DUZELTME eskiDuzSnap bloğuna `data.gun === gun` kontrolü eklendi
 // ═══════════════════════════════════════════════════════════════════════════
 export const getTahsilatlar = async (
   subeKodu: string,
@@ -673,7 +680,7 @@ export const getTahsilatlar = async (
       yeniSnap.docs.forEach((tahDoc) => {
         yeniIds.add(tahDoc.id);
         const data = tahDoc.data();
-        if (data.tahsilatGun === gun && data.satisTarihi === gun) return; // aynı gün satış, tahsilata girmesin
+        if (data.tahsilatGun === gun && data.satisTarihi === gun) return;
         const nakit  = Number(data.nakitTutar  ?? 0);
         const kart   = Number(data.kartTutar   ?? 0);
         const havale = Number(data.havaleTutar ?? 0);
@@ -729,6 +736,8 @@ export const getTahsilatlar = async (
     }
 
     // ── 2. IADE tipi ─────────────────────────────────────────────────
+    // v11: kasaIadeEkle artık created_at = now() yazıyor,
+    // tahsilatGun sorgusu daha güvenilir.
     try {
       const yeniIadeSnap = await getDocs(
         query(
@@ -829,8 +838,8 @@ export const getTahsilatlar = async (
       console.error('getTahsilatlar iptal kayıtları hatası:', err);
     }
 
-    // ── 4. DUZELTME tipi ✅ v10 ───────────────────────────────────────
-    // Geçmiş satış düzenlemelerinden gelen fark kayıtları — turuncu badge
+    // ── 4. DUZELTME tipi — v11 FIX ────────────────────────────────────
+    // eskiDuzSnap bloğuna `data.gun === gun` kontrolü eklendi
     try {
       const yeniDuzSnap = await getDocs(
         query(
@@ -858,12 +867,11 @@ export const getTahsilatlar = async (
           tarih: toDate(data.created_at), odemeDurumu: 'DUZELTME', onayDurumu: true,
           kullanici: data.yapan ?? '—', oncekiGunOdemesi: true,
           satisTarihi: data.satisTarihi ?? '',
-          isDuzeltme: true,  // UI'da turuncu badge için
+          isDuzeltme: true,
           aciklama: data.aciklama ?? 'Ödeme düzenlemesi',
         });
       });
 
-      // Fallback: tahsilatGun alanı olmayan eski kayıtlar
       const eskiDuzSnap = await getDocs(
         query(
           collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
@@ -876,6 +884,8 @@ export const getTahsilatlar = async (
         if (yeniDuzIds.has(duzDoc.id)) return;
         const data = duzDoc.data();
         if (data.tahsilatGun) return;
+        // FIX v11: TAHSILAT/IADE bloklarıyla tutarlı — aynı günün referansı ise atla
+        if (data.gun === gun) return;
         const nakit  = Number(data.nakitTutar  ?? 0);
         const kart   = Number(data.kartTutar   ?? 0);
         const havale = Number(data.havaleTutar ?? 0);
@@ -1038,10 +1048,10 @@ export const testGunGecisi = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  KasaTahsilatHareket tip tanımı — v10: DUZELTME eklendi
+//  KasaTahsilatHareket tip tanımı
 // ═══════════════════════════════════════════════════════════════════════════
 export interface KasaTahsilatHareket {
-  tip: 'TAHSILAT' | 'IADE' | 'DUZELTME';  // ✅ v10
+  tip: 'TAHSILAT' | 'IADE' | 'DUZELTME';
   satisId: string;
   satisKodu: string;
   musteriIsim: string;
@@ -1064,7 +1074,7 @@ export interface KasaTahsilatHareket {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  kasaTahsilatEkle — değişmedi (v9 ile aynı)
+//  kasaTahsilatEkle — değişmedi
 // ═══════════════════════════════════════════════════════════════════════════
 export const kasaTahsilatEkle = async (params: {
   subeKodu: string;
@@ -1152,7 +1162,11 @@ export const kasaTahsilatEkle = async (params: {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  kasaIadeEkle — değişmedi (v9 ile aynı)
+//  kasaIadeEkle — v11
+//  FIX 1: created_at artık geçmiş tarihe değil BUGÜNÜN zamanına set ediliyor.
+//  gun parametresi yalnızca aciklama/referans amaçlı kullanılıyor.
+//  Bu sayede recalcNakitSatis fallback sorguları (created_at bazlı)
+//  iadeyi doğru günde buluyor.
 // ═══════════════════════════════════════════════════════════════════════════
 export const kasaIadeEkle = async (params: {
   subeKodu: string;
@@ -1176,8 +1190,9 @@ export const kasaIadeEkle = async (params: {
   if (!sube) return false;
 
   try {
-    const [y, m, d] = gun.split('-').map(Number);
-    const createdAt = Timestamp.fromDate(new Date(y, m - 1, d, 12, 0, 0, 0));
+    // FIX v11: created_at = şu an (bugun), geçmiş tarihe set ETMİYORUZ.
+    // Eski davranış: new Date(y, m-1, d, 12, 0, 0, 0) — geçmişe set ediyordu,
+    // fallback sorguları iadeyi bugünün kasasında bulamıyordu.
     const tahsilatGun = bugunStrTR();
 
     await addDoc(
@@ -1189,12 +1204,13 @@ export const kasaIadeEkle = async (params: {
         kartTutar:   -Math.abs(kartTutar),
         havaleTutar: -Math.abs(havaleTutar),
         toplamTutar: -(Math.abs(nakitTutar) + Math.abs(kartTutar) + Math.abs(havaleTutar)),
-        gun, subeKodu, yapan, yapanId,
+        gun,          // referans: orijinal satış günü
+        subeKodu, yapan, yapanId,
         aciklama: iadeSebebi ?? 'İade',
         iadeSebebi: iadeSebebi ?? '',
         iadeTarih: gun,
-        tahsilatGun,
-        created_at: createdAt,
+        tahsilatGun,  // bugünün kasasına ait
+        created_at: Timestamp.fromDate(new Date()), // FIX: şimdiki zaman
       }
     );
 
