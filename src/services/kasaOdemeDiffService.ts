@@ -172,56 +172,75 @@ export const kasaOdemeDiffYaz = async (params: {
     // ── 2. HAVALE ────────────────────────────────────────────────────────
     const eskiHavaleler = eskiOdeme.havaleler ?? [];
     const yeniHavaleler = yeniOdeme.havaleler ?? [];
+    const eskiHavaleToplam = eskiHavaleler.reduce((t, h) => t + h.tutar, 0) || eskiOdeme.havaleTutar;
+    const yeniHavaleToplam = yeniHavaleler.reduce((t, h) => t + h.tutar, 0) || yeniOdeme.havaleTutar;
 
-    // Yeni eklenen havaleler (eskide yoktu)
-    for (const yeni of yeniHavaleler) {
-      const eskiToplamBanka = eskiHavaleler
-        .filter(h => (h.banka ?? '—') === (yeni.banka ?? '—'))
-        .reduce((t, h) => t + h.tutar, 0);
-
-      if (eskiToplamBanka === 0 && yeni.tutar > 0) {
-        // Tamamen yeni havale → TAHSILAT
-        await hareketYaz({
-          ...base, tip: 'TAHSILAT',
-          nakitTutar: 0, kartTutar: 0, havaleTutar: yeni.tutar,
-          aciklama: `Yeni havale eklendi — ${yeni.banka ?? '—'} (satış: ${satisTarihi} / düzenleme: ${bugun})`,
-        });
-        toplamDiffHavale += yeni.tutar;
-      } else if (eskiToplamBanka !== yeni.tutar) {
-        // Mevcut havale değişti → DUZELTME
-        const fark = yeni.tutar - eskiToplamBanka;
-        if (fark !== 0) {
+    // Eski array boşsa (eski kayıt formatı) — toplam bazlı karşılaştır
+    if (eskiHavaleler.length === 0 && eskiHavaleToplam > 0) {
+      const diffHavale = yeniHavaleToplam - eskiHavaleToplam;
+      if (diffHavale > 0) {
+        // Yeni havale eklendi
+        for (const yeni of yeniHavaleler) {
           await hareketYaz({
-            ...base, tip: 'DUZELTME',
-            nakitTutar: 0, kartTutar: 0, havaleTutar: fark,
-            aciklama: `${yeni.banka ?? 'Havale'} güncellendi ${fark > 0 ? '+' : ''}${fark.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+            ...base, tip: 'TAHSILAT',
+            nakitTutar: 0, kartTutar: 0, havaleTutar: yeni.tutar,
+            aciklama: `Yeni havale eklendi — ${yeni.banka ?? '—'} (satış: ${satisTarihi} / düzenleme: ${bugun})`,
           });
-          toplamDiffHavale += fark;
+          toplamDiffHavale += yeni.tutar;
         }
-      }
-    }
-
-    // Silinen havaleler (yenide yok)
-    for (const eski of eskiHavaleler) {
-      const yeniToplamBanka = yeniHavaleler
-        .filter(h => (h.banka ?? '—') === (eski.banka ?? '—'))
-        .reduce((t, h) => t + h.tutar, 0);
-
-      if (yeniToplamBanka === 0 && eski.tutar > 0) {
+      } else if (diffHavale < 0) {
         await hareketYaz({
           ...base, tip: 'DUZELTME',
-          nakitTutar: 0, kartTutar: 0, havaleTutar: -eski.tutar,
-          aciklama: `${eski.banka ?? 'Havale'} silindi −${eski.tutar.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+          nakitTutar: 0, kartTutar: 0, havaleTutar: diffHavale,
+          aciklama: `Havale güncellendi ${diffHavale.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
         });
-        toplamDiffHavale -= eski.tutar;
+        toplamDiffHavale += diffHavale;
       }
-    }
+      // diffHavale === 0 → hiçbir şey yazma
+    } else if (eskiHavaleler.length > 0) {
+      // Her iki tarafta da array var — banka bazlı karşılaştır
+      for (const yeni of yeniHavaleler) {
+        const eskiToplamBanka = eskiHavaleler
+          .filter(h => (h.banka ?? '—') === (yeni.banka ?? '—'))
+          .reduce((t, h) => t + h.tutar, 0);
 
-    // Fallback: havale listesi yoksa toplam fark yaz
-    if (eskiHavaleler.length === 0 && yeniHavaleler.length === 0) {
-      const diffHavale = yeniOdeme.havaleTutar - eskiOdeme.havaleTutar;
+        if (eskiToplamBanka === 0 && yeni.tutar > 0) {
+          await hareketYaz({
+            ...base, tip: 'TAHSILAT',
+            nakitTutar: 0, kartTutar: 0, havaleTutar: yeni.tutar,
+            aciklama: `Yeni havale eklendi — ${yeni.banka ?? '—'} (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+          });
+          toplamDiffHavale += yeni.tutar;
+        } else if (eskiToplamBanka !== yeni.tutar) {
+          const fark = yeni.tutar - eskiToplamBanka;
+          if (fark !== 0) {
+            await hareketYaz({
+              ...base, tip: 'DUZELTME',
+              nakitTutar: 0, kartTutar: 0, havaleTutar: fark,
+              aciklama: `${yeni.banka ?? 'Havale'} güncellendi ${fark > 0 ? '+' : ''}${fark.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+            });
+            toplamDiffHavale += fark;
+          }
+        }
+      }
+      for (const eski of eskiHavaleler) {
+        const yeniToplamBanka = yeniHavaleler
+          .filter(h => (h.banka ?? '—') === (eski.banka ?? '—'))
+          .reduce((t, h) => t + h.tutar, 0);
+        if (yeniToplamBanka === 0 && eski.tutar > 0) {
+          await hareketYaz({
+            ...base, tip: 'DUZELTME',
+            nakitTutar: 0, kartTutar: 0, havaleTutar: -eski.tutar,
+            aciklama: `${eski.banka ?? 'Havale'} silindi −${eski.tutar.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+          });
+          toplamDiffHavale -= eski.tutar;
+        }
+      }
+    } else {
+      // Her iki tarafta da array yok — toplam fark yaz
+      const diffHavale = yeniHavaleToplam - eskiHavaleToplam;
       if (diffHavale !== 0) {
-        const tip = eskiOdeme.havaleTutar === 0 ? 'TAHSILAT' : 'DUZELTME';
+        const tip = eskiHavaleToplam === 0 ? 'TAHSILAT' : 'DUZELTME';
         await hareketYaz({
           ...base, tip,
           nakitTutar: 0, kartTutar: 0, havaleTutar: diffHavale,
@@ -236,54 +255,76 @@ export const kasaOdemeDiffYaz = async (params: {
     // ── 3. KART ──────────────────────────────────────────────────────────
     const eskiKartlar = eskiOdeme.kartOdemeler ?? [];
     const yeniKartlar = yeniOdeme.kartOdemeler ?? [];
+    const eskiKartToplam = eskiKartlar.reduce((t, k) => t + k.tutar, 0) || eskiOdeme.kartTutar;
+    const yeniKartToplam = yeniKartlar.reduce((t, k) => t + k.tutar, 0) || yeniOdeme.kartTutar;
 
-    for (const yeni of yeniKartlar) {
-      const eskiToplamBanka = eskiKartlar
-        .filter(k => (k.banka ?? '—') === (yeni.banka ?? '—'))
-        .reduce((t, k) => t + k.tutar, 0);
-
-      if (eskiToplamBanka === 0 && yeni.tutar > 0) {
-        // Tamamen yeni kart → TAHSILAT
-        await hareketYaz({
-          ...base, tip: 'TAHSILAT',
-          nakitTutar: 0, kartTutar: yeni.tutar, havaleTutar: 0,
-          aciklama: `Yeni kart ödemesi — ${yeni.banka ?? '—'} (satış: ${satisTarihi} / düzenleme: ${bugun})`,
-        });
-        toplamDiffKart += yeni.tutar;
-      } else if (eskiToplamBanka !== yeni.tutar) {
-        const fark = yeni.tutar - eskiToplamBanka;
-        if (fark !== 0) {
+    // Eski array boşsa (eski kayıt formatı) — sadece toplam fark yaz
+    if (eskiKartlar.length === 0 && eskiKartToplam > 0) {
+      // Eski kayıtta kart vardı ama array yok, yeni array ile karşılaştır
+      const diffKart = yeniKartToplam - eskiKartToplam;
+      if (diffKart > 0) {
+        // Yeni kart eklendi
+        for (const yeni of yeniKartlar) {
           await hareketYaz({
-            ...base, tip: 'DUZELTME',
-            nakitTutar: 0, kartTutar: fark, havaleTutar: 0,
-            aciklama: `${yeni.banka ?? 'Kart'} güncellendi ${fark > 0 ? '+' : ''}${fark.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+            ...base, tip: 'TAHSILAT',
+            nakitTutar: 0, kartTutar: yeni.tutar, havaleTutar: 0,
+            aciklama: `Yeni kart ödemesi — ${yeni.banka ?? '—'} (satış: ${satisTarihi} / düzenleme: ${bugun})`,
           });
-          toplamDiffKart += fark;
+          toplamDiffKart += yeni.tutar;
         }
-      }
-    }
-
-    // Silinen kartlar
-    for (const eski of eskiKartlar) {
-      const yeniToplamBanka = yeniKartlar
-        .filter(k => (k.banka ?? '—') === (eski.banka ?? '—'))
-        .reduce((t, k) => t + k.tutar, 0);
-
-      if (yeniToplamBanka === 0 && eski.tutar > 0) {
+      } else if (diffKart < 0) {
         await hareketYaz({
           ...base, tip: 'DUZELTME',
-          nakitTutar: 0, kartTutar: -eski.tutar, havaleTutar: 0,
-          aciklama: `${eski.banka ?? 'Kart'} silindi −${eski.tutar.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+          nakitTutar: 0, kartTutar: diffKart, havaleTutar: 0,
+          aciklama: `Kart güncellendi ${diffKart.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
         });
-        toplamDiffKart -= eski.tutar;
+        toplamDiffKart += diffKart;
       }
-    }
+      // diffKart === 0 → hiçbir şey yazma
+    } else if (eskiKartlar.length > 0) {
+      // Her iki tarafta da array var — banka bazlı karşılaştır
+      for (const yeni of yeniKartlar) {
+        const eskiToplamBanka = eskiKartlar
+          .filter(k => (k.banka ?? '—') === (yeni.banka ?? '—'))
+          .reduce((t, k) => t + k.tutar, 0);
 
-    // Fallback: kart listesi yoksa toplam fark yaz
-    if (eskiKartlar.length === 0 && yeniKartlar.length === 0) {
-      const diffKart = yeniOdeme.kartTutar - eskiOdeme.kartTutar;
+        if (eskiToplamBanka === 0 && yeni.tutar > 0) {
+          await hareketYaz({
+            ...base, tip: 'TAHSILAT',
+            nakitTutar: 0, kartTutar: yeni.tutar, havaleTutar: 0,
+            aciklama: `Yeni kart ödemesi — ${yeni.banka ?? '—'} (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+          });
+          toplamDiffKart += yeni.tutar;
+        } else if (eskiToplamBanka !== yeni.tutar) {
+          const fark = yeni.tutar - eskiToplamBanka;
+          if (fark !== 0) {
+            await hareketYaz({
+              ...base, tip: 'DUZELTME',
+              nakitTutar: 0, kartTutar: fark, havaleTutar: 0,
+              aciklama: `${yeni.banka ?? 'Kart'} güncellendi ${fark > 0 ? '+' : ''}${fark.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+            });
+            toplamDiffKart += fark;
+          }
+        }
+      }
+      for (const eski of eskiKartlar) {
+        const yeniToplamBanka = yeniKartlar
+          .filter(k => (k.banka ?? '—') === (eski.banka ?? '—'))
+          .reduce((t, k) => t + k.tutar, 0);
+        if (yeniToplamBanka === 0 && eski.tutar > 0) {
+          await hareketYaz({
+            ...base, tip: 'DUZELTME',
+            nakitTutar: 0, kartTutar: -eski.tutar, havaleTutar: 0,
+            aciklama: `${eski.banka ?? 'Kart'} silindi −${eski.tutar.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+          });
+          toplamDiffKart -= eski.tutar;
+        }
+      }
+    } else {
+      // Her iki tarafta da array yok — toplam fark yaz
+      const diffKart = yeniKartToplam - eskiKartToplam;
       if (diffKart !== 0) {
-        const tip = eskiOdeme.kartTutar === 0 ? 'TAHSILAT' : 'DUZELTME';
+        const tip = eskiKartToplam === 0 ? 'TAHSILAT' : 'DUZELTME';
         await hareketYaz({
           ...base, tip,
           nakitTutar: 0, kartTutar: diffKart, havaleTutar: 0,
