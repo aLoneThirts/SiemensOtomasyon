@@ -1,20 +1,10 @@
 // ===================================================
-//  kasaOdemeDiffService.ts — v1
+//  kasaOdemeDiffService.ts — v2
 //
-//  AMAÇ:
-//  Geçmiş tarihli bir satış düzenlendiğinde (farklı gün),
-//  eski ödeme state'i ile yeni ödeme state'i arasındaki
-//  FARKI bugünün kasasına DUZELTME tipi olarak yazar.
-//
-//  KURALLAR:
-//  1. Satış günü === işlem günü → HİÇBİR ŞEY YAZMA
-//     (aynı gün düzenlemeler kasayı etkilemez)
-//  2. Satış günü !== işlem günü → sadece FARK yaz
-//     - Peşinat 5k→10k: kasaya +5k (fark)
-//     - Peşinat 10k→5k: kasaya -5k (fark)
-//     - Banka değişimi, toplam aynı: DUZELTME kaydı açıklamayla var, tutar=0
-//  3. Eski günün kasasına ASLA dokunma
-//  4. Bugünün kasa gün dokümanı yoksa güncelleme yapma (sadece hareket yaz)
+//  v1'den fark:
+//  - Yeni eklenen ödeme (eskide yok, yenide var) → TAHSILAT (yeşil)
+//  - Mevcut ödeme değişti / silindi → DUZELTME (turuncu)
+//  - 2 kere yazma yok — her kalem tek seferde işlenir
 // ===================================================
 
 import {
@@ -29,99 +19,92 @@ import { bugunStrTR } from './kasaService';
 
 export interface OdemeKalemi {
   tutar: number;
-  banka?: string;  // havale/kart için banka adı
+  banka?: string;
 }
 
 export interface OdemeSnapshot {
   nakitTutar:    number;
   kartTutar:     number;
   havaleTutar:   number;
-  // Banka bazlı detay (opsiyonel — varsa daha zengin açıklama üretilir)
   kartOdemeler?: OdemeKalemi[];
   havaleler?:    OdemeKalemi[];
 }
 
-export interface DiffSonuc {
-  diffNakit:  number;
-  diffKart:   number;
-  diffHavale: number;
-  aciklama:   string;
-  herhangiDegisiklikVar: boolean; // tutar aynı olsa bile banka değiştiyse true
-}
+// ─── Kasa gün dokümanını güncelle ────────────────────────────────────────────
 
-// ─── Diff hesapla ─────────────────────────────────────────────────────────────
-
-export const odemeDiffHesapla = (
-  eskiOdeme: OdemeSnapshot,
-  yeniOdeme: OdemeSnapshot,
-  satisTarihi: string,
+const kasaGunGuncelle = async (
+  subeKodu: string,
   bugun: string,
-): DiffSonuc => {
-  const diffNakit  = yeniOdeme.nakitTutar  - eskiOdeme.nakitTutar;
-  const diffKart   = yeniOdeme.kartTutar   - eskiOdeme.kartTutar;
-  const diffHavale = yeniOdeme.havaleTutar - eskiOdeme.havaleTutar;
+  diffNakit: number,
+  diffKart: number,
+  diffHavale: number,
+) => {
+  if (diffNakit === 0 && diffKart === 0 && diffHavale === 0) return;
 
-  const aciklamaParcalari: string[] = [
-    `Geçmiş satış düzenlemesi (satış: ${satisTarihi} / düzenleme: ${bugun})`,
-  ];
+  const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', bugun);
+  const gunSnap = await getDoc(gunRef);
+  if (!gunSnap.exists()) return;
 
-  // Havale banka bazlı diff açıklaması
-  const eskiHavaleler = eskiOdeme.havaleler ?? [];
-  const yeniHavaleler = yeniOdeme.havaleler ?? [];
-  const tumHavaleBankalar = new Set([
-    ...eskiHavaleler.map(h => h.banka ?? '—'),
-    ...yeniHavaleler.map(h => h.banka ?? '—'),
-  ]);
-  let havaleBankaDegisti = false;
-  tumHavaleBankalar.forEach(banka => {
-    const eski = eskiHavaleler.filter(h => (h.banka ?? '—') === banka).reduce((t, h) => t + h.tutar, 0);
-    const yeni = yeniHavaleler.filter(h => (h.banka ?? '—') === banka).reduce((t, h) => t + h.tutar, 0);
-    const fark = yeni - eski;
-    if (fark > 0)  aciklamaParcalari.push(`${banka} havale +${fark.toLocaleString('tr-TR')} ₺`);
-    if (fark < 0)  aciklamaParcalari.push(`${banka} havale ${fark.toLocaleString('tr-TR')} ₺`);
-    if (fark !== 0) havaleBankaDegisti = true;
+  await updateDoc(gunRef, {
+    nakitSatis:  increment(diffNakit),
+    kartSatis:   increment(diffKart),
+    havaleSatis: increment(diffHavale),
+    guncellemeTarihi: serverTimestamp(),
   });
 
-  // Kart banka bazlı diff açıklaması
-  const eskiKartlar = eskiOdeme.kartOdemeler ?? [];
-  const yeniKartlar = yeniOdeme.kartOdemeler ?? [];
-  const tumKartBankalar = new Set([
-    ...eskiKartlar.map(k => k.banka ?? '—'),
-    ...yeniKartlar.map(k => k.banka ?? '—'),
-  ]);
-  let kartBankaDegisti = false;
-  tumKartBankalar.forEach(banka => {
-    const eski = eskiKartlar.filter(k => (k.banka ?? '—') === banka).reduce((t, k) => t + k.tutar, 0);
-    const yeni = yeniKartlar.filter(k => (k.banka ?? '—') === banka).reduce((t, k) => t + k.tutar, 0);
-    const fark = yeni - eski;
-    if (fark > 0)  aciklamaParcalari.push(`${banka} kart +${fark.toLocaleString('tr-TR')} ₺`);
-    if (fark < 0)  aciklamaParcalari.push(`${banka} kart ${fark.toLocaleString('tr-TR')} ₺`);
-    if (fark !== 0) kartBankaDegisti = true;
-  });
-
-  // Nakit diff açıklaması
-  if (diffNakit !== 0) {
-    aciklamaParcalari.push(
-      diffNakit > 0
-        ? `Nakit +${diffNakit.toLocaleString('tr-TR')} ₺`
-        : `Nakit ${diffNakit.toLocaleString('tr-TR')} ₺`
-    );
+  const freshSnap = await getDoc(gunRef);
+  if (freshSnap.exists()) {
+    const fresh = freshSnap.data();
+    const gunSonuBakiyesi =
+      (fresh.acilisBakiyesi   ?? 0) +
+      (fresh.nakitSatis       ?? 0) -
+      (fresh.toplamGider      ?? 0) -
+      (fresh.cikisYapilanPara ?? 0) -
+      (fresh.adminAlimlar     ?? 0);
+    await updateDoc(gunRef, { gunSonuBakiyesi });
   }
+};
 
-  const herhangiDegisiklikVar =
-    diffNakit !== 0 ||
-    diffKart !== 0 ||
-    diffHavale !== 0 ||
-    havaleBankaDegisti ||
-    kartBankaDegisti;
+// ─── Hareket yaz ─────────────────────────────────────────────────────────────
 
-  return {
-    diffNakit,
-    diffKart,
-    diffHavale,
-    aciklama: aciklamaParcalari.join(' | '),
-    herhangiDegisiklikVar,
-  };
+const hareketYaz = async (params: {
+  subeKodu: string;
+  dbPath: string;
+  tip: 'TAHSILAT' | 'DUZELTME';
+  satisId: string;
+  satisKodu: string;
+  musteriIsim: string;
+  satisTarihi: string;
+  bugun: string;
+  nakitTutar: number;
+  kartTutar: number;
+  havaleTutar: number;
+  aciklama: string;
+  yapan: string;
+  yapanId: string;
+}) => {
+  const {
+    subeKodu, dbPath, tip, satisId, satisKodu, musteriIsim,
+    satisTarihi, bugun, nakitTutar, kartTutar, havaleTutar,
+    aciklama, yapan, yapanId,
+  } = params;
+
+  await addDoc(
+    collection(db, `subeler/${dbPath}/kasaTahsilatHareketleri`),
+    {
+      tip,
+      satisId, satisKodu, musteriIsim,
+      nakitTutar, kartTutar, havaleTutar,
+      toplamTutar: nakitTutar + kartTutar + havaleTutar,
+      gun: satisTarihi,
+      subeKodu, yapan, yapanId,
+      aciklama,
+      satisTarihi,
+      tahsilatGun: bugun,
+      created_at: Timestamp.fromDate(new Date()),
+      ...(tip === 'DUZELTME' ? { isDuzeltme: true } : {}),
+    }
+  );
 };
 
 // ─── Ana fonksiyon ────────────────────────────────────────────────────────────
@@ -131,7 +114,7 @@ export const kasaOdemeDiffYaz = async (params: {
   satisId:     string;
   satisKodu:   string;
   musteriIsim: string;
-  satisTarihi: string;  // orijinal satış günü "YYYY-MM-DD"
+  satisTarihi: string;
   eskiOdeme:   OdemeSnapshot;
   yeniOdeme:   OdemeSnapshot;
   yapan:       string;
@@ -144,84 +127,179 @@ export const kasaOdemeDiffYaz = async (params: {
 
   const bugun = bugunStrTR();
 
-  // KURAL 1: Aynı gün düzenleme → hiçbir şey yazma
+  // KURAL: Aynı gün düzenleme → hiçbir şey yazma
   if (satisTarihi === bugun) {
-    console.log(`kasaOdemeDiffYaz: aynı gün düzenleme (${bugun}), kasa kaydı atlanıyor.`);
+    console.log(`kasaOdemeDiffYaz: aynı gün (${bugun}), atlanıyor.`);
     return true;
   }
 
   const sube = getSubeByKod(subeKodu as SubeKodu);
   if (!sube) return false;
 
-  // Diff hesapla
-  const diff = odemeDiffHesapla(eskiOdeme, yeniOdeme, satisTarihi, bugun);
+  const base = {
+    subeKodu, dbPath: sube.dbPath,
+    satisId, satisKodu, musteriIsim,
+    satisTarihi, bugun, yapan, yapanId,
+  };
 
-  // Hiçbir değişiklik yoksa yazma
-  if (!diff.herhangiDegisiklikVar) {
-    console.log(`kasaOdemeDiffYaz: değişiklik tespit edilmedi, atlanıyor.`);
-    return true;
-  }
+  let toplamDiffNakit  = 0;
+  let toplamDiffKart   = 0;
+  let toplamDiffHavale = 0;
 
   try {
-    // 1. kasaTahsilatHareketleri'ne DUZELTME kaydı yaz
-    await addDoc(
-      collection(db, `subeler/${sube.dbPath}/kasaTahsilatHareketleri`),
-      {
-        tip:           'DUZELTME',
-        satisId,
-        satisKodu,
-        musteriIsim,
-        nakitTutar:    diff.diffNakit,
-        kartTutar:     diff.diffKart,
-        havaleTutar:   diff.diffHavale,
-        toplamTutar:   diff.diffNakit + diff.diffKart + diff.diffHavale,
-        gun:           satisTarihi,       // orijinal satış günü (referans)
-        subeKodu,
-        yapan,
-        yapanId,
-        aciklama:      diff.aciklama,
-        satisTarihi,
-        tahsilatGun:   bugun,             // bugünün kasasına ait
-        created_at:    Timestamp.fromDate(new Date()),
-        // Debug için snapshot
-        _eskiOdeme:    eskiOdeme,
-        _yeniOdeme:    yeniOdeme,
-      }
-    );
-
-    // 2. Bugünün kasa gün dokümanını güncelle (varsa)
-    const gunRef = doc(db, 'kasalar', subeKodu, 'gunler', bugun);
-    const gunSnap = await getDoc(gunRef);
-
-    if (gunSnap.exists() && (diff.diffNakit !== 0 || diff.diffKart !== 0 || diff.diffHavale !== 0)) {
-      await updateDoc(gunRef, {
-        nakitSatis:  increment(diff.diffNakit),
-        kartSatis:   increment(diff.diffKart),
-        havaleSatis: increment(diff.diffHavale),
-        guncellemeTarihi: serverTimestamp(),
-      });
-
-      // Gün sonu yeniden hesapla
-      const freshSnap = await getDoc(gunRef);
-      if (freshSnap.exists()) {
-        const fresh = freshSnap.data();
-        const gunSonuBakiyesi =
-          (fresh.acilisBakiyesi   ?? 0) +
-          (fresh.nakitSatis       ?? 0) -
-          (fresh.toplamGider      ?? 0) -
-          (fresh.cikisYapilanPara ?? 0) -
-          (fresh.adminAlimlar     ?? 0);
-        await updateDoc(gunRef, { gunSonuBakiyesi });
+    // ── 1. NAKİT (peşinat) ───────────────────────────────────────────────
+    const diffNakit = yeniOdeme.nakitTutar - eskiOdeme.nakitTutar;
+    if (diffNakit !== 0) {
+      if (eskiOdeme.nakitTutar === 0 && yeniOdeme.nakitTutar > 0) {
+        // Yeni peşinat eklendi → TAHSILAT
+        await hareketYaz({
+          ...base, tip: 'TAHSILAT',
+          nakitTutar: yeniOdeme.nakitTutar, kartTutar: 0, havaleTutar: 0,
+          aciklama: `Yeni peşinat eklendi (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+        });
+        toplamDiffNakit += yeniOdeme.nakitTutar;
+      } else {
+        // Mevcut peşinat değişti → DUZELTME
+        await hareketYaz({
+          ...base, tip: 'DUZELTME',
+          nakitTutar: diffNakit, kartTutar: 0, havaleTutar: 0,
+          aciklama: `Peşinat güncellendi ${diffNakit > 0 ? '+' : ''}${diffNakit.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+        });
+        toplamDiffNakit += diffNakit;
       }
     }
-    // Kasa günü henüz açılmamışsa sadece hareket kaydı yeterli.
-    // getBugununKasaGunu çağrıldığında recalcNakitSatis zaten DUZELTME'yi toplayacak.
 
-    console.log(`✅ kasaOdemeDiffYaz: ${satisKodu} için diff yazıldı:`, {
-      diffNakit: diff.diffNakit,
-      diffKart:  diff.diffKart,
-      diffHavale: diff.diffHavale,
-      aciklama:  diff.aciklama,
+    // ── 2. HAVALE ────────────────────────────────────────────────────────
+    const eskiHavaleler = eskiOdeme.havaleler ?? [];
+    const yeniHavaleler = yeniOdeme.havaleler ?? [];
+
+    // Yeni eklenen havaleler (eskide yoktu)
+    for (const yeni of yeniHavaleler) {
+      const eskiToplamBanka = eskiHavaleler
+        .filter(h => (h.banka ?? '—') === (yeni.banka ?? '—'))
+        .reduce((t, h) => t + h.tutar, 0);
+
+      if (eskiToplamBanka === 0 && yeni.tutar > 0) {
+        // Tamamen yeni havale → TAHSILAT
+        await hareketYaz({
+          ...base, tip: 'TAHSILAT',
+          nakitTutar: 0, kartTutar: 0, havaleTutar: yeni.tutar,
+          aciklama: `Yeni havale eklendi — ${yeni.banka ?? '—'} (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+        });
+        toplamDiffHavale += yeni.tutar;
+      } else if (eskiToplamBanka !== yeni.tutar) {
+        // Mevcut havale değişti → DUZELTME
+        const fark = yeni.tutar - eskiToplamBanka;
+        if (fark !== 0) {
+          await hareketYaz({
+            ...base, tip: 'DUZELTME',
+            nakitTutar: 0, kartTutar: 0, havaleTutar: fark,
+            aciklama: `${yeni.banka ?? 'Havale'} güncellendi ${fark > 0 ? '+' : ''}${fark.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+          });
+          toplamDiffHavale += fark;
+        }
+      }
+    }
+
+    // Silinen havaleler (yenide yok)
+    for (const eski of eskiHavaleler) {
+      const yeniToplamBanka = yeniHavaleler
+        .filter(h => (h.banka ?? '—') === (eski.banka ?? '—'))
+        .reduce((t, h) => t + h.tutar, 0);
+
+      if (yeniToplamBanka === 0 && eski.tutar > 0) {
+        await hareketYaz({
+          ...base, tip: 'DUZELTME',
+          nakitTutar: 0, kartTutar: 0, havaleTutar: -eski.tutar,
+          aciklama: `${eski.banka ?? 'Havale'} silindi −${eski.tutar.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+        });
+        toplamDiffHavale -= eski.tutar;
+      }
+    }
+
+    // Fallback: havale listesi yoksa toplam fark yaz
+    if (eskiHavaleler.length === 0 && yeniHavaleler.length === 0) {
+      const diffHavale = yeniOdeme.havaleTutar - eskiOdeme.havaleTutar;
+      if (diffHavale !== 0) {
+        const tip = eskiOdeme.havaleTutar === 0 ? 'TAHSILAT' : 'DUZELTME';
+        await hareketYaz({
+          ...base, tip,
+          nakitTutar: 0, kartTutar: 0, havaleTutar: diffHavale,
+          aciklama: tip === 'TAHSILAT'
+            ? `Yeni havale eklendi (satış: ${satisTarihi} / düzenleme: ${bugun})`
+            : `Havale güncellendi ${diffHavale > 0 ? '+' : ''}${diffHavale.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+        });
+        toplamDiffHavale += diffHavale;
+      }
+    }
+
+    // ── 3. KART ──────────────────────────────────────────────────────────
+    const eskiKartlar = eskiOdeme.kartOdemeler ?? [];
+    const yeniKartlar = yeniOdeme.kartOdemeler ?? [];
+
+    for (const yeni of yeniKartlar) {
+      const eskiToplamBanka = eskiKartlar
+        .filter(k => (k.banka ?? '—') === (yeni.banka ?? '—'))
+        .reduce((t, k) => t + k.tutar, 0);
+
+      if (eskiToplamBanka === 0 && yeni.tutar > 0) {
+        // Tamamen yeni kart → TAHSILAT
+        await hareketYaz({
+          ...base, tip: 'TAHSILAT',
+          nakitTutar: 0, kartTutar: yeni.tutar, havaleTutar: 0,
+          aciklama: `Yeni kart ödemesi — ${yeni.banka ?? '—'} (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+        });
+        toplamDiffKart += yeni.tutar;
+      } else if (eskiToplamBanka !== yeni.tutar) {
+        const fark = yeni.tutar - eskiToplamBanka;
+        if (fark !== 0) {
+          await hareketYaz({
+            ...base, tip: 'DUZELTME',
+            nakitTutar: 0, kartTutar: fark, havaleTutar: 0,
+            aciklama: `${yeni.banka ?? 'Kart'} güncellendi ${fark > 0 ? '+' : ''}${fark.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+          });
+          toplamDiffKart += fark;
+        }
+      }
+    }
+
+    // Silinen kartlar
+    for (const eski of eskiKartlar) {
+      const yeniToplamBanka = yeniKartlar
+        .filter(k => (k.banka ?? '—') === (eski.banka ?? '—'))
+        .reduce((t, k) => t + k.tutar, 0);
+
+      if (yeniToplamBanka === 0 && eski.tutar > 0) {
+        await hareketYaz({
+          ...base, tip: 'DUZELTME',
+          nakitTutar: 0, kartTutar: -eski.tutar, havaleTutar: 0,
+          aciklama: `${eski.banka ?? 'Kart'} silindi −${eski.tutar.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+        });
+        toplamDiffKart -= eski.tutar;
+      }
+    }
+
+    // Fallback: kart listesi yoksa toplam fark yaz
+    if (eskiKartlar.length === 0 && yeniKartlar.length === 0) {
+      const diffKart = yeniOdeme.kartTutar - eskiOdeme.kartTutar;
+      if (diffKart !== 0) {
+        const tip = eskiOdeme.kartTutar === 0 ? 'TAHSILAT' : 'DUZELTME';
+        await hareketYaz({
+          ...base, tip,
+          nakitTutar: 0, kartTutar: diffKart, havaleTutar: 0,
+          aciklama: tip === 'TAHSILAT'
+            ? `Yeni kart ödemesi (satış: ${satisTarihi} / düzenleme: ${bugun})`
+            : `Kart güncellendi ${diffKart > 0 ? '+' : ''}${diffKart.toLocaleString('tr-TR')} ₺ (satış: ${satisTarihi} / düzenleme: ${bugun})`,
+        });
+        toplamDiffKart += diffKart;
+      }
+    }
+
+    // ── 4. Kasa gün dokümanını güncelle ──────────────────────────────────
+    await kasaGunGuncelle(subeKodu, bugun, toplamDiffNakit, toplamDiffKart, toplamDiffHavale);
+
+    console.log(`✅ kasaOdemeDiffYaz v2: ${satisKodu} için yazıldı`, {
+      toplamDiffNakit, toplamDiffKart, toplamDiffHavale,
     });
 
     return true;
